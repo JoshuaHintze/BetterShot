@@ -1,0 +1,6 @@
+{
+  "profiles": {
+    "BetterShot": { "commandName": "Project" },
+    "Self test": { "commandName": "Project", "commandLineArgs": "--self-test" }
+  }
+}

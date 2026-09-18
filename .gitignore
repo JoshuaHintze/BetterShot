@@ -1,0 +1,61 @@
+# Project-local SDK and generated build/package output
+/.tools/
+/artifacts/
+**/bin/
+**/obj/
+
+# Visual Studio, VS Code, and JetBrains local state
+/.vs/
+/.vscode/*.user.json
+/.idea/
+_ReSharper*/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+# Test, coverage, and benchmark output
+TestResults/
+**/TestResults/
+coverage/
+**/coverage/
+coverage*.json
+coverage*.xml
+*.coverage
+*.coveragexml
+BenchmarkDotNet.Artifacts/
+
+# Local logs, crash dumps, and temporary files
+*.log
+*.dmp
+*.tmp
+*.temp
+*.bak
+*.swp
+~$*
+/.tmp/
+/tmp/
+/temp/
+
+# Local environment and secret files; keep checked-in templates
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.template
+!.env.*.template
+
+# Private signing material
+*.pfx
+*.p12
+*.pvk
+*.snk
+*.key
+/signing/
+/certificates/private/
+
+# Local BetterShot capture/history archives (may contain private images)
+*.capture
+/captures/
+/history/
