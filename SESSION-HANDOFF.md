@@ -79,7 +79,7 @@ Windows computer-use previously failed to initialize when cwd was WSL. The envir
 
 ## Repository status
 
-The first local source commit on main was authorized September 18, 2026. It includes the application source, branding assets, third-party license, installer definition, build/diagnostic scripts, and project documentation. Generated outputs, local tooling, private captures, secrets, and machine-specific files are excluded by .gitignore. No GitHub remote is configured and no publication has been requested. Use git status and git log for current repository state.
+The first local source commit on main was authorized September 18, 2026. It includes the application source, branding assets, third-party license, installer definition, build/diagnostic scripts, and project documentation. Generated outputs, local tooling, private captures, secrets, and machine-specific files are excluded by .gitignore. Public GitHub publication was authorized September 18, 2026. The personal repository is https://github.com/JoshuaHintze/BetterShot and origin points to its HTTPS Git URL. Use git status and git log for current repository state.
 
 ## Reference preservation
 
