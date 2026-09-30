@@ -16,6 +16,7 @@ public sealed partial class EditorWindow : Window
     private readonly Image _image = new() { Stretch = Stretch.Fill, SnapsToDevicePixels = true, Focusable = true };
     private readonly Canvas _imageOverlay = new() { Background = null, ClipToBounds = false };
     private readonly Grid _imageSurface = new() { ClipToBounds = false };
+    private readonly PreviewLayer _previewLayer = new() { IsHitTestVisible = false };
     private readonly ScrollViewer _scroller = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     private readonly Dictionary<Tool, Button> _tools = [];
     private readonly TextBlock _status = new() { Foreground = new SolidColorBrush(Color.FromRgb(155, 160, 168)), FontSize = 12 };
@@ -28,7 +29,6 @@ public sealed partial class EditorWindow : Window
     private Point? _start;
     private readonly List<Point> _penPoints = [];
     private Annotation? _preview;
-    private int _lastPreviewTick;
     private bool _fit = true;
     private double _zoom = 1;
 
@@ -90,7 +90,8 @@ public sealed partial class EditorWindow : Window
         var canvasArea = new Grid { Background = Brush("#111213") };
         _scroller.Background = Brush("#111213"); _scroller.Padding = new Thickness(44); _scroller.Focusable = false;
         PreviewMouseDown += Scroller_PreviewMouseDown;
-        _imageSurface.Children.Add(_image); _imageSurface.Children.Add(_imageOverlay);
+        _previewLayer.PixelWidth = _document.Original.PixelWidth;
+        _imageSurface.Children.Add(_image); _imageSurface.Children.Add(_previewLayer); _imageSurface.Children.Add(_imageOverlay);
         var imageBorder = new Border { Background = Brushes.Black, BorderBrush = Brush("#4B4D50"), BorderThickness = new Thickness(1), Child = _imageSurface,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 28, Opacity = .55, ShadowDepth = 5 } };
         _image.MouseLeftButtonDown += Image_MouseDown; _image.MouseMove += Image_MouseMove; _image.MouseLeftButtonUp += Image_MouseUp;
@@ -188,7 +189,7 @@ public sealed partial class EditorWindow : Window
     }
 
     private void DocumentChanged(object? sender, EventArgs e) => Dispatcher.Invoke(Refresh);
-    private void Refresh() { _image.Source = RenderPreview(); if (_fit) FitImage(); RefreshTextOverlay(); }
+    private void Refresh() { _image.Source = RenderPreview(); _previewLayer.Show(_preview, _tool == Tool.Select); if (_fit) FitImage(); RefreshTextOverlay(); }
     private BitmapSource RenderPreview()
     {
         if (_selected is null && _preview is null) return _document.Render();
@@ -202,7 +203,6 @@ public sealed partial class EditorWindow : Window
                 if (_preview is not null && ReferenceEquals(a, _selected) && _tool == Tool.Select) continue;
                 a.Draw(dc, a is not TextAnnotation && ReferenceEquals(a, _selected));
             }
-            _preview?.Draw(dc, _tool == Tool.Select);
         }
         var r = new RenderTargetBitmap(_document.Original.PixelWidth,_document.Original.PixelHeight,96,96,PixelFormats.Pbgra32); r.Render(v); r.Freeze(); return r;
     }
@@ -227,8 +227,10 @@ public sealed partial class EditorWindow : Window
         if (_start is null || e.LeftButton != MouseButtonState.Pressed) return;
         Point end=PixelPoint(e), start=_start.Value;
         if (_tool==Tool.Pen) _penPoints.Add(end);
+        bool startedMove = _preview is null && _tool == Tool.Select;
         _preview = _tool switch { Tool.Select when _selected is not null => _selected.Move(end-start), Tool.Arrow => new ArrowAnnotation(start,end,CurrentColor,CurrentWidth), Tool.Rectangle => new RectangleAnnotation(new Rect(start,end),CurrentColor,CurrentWidth), Tool.Redact => new RectangleAnnotation(new Rect(start,end),CurrentColor,CurrentWidth,true), Tool.Pen when _penPoints.Count>1 => new PenAnnotation(_penPoints.ToArray(),CurrentColor,CurrentWidth), _=>null };
-        int now=Environment.TickCount; if(unchecked(now-_lastPreviewTick)>=16){_lastPreviewTick=now;Refresh();}
+        // The in-progress shape is drawn on a vector layer so dragging never re-renders the full-resolution bitmap.
+        if (startedMove && _preview is not null) Refresh(); else _previewLayer.Show(_preview, _tool == Tool.Select);
     }
     private void Image_MouseUp(object sender, MouseButtonEventArgs e)
     {
@@ -287,4 +289,22 @@ public sealed partial class EditorWindow : Window
     private static FrameworkElement Spacer(double width)=>new Border{Width=width};
     private static SolidColorBrush Brush(string value)=>new((Color)ColorConverter.ConvertFromString(value));
     private sealed record ColorChoice(string Name, Color Value) { public override string ToString()=>$"●  {Name}"; }
+
+    private sealed class PreviewLayer : FrameworkElement
+    {
+        private Annotation? _annotation;
+        private bool _selected;
+        public double PixelWidth { get; set; } = 1;
+        public void Show(Annotation? annotation, bool selected)
+        {
+            if (annotation is null && _annotation is null) return;
+            _annotation = annotation; _selected = selected; InvalidateVisual();
+        }
+        protected override void OnRender(DrawingContext dc)
+        {
+            if (_annotation is null || ActualWidth <= 0) return;
+            double scale = ActualWidth / Math.Max(1, PixelWidth);
+            dc.PushTransform(new ScaleTransform(scale, scale)); _annotation.Draw(dc, _selected); dc.Pop();
+        }
+    }
 }
