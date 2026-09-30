@@ -19,6 +19,11 @@ internal static class ShortcutClassifier
     internal static bool ShouldSuppressKeyDown(int key, IReadOnlySet<int> pressed) =>
         key == S && IsExactWinShiftS(pressed);
 
+    // A low-level hook can miss key-ups (hook timeouts while busy, secure desktop, elevated windows).
+    // Drop remembered keys that Windows no longer reports as down so a stale Win cannot turn Shift+S into the shortcut.
+    internal static void PruneReleasedKeys(HashSet<int> pressed, int currentKey, Func<int, bool> isDown) =>
+        pressed.RemoveWhere(k => k != currentKey && !isDown(k));
+
     internal static bool ShouldSuppressKeyUp(int key, bool suppressedSIsDown) =>
         key == S && suppressedSIsDown;
 
@@ -45,7 +50,13 @@ internal static class ShortcutClassifier
         // A repeated S-down remains paired with one suppressed S-up, even if modifiers lift first.
         bool repeatSuppressed = ShouldSuppressKeyDown(S, Keys(LWin, LShift, S));
         bool keyUpAfterModifiersLifted = ShouldSuppressKeyUp(S, true);
-        return classification && exactDownSuppressed && modifiedDownPasses && unrelatedDownPasses &&
+        var stale = Keys(LWin, LShift, S);
+        PruneReleasedKeys(stale, S, k => k is LShift);
+        bool staleWinIgnored = !ShouldSuppressKeyDown(S, stale) && stale.SetEquals(Keys(LShift, S));
+        var held = Keys(LWin, LShift, S);
+        PruneReleasedKeys(held, S, k => k is LWin or LShift);
+        bool heldChordKept = ShouldSuppressKeyDown(S, held);
+        return classification && staleWinIgnored && heldChordKept && exactDownSuppressed && modifiedDownPasses && unrelatedDownPasses &&
                pairedUpSuppressed && ordinaryUpPasses && repeatSuppressed && keyUpAfterModifiersLifted;
     }
 }
