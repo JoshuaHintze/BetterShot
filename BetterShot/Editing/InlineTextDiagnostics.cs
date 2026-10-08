@@ -42,7 +42,68 @@ internal static class InlineTextDiagnostics
         editor.SetTextForTest("   ");
         editor.CommitTextForTest();
         if (document.Items.Count != originalCount + 1) throw new InvalidOperationException("Empty text created an annotation.");
+        VerifyNavigation(editor, document);
         VerifyHandles(editor, document);
+    }
+
+    private static void VerifyNavigation(EditorWindow editor, CaptureDocument document)
+    {
+        int itemCount = document.Items.Count;
+        Annotation[] items = document.Items.ToArray();
+
+        if (editor.BeginSpaceNavigationForTest(textInputFocused: true) || editor.SpaceNavigationActiveForTest)
+            throw new InvalidOperationException("Space navigation intercepted inline text input.");
+
+        if (!editor.BeginSpaceNavigationForTest() || !editor.SpaceNavigationActiveForTest)
+            throw new InvalidOperationException("Holding Space did not enable canvas navigation.");
+        if (!ReferenceEquals(editor.NavigationCursorForTest, editor.GrabCursorForTest))
+            throw new InvalidOperationException("Holding Space did not show the open grab cursor.");
+        editor.BeginPanForTest(new Point(20, 20));
+        if (!ReferenceEquals(editor.NavigationCursorForTest, editor.GrabbingCursorForTest))
+            throw new InvalidOperationException("Canvas drag did not show the closed grabbing cursor.");
+        editor.EndPanForTest();
+        if (!ReferenceEquals(editor.NavigationCursorForTest, editor.GrabCursorForTest))
+            throw new InvalidOperationException("Ending a canvas drag did not restore the open grab cursor.");
+        editor.BeginPanForTest(new Point(20, 20));
+        editor.DeactivateForTest();
+        if (editor.SpaceNavigationActiveForTest || editor.IsPanningForTest)
+            throw new InvalidOperationException("Editor deactivation did not clean up canvas navigation.");
+        if (editor.NavigationCursorForTest is not null)
+            throw new InvalidOperationException("Editor deactivation did not restore the selected tool cursor.");
+        if (document.Items.Count != itemCount || !document.Items.SequenceEqual(items))
+            throw new InvalidOperationException("Canvas navigation mutated annotations.");
+
+        editor.SetZoomForTest(0.5);
+        editor.UpdateLayout();
+        Point imageAnchor = new(editor.TextOverlayForTest.ActualWidth / 2, editor.TextOverlayForTest.ActualHeight / 2);
+        Point viewportAnchor = editor.TextOverlayForTest.TranslatePoint(imageAnchor, editor.ScrollerForTest);
+        editor.ZoomAtForTest(viewportAnchor, imageAnchor, 2);
+        editor.UpdateLayout();
+        Point anchoredAfter = editor.TextOverlayForTest.TranslatePoint(new Point(imageAnchor.X * 4, imageAnchor.Y * 4), editor.ScrollerForTest);
+        if ((anchoredAfter - viewportAnchor).Length > 1.5)
+            throw new InvalidOperationException("Pointer-anchored zoom drifted while crossing from fitted to scrollable content.");
+
+        editor.ScrollerForTest.ScrollToHorizontalOffset(80);
+        editor.ScrollerForTest.ScrollToVerticalOffset(60);
+        editor.UpdateLayout();
+        double beforeX = editor.ScrollerForTest.HorizontalOffset;
+        double beforeY = editor.ScrollerForTest.VerticalOffset;
+        if (!editor.BeginSpaceNavigationForTest()) throw new InvalidOperationException("Space navigation could not restart.");
+        if (!ReferenceEquals(editor.NavigationCursorForTest, editor.GrabCursorForTest))
+            throw new InvalidOperationException("Restarted Space navigation did not restore the open grab cursor.");
+        editor.BeginPanForTest(new Point(100, 100));
+        if (!ReferenceEquals(editor.NavigationCursorForTest, editor.GrabbingCursorForTest))
+            throw new InvalidOperationException("Restarted canvas drag did not show the closed grabbing cursor.");
+        editor.MovePanForTest(new Point(60, 70));
+        editor.UpdateLayout();
+        if (Math.Abs(editor.ScrollerForTest.HorizontalOffset - (beforeX + 40)) > 0.5 ||
+            Math.Abs(editor.ScrollerForTest.VerticalOffset - (beforeY + 30)) > 0.5)
+            throw new InvalidOperationException("Canvas pan did not move both scroll offsets with the pointer drag.");
+        editor.EndSpaceNavigationForTest();
+        if (editor.IsPanningForTest || editor.SpaceNavigationActiveForTest || editor.NavigationCursorForcedForTest)
+            throw new InvalidOperationException("Releasing Space did not restore the editor cursor and capture state.");
+        if (editor.NavigationCursorForTest is not null)
+            throw new InvalidOperationException("Releasing Space did not restore the selected tool cursor.");
     }
 
     private static void VerifyHandles(EditorWindow editor, CaptureDocument document)

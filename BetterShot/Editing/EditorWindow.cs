@@ -43,13 +43,15 @@ public sealed partial class EditorWindow : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner; Background = Brush("#151617"); Foreground = Brushes.White;
         FontFamily = new FontFamily("Segoe UI"); FontSize = 14;
         Content = BuildLayout();
+        InitializeNavigation();
         _document.Changed += DocumentChanged;
         Closing += (_, _) => CommitTextEdit();
-        Deactivated += (_, _) => CommitTextEdit();
+        Deactivated += Editor_Deactivated;
         Closed += (_, _) => _document.Changed -= DocumentChanged;
         Loaded += (_, _) => { Refresh(); FitImage(); };
         _scroller.ScrollChanged += (_, e) => { if (_fit && (e.ViewportWidthChange != 0 || e.ViewportHeightChange != 0)) FitImage(); };
         PreviewKeyDown += OnKeyDown;
+        PreviewKeyUp += OnKeyUp;
         SelectTool(Tool.Arrow);
     }
 
@@ -265,6 +267,12 @@ public sealed partial class EditorWindow : Window
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Space && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            if (TryBeginSpaceNavigation(Keyboard.FocusedElement is TextBox)) e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.Escape && (_spaceHeld || _isPanning)) { ResetNavigation(); e.Handled = true; return; }
         if (Keyboard.FocusedElement is TextBox) return;
         if (e.Key==Key.Escape && _textGestureStart is not null) { CancelTextGesture(); e.Handled=true; }
         else if (e.Key==Key.Escape && _start is not null) { _image.ReleaseMouseCapture();CancelDrag();e.Handled=true; }
@@ -274,6 +282,13 @@ public sealed partial class EditorWindow : Window
         else if (Keyboard.Modifiers==ModifierKeys.Control && e.Key==Key.C) { Copy_Click(this,new RoutedEventArgs());e.Handled=true; }
         else if (Keyboard.Modifiers==ModifierKeys.Control && e.Key==Key.S) { Save_Click(this,new RoutedEventArgs());e.Handled=true; }
         else if (Keyboard.Modifiers==ModifierKeys.None) { Tool? t=e.Key switch { Key.V=>Tool.Select,Key.A=>Tool.Arrow,Key.R=>Tool.Rectangle,Key.P=>Tool.Pen,Key.T=>Tool.Text,Key.S=>Tool.Step,Key.B=>Tool.Redact,_=>null}; if(t is not null){SelectTool(t.Value);e.Handled=true;} else if(e.Key==Key.D0||e.Key==Key.NumPad0){_fit=true;FitImage();} }
+    }
+
+    private void OnKeyUp(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Space || !_spaceHeld) return;
+        EndSpaceNavigation();
+        e.Handled = true;
     }
 
     private void FitImage()
