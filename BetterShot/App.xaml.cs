@@ -26,8 +26,9 @@ public partial class App : System.Windows.Application
             {
                 passed = Platform.ShortcutClassifier.RunSelfTests();
                 Capture.ScreenGeometry.RunSelfTest();
+                Platform.HotkeyBinding.RunSelfTest();
                 EditorDiagnostics.RunSelfTest();
-                result = passed ? "PASS: shortcut classification, suppression, screen geometry, document editing, rendering, and PNG file-drop snapshots" : "FAIL: shortcut classification or suppression";
+                result = passed ? "PASS: shortcut classification, suppression, screen geometry, monitor-under-cursor, hotkey validation, document editing, rendering, and PNG file-drop snapshots" : "FAIL: shortcut classification or suppression";
             }
             catch (Exception ex)
             {
@@ -74,6 +75,42 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (e.Args.Contains("--capture-settings-test", StringComparer.OrdinalIgnoreCase))
+        {
+            _ = RunCaptureSettingsTestAsync(testOutput);
+            return;
+        }
+
+        if (e.Args.Contains("--ocr-test", StringComparer.OrdinalIgnoreCase))
+        {
+            _ = RunOcrTestAsync(testOutput);
+            return;
+        }
+
+        if (e.Args.Contains("--recording-editor-test", StringComparer.OrdinalIgnoreCase))
+        {
+            _ = RunRecordingEditorTestAsync(testOutput);
+            return;
+        }
+
+        if (e.Args.Contains("--recording-test", StringComparer.OrdinalIgnoreCase))
+        {
+            _ = RunRecordingTestAsync(testOutput);
+            return;
+        }
+
+        if (e.Args.Contains("--ai-test", StringComparer.OrdinalIgnoreCase))
+        {
+            _ = RunAiTestAsync(testOutput);
+            return;
+        }
+
+        if (TryGetExtrasTest(e.Args, out ExtrasDiagnostics.Areas extrasAreas, out string extrasResultFile))
+        {
+            _ = RunExtrasTestAsync(testOutput, extrasAreas, extrasResultFile);
+            return;
+        }
+
         if (e.Args.Contains("--startup-test", StringComparer.OrdinalIgnoreCase))
         {
             try { StartupDiagnostics.Run(testOutput); Shutdown(0); }
@@ -100,6 +137,7 @@ public partial class App : System.Windows.Application
         var window = new MainWindow(enableHistory: true);
         MainWindow = window;
         if (background) window.InitializeInTray(); else window.Show();
+        window.StartInteractiveServices(showOnboarding: !background);
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -250,40 +288,44 @@ public partial class App : System.Windows.Application
                 editor.Width = testWidth;
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
                 editor.UpdateLayout();
-                var root = (System.Windows.Controls.Grid)editor.Content;
-                var toolbar = (System.Windows.Controls.Border)root.Children[0];
-                var bar = (System.Windows.Controls.Grid)toolbar.Child;
-                Rect? previous = null;
-                foreach (FrameworkElement group in bar.Children)
-                {
-                    Point origin = group.TranslatePoint(new Point(), bar);
-                    var bounds = new Rect(origin, group.RenderSize);
-                    if (bounds.Left < -0.5 || bounds.Right > bar.ActualWidth + 0.5 ||
-                        bounds.Top < -0.5 || bounds.Bottom > bar.ActualHeight + 0.5 ||
-                        (previous is Rect prior && prior.Right > bounds.Left + 0.5))
-                        throw new InvalidOperationException($"Editor toolbar overlaps or clips at {testWidth} DIP.");
-                    previous = bounds;
-                }
+                editor.Surface.VerifyChromeFitsForTest($"{testWidth} DIP");
                 RenderWindow(editor, Path.Combine(directory, $"workflow-editor-{testWidth:0}.png"));
             }
 
-            InlineTextDiagnostics.Verify(editor, document);
+            InlineTextDiagnostics.Verify(editor.Surface, document);
             editor.Width = 1180;
-            editor.SetZoomForTest(0.85);
-            editor.BeginTextForTest(new Point(60, 45));
-            editor.SetTextForTest("Hello gyp\nEdit text right on the image");
+            editor.Surface.SetZoomForTest(0.85);
+            editor.Surface.BeginTextForTest(new Point(60, 45));
+            editor.Surface.SetTextForTest("Hello gyp\nEdit text right on the image");
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             RenderWindow(editor, Path.Combine(directory, "workflow-inline-text.png"));
-            editor.CommitTextForTest();
+            editor.Surface.CommitTextForTest();
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             RenderWindow(editor, Path.Combine(directory, "workflow-text-handles.png"));
+            // Callout (Q): drag out a bubble, type bold text into it, and compare the editor preview with the export.
+            editor.Surface.HandleShortcutForTest(System.Windows.Input.Key.Q);
+            editor.Surface.BeginCalloutForTest(new Point(470, 300), new Point(720, 220));
+            editor.Surface.SetTextForTest("Press Q, drag, and type right in the bubble");
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            RenderWindow(editor, Path.Combine(directory, "workflow-callout-typing.png"));
+            editor.Surface.CommitTextForTest();
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            RenderWindow(editor, Path.Combine(directory, "workflow-callout.png"));
+            SaveBitmap(document.Render(), Path.Combine(directory, "workflow-callout-export.png"));
+            if (document.Items.OfType<TextAnnotation>().LastOrDefault() is not { IsCallout: true, WrapWidth: not null })
+                throw new InvalidOperationException("The callout was not committed with a wrapping bubble.");
+            editor.Surface.SetInspectorForTest(true, docked: false);
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            RenderWindow(editor, Path.Combine(directory, "workflow-inspector-floating.png"));
+            editor.Surface.SetInspectorForTest(true, docked: true);
+            document.Undo();
             editor.Close();
             shell.Presentation.OpenEditor(document);
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             EditorWindow reopened = shell.Presentation.EditorFor(document) ?? throw new InvalidOperationException("The shared document could not be reopened.");
             if (!ReferenceEquals(shell.Presentation.Recent[1], document)) throw new InvalidOperationException("Reopening replaced the shared document.");
             reopened.Close(); shell.Presentation.Dismiss(thumbnail); shell.CloseForTest(); shell = null;
-            WriteTestResult(Path.Combine(directory, "workflow-test.txt"), "PASS: thumbnail-first capture, no auto-editor, multi-capture retention, dismiss behavior, shared-document reopen, thumbnail render, editor layout, inline text editing, text handle undo/cancel, pointer-anchored zoom, and Space-drag canvas navigation");
+            WriteTestResult(Path.Combine(directory, "workflow-test.txt"), "PASS: thumbnail-first capture, no auto-editor, multi-capture retention, dismiss behavior, shared-document reopen, thumbnail render, editor layout, inspector, callout creation, inline text editing, text handle undo/cancel, pointer-anchored zoom, and Space-drag canvas navigation");
             Shutdown(0);
         }
         catch (Exception ex)
@@ -298,6 +340,60 @@ public partial class App : System.Windows.Application
     {
         try { await HistoryDiagnostics.RunAsync(output); Shutdown(0); }
         catch (Exception ex) { WriteTestResult(output, $"FAIL: history test: {ex}", "history-test.txt"); Shutdown(1); }
+    }
+    private async Task RunCaptureSettingsTestAsync(string? output)
+    {
+        try { await CaptureSettingsDiagnostics.RunAsync(output); Shutdown(0); }
+        catch (Exception ex) { WriteTestResult(output, $"FAIL: capture settings test: {ex}", "capture-settings-test.txt"); Shutdown(1); }
+    }
+    private async Task RunAiTestAsync(string? output)
+    {
+        try { await Ai.AiDiagnostics.RunAsync(output); Shutdown(0); }
+        catch (Exception ex) { WriteTestResult(output, $"FAIL: ai test: {ex}", "ai-test.txt"); Shutdown(1); }
+    }
+    private async Task RunOcrTestAsync(string? output)
+    {
+        try { await Ocr.OcrDiagnostics.RunAsync(output); Shutdown(0); }
+        catch (Exception ex) { WriteTestResult(output, $"FAIL: OCR test: {ex}", "ocr-test.txt"); Shutdown(1); }
+    }
+    private async Task RunRecordingTestAsync(string? output)
+    {
+        try { await RecordingDiagnostics.RunAsync(output); Shutdown(0); }
+        catch (Exception ex) { WriteTestResult(output, $"FAIL: recording test: {ex}", "recording-test.txt"); Shutdown(1); }
+    }
+    /// <summary>--extras-test runs every phase 5 check; the narrower switches run one area each.</summary>
+    private static bool TryGetExtrasTest(string[] args, out ExtrasDiagnostics.Areas areas, out string resultFile)
+    {
+        (string Switch, ExtrasDiagnostics.Areas Areas, string File)[] switches =
+        [
+            ("--extras-test", ExtrasDiagnostics.Areas.All, "extras-test.txt"),
+            ("--scrolling-test", ExtrasDiagnostics.Areas.Scrolling, "scrolling-test.txt"),
+            ("--background-removal-test", ExtrasDiagnostics.Areas.BackgroundRemoval, "background-removal-test.txt"),
+            ("--update-test", ExtrasDiagnostics.Areas.Updates, "update-test.txt"),
+            ("--onboarding-test", ExtrasDiagnostics.Areas.Onboarding, "onboarding-test.txt")
+        ];
+        foreach ((string name, ExtrasDiagnostics.Areas candidate, string file) in switches)
+        {
+            if (!args.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+            areas = candidate;
+            resultFile = file;
+            return true;
+        }
+        areas = ExtrasDiagnostics.Areas.All;
+        resultFile = string.Empty;
+        return false;
+    }
+
+    private async Task RunExtrasTestAsync(string? output, ExtrasDiagnostics.Areas areas, string resultFile)
+    {
+        try { await ExtrasDiagnostics.RunAsync(output, areas, resultFile); Shutdown(0); }
+        catch (Exception ex) { WriteTestResult(output, $"FAIL: {ex}", resultFile); Shutdown(1); }
+    }
+
+    private async Task RunRecordingEditorTestAsync(string? output)
+    {
+        try { await RecordingEditor.RecordingEditorDiagnostics.RunAsync(output); Shutdown(0); }
+        catch (Exception ex) { WriteTestResult(output, $"FAIL: recording editor test: {ex}", "recording-editor-test.txt"); Shutdown(1); }
     }
     private async Task RunShellTestAsync(string? output)
     {

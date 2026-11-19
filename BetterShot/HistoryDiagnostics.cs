@@ -19,7 +19,7 @@ internal static class HistoryDiagnostics
         Directory.CreateDirectory(runRoot);
         VerifyStore(Path.Combine(runRoot, "store"));
         await VerifyUiAsync(Path.Combine(runRoot, "ui"), directory);
-        App.WriteTestResult(Path.Combine(directory, "history-test.txt"), "PASS: editable history round-trip, retention settings, expiry boundary, atomic overwrite failure, corrupt-file isolation, immediate deletion, restart restoration, and saved shortcut on/off hook activation");
+        App.WriteTestResult(Path.Combine(directory, "history-test.txt"), "PASS: editable history round-trip, editor feature persistence (new annotations, styles, crop, background, legacy load), retention settings, expiry boundary, atomic overwrite failure, corrupt-file isolation, immediate deletion, restart restoration, and saved shortcut on/off hook activation");
     }
 
     private static void VerifyStore(string root)
@@ -113,6 +113,78 @@ internal static class HistoryDiagnostics
         Check(!store.Load(now).Any(d => d.Id == malformed.Id), "A damaged annotation package loaded without its required redaction metadata.");
         store.Delete(kept.Id);
         Check(!File.Exists(archive) && File.Exists(manual) && File.Exists(foreign), "Delete removed unrelated files or left the target archive.");
+        VerifyEditorFeatureRoundTrip(Path.Combine(root, "editor-features"));
+    }
+
+    private static void VerifyEditorFeatureRoundTrip(string root)
+    {
+        var store = new CaptureHistoryStore(root);
+        var document = EditorDiagnostics.CreateSampleDocument();
+        document.Add(new EllipseAnnotation(new Rect(40, 40, 120, 80), Colors.Orange, 8) { Fill = Color.FromArgb(120, 0, 128, 255), Dashed = true, Shadow = true, Opacity = .8 });
+        document.Add(new LineAnnotation(new Point(20, 300), new Point(260, 300), Colors.Cyan, 4) { Dashed = true });
+        document.Add(new HighlighterAnnotation(new[] { new Point(100, 420), new Point(400, 425) }, Color.FromRgb(255, 212, 0), 8));
+        document.Add(new TextAnnotation(new Point(600, 40), "Callout", Colors.Purple, 22) { Tail = new Point(560, 120), Shadow = true, WrapWidth = 180 });
+        document.Add(new TextAnnotation(new Point(40, 500), "Label", Colors.White, 20) { Background = true, Fill = Colors.Navy });
+        document.Add(new RectangleAnnotation(new Rect(300, 320, 120, 50), Colors.Black, 8, true) { RedactionMode = RedactionStyle.Pixelate });
+        document.Add(new RectangleAnnotation(new Rect(450, 320, 120, 50), Colors.Black, 4, true) { RedactionMode = RedactionStyle.Blur });
+        document.Add(new RectangleAnnotation(new Rect(620, 300, 100, 60), Colors.Red, 4) { CornerRadius = 12, Fill = Colors.Yellow });
+        document.Add(new SpotlightAnnotation(new Rect(380, 90, 360, 210), 10));
+        document.Add(new MagnifyAnnotation(new Point(800, 120), 60, 3, Colors.White, 4) { Shadow = true });
+        document.SetCrop(new Rect(20, 10, 880, 520));
+        document.SetBackground(new BackgroundStyle("mint", 32, 12, false));
+        store.Save(document);
+        var loaded = store.Load(DateTime.UtcNow).Single(d => d.Id == document.Id);
+        Check(loaded.Crop == document.Crop && loaded.Background == document.Background, "Crop or background did not survive history.");
+        Check(loaded.Items.Count == document.Items.Count && loaded.Items.Zip(document.Items).All(pair => SameAnnotation(pair.First, pair.Second)),
+            "New annotation kinds or style fields did not survive history.");
+        BitmapSource restoredRender = loaded.Render();
+        Check(restoredRender.PixelWidth == 880 + 64 && restoredRender.PixelHeight == 520 + 64 && PixelHash(restoredRender) == PixelHash(document.Render()),
+            "Restored composition differs from the saved composition.");
+
+        string path = Path.Combine(root, document.Id.ToString("N") + ".capture");
+        EditDocumentJson(path, node =>
+        {
+            foreach (var annotation in node["Annotations"]!.AsArray())
+                if ((string?)annotation!["RedactionStyle"] == "pixelate") annotation["RedactionStyle"] = "sparkle";
+        });
+        var tampered = store.Load(DateTime.UtcNow).Single(d => d.Id == document.Id);
+        Check(tampered.Items.OfType<RectangleAnnotation>().Count(r => r.Redaction && r.RedactionMode == RedactionStyle.Solid) == 1,
+            "An unknown redaction style did not fall back to an opaque redaction.");
+
+        var legacy = EditorDiagnostics.CreateSampleDocument();
+        legacy.Add(new PenAnnotation(new[] { new Point(25, 25), new Point(50, 90) }, Colors.LimeGreen, 3));
+        store.Save(legacy);
+        string[] optional = ["Opacity", "Dashed", "Shadow", "Fill", "CornerRadius", "RedactionStyle", "Zoom", "Tail", "TextBackground", "WrapWidth"];
+        EditDocumentJson(Path.Combine(root, legacy.Id.ToString("N") + ".capture"), node =>
+        {
+            node.AsObject().Remove("Crop");
+            node.AsObject().Remove("Background");
+            foreach (var annotation in node["Annotations"]!.AsArray())
+                foreach (string name in optional) annotation!.AsObject().Remove(name);
+        });
+        var legacyLoaded = store.Load(DateTime.UtcNow).Single(d => d.Id == legacy.Id);
+        Check(legacyLoaded.Crop is null && !legacyLoaded.Background.IsEnabled && PixelHash(legacyLoaded.Render()) == PixelHash(legacy.Render()),
+            "A capture saved before editor styles did not load unchanged.");
+    }
+
+    private static bool SameAnnotation(Annotation left, Annotation right) => (left, right) switch
+    {
+        (PenAnnotation a, PenAnnotation b) => a.Points.SequenceEqual(b.Points) && a with { Points = b.Points } == b,
+        (HighlighterAnnotation a, HighlighterAnnotation b) => a.Points.SequenceEqual(b.Points) && a with { Points = b.Points } == b,
+        _ => left == right
+    };
+
+    private static void EditDocumentJson(string path, Action<System.Text.Json.Nodes.JsonNode> edit)
+    {
+        using var zip = System.IO.Compression.ZipFile.Open(path, System.IO.Compression.ZipArchiveMode.Update);
+        var entry = zip.GetEntry("document.json")!;
+        string json;
+        using (var reader = new StreamReader(entry.Open())) json = reader.ReadToEnd();
+        var node = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+        edit(node);
+        entry.Delete();
+        using var writer = new StreamWriter(zip.CreateEntry("document.json").Open());
+        writer.Write(node.ToJsonString());
     }
 
     private static string PixelHash(BitmapSource bitmap)
@@ -162,7 +234,7 @@ internal static class HistoryDiagnostics
                 Check(shell.Presentation.Recent.Any(d => d.Id == fresh.Id) && File.Exists(freshPath), "Failed disk deletion silently removed the visible capture.");
             }
             shell.Presentation.OpenEditor(fresh); await SettleAsync(shell);
-            var deletingEditor = shell.Presentation.EditorFor(fresh)!;
+            var deletingEditor = shell.Presentation.EditorFor(fresh)!.Surface;
             deletingEditor.BeginTextForTest(new Point(35, 80));
             deletingEditor.SetTextForTest("Pending text must not resurrect a deleted capture");
             fresh.Add(new RectangleAnnotation(new Rect(35, 20, 110, 25), Colors.Red, 3));
@@ -173,7 +245,7 @@ internal static class HistoryDiagnostics
             Check(new CaptureHistoryStore(root).Load(DateTime.UtcNow).All(d => d.Id != fresh.Id), "A queued edit resurrected the deleted capture.");
 
             shell.Presentation.OpenEditor(restored); await SettleAsync(shell);
-            var editing = shell.Presentation.EditorFor(restored)!;
+            var editing = shell.Presentation.EditorFor(restored)!.Surface;
             editing.BeginTextForTest(new Point(45, 45));
             editing.SetTextForTest("Retained across restart");
             shell.CloseForTest(); shell = null;

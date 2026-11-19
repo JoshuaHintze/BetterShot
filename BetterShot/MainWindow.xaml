@@ -1,15 +1,46 @@
-<Window x:Class="BetterShot.MainWindow" x:Name="Root" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:BetterShot.Controls" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework" Title="BetterShot" Width="1100" Height="900" MinWidth="780" MinHeight="700" WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize" Background="#151619" Foreground="{StaticResource TextBrush}" FontFamily="Segoe UI" FontSize="14" Icon="Assets/BetterShot.ico" PreviewKeyDown="Window_PreviewKeyDown" SizeChanged="Window_SizeChanged">
+<Window x:Class="BetterShot.MainWindow" x:Name="Root" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:BetterShot.Controls" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework" Title="BetterShot" Width="1100" Height="900" MinWidth="1000" MinHeight="680" WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize" Background="#121214" Foreground="{StaticResource TextBrush}" FontFamily="Segoe UI" FontSize="14" Icon="Assets/BetterShot.ico" PreviewKeyDown="Window_PreviewKeyDown" SizeChanged="Window_SizeChanged">
   <shell:WindowChrome.WindowChrome>
-    <shell:WindowChrome CaptionHeight="32" ResizeBorderThickness="6" CornerRadius="0" GlassFrameThickness="0" UseAeroCaptionButtons="False" />
+    <shell:WindowChrome CaptionHeight="56" ResizeBorderThickness="6" CornerRadius="0" GlassFrameThickness="0" UseAeroCaptionButtons="False" />
   </shell:WindowChrome.WindowChrome>
   <Window.Resources>
-    <Style x:Key="ChromeButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Width" Value="46" />
-      <Setter Property="Height" Value="32" />
+    <!-- Window caption buttons: round, borderless, and centred on the header row they sit in (see AlignCaptionButtons). -->
+    <Style x:Key="ChromeButton" TargetType="Button">
+      <Setter Property="Width" Value="40" />
+      <Setter Property="Height" Value="40" />
       <Setter Property="Padding" Value="0" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Focusable" Value="False" />
       <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="20">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#2B2C30" /></Trigger>
+              <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#34363B" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="CloseChromeButton" TargetType="Button" BasedOn="{StaticResource ChromeButton}">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="20">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#C42B1C" /></Trigger>
+              <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#A32519" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
     <Style x:Key="QuietButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Height" Value="34" />
@@ -108,6 +139,30 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <Style x:Key="SearchTextBox" TargetType="TextBox">
+      <Setter Property="Foreground" Value="#F0F1F3" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="CaretBrush" Value="#FFD84A" />
+      <Setter Property="SelectionBrush" Value="#8A7A2E" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <ScrollViewer x:Name="PART_ContentHost" Background="{TemplateBinding Background}" VerticalAlignment="Center" />
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="SearchFrame" TargetType="Border">
+      <Setter Property="Background" Value="#24262A" />
+      <Setter Property="BorderBrush" Value="#484B53" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True"><Setter Property="BorderBrush" Value="#747984" /></Trigger>
+        <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter Property="BorderBrush" Value="#FFD84A" /></Trigger>
+      </Style.Triggers>
+    </Style>
     <Style x:Key="ShortcutToggle" TargetType="CheckBox">
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="Template">
@@ -141,229 +196,445 @@
         </Setter.Value>
       </Setter>
     </Style>
-  </Window.Resources>
-  <Grid>
-    <Grid.RowDefinitions>
-      <RowDefinition Height="32" />
-      <RowDefinition Height="*" />
-      <RowDefinition Height="40" />
-    </Grid.RowDefinitions>
-    <Border Grid.Row="0" Background="#17181B" BorderBrush="#292B30" BorderThickness="0,0,0,1" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
-      <Grid>
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-          <Image Source="Assets/BetterShot.ico" Width="16" Height="16" />
-          <TextBlock Text="BetterShot" Margin="8,0,0,1" VerticalAlignment="Center" FontSize="12" FontWeight="Normal" />
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-          <Button x:Name="SettingsButton" Style="{StaticResource ChromeButton}" ToolTip="Settings" AutomationProperties.Name="Settings" Click="Settings_Click">
-            <controls:LucideIcon Icon="Settings" Width="16" Height="16" Foreground="#C8C9CD" />
-          </Button>
-          <Button Style="{StaticResource ChromeButton}" ToolTip="Minimize" AutomationProperties.Name="Minimize" Click="Minimize_Click">
-            <controls:LucideIcon Icon="Minus" Width="12" Height="12" Foreground="#C8C9CD" />
-          </Button>
-          <Button Style="{StaticResource ChromeButton}" ToolTip="Maximize or restore" AutomationProperties.Name="Maximize or restore" Click="Maximize_Click">
-            <controls:LucideIcon Icon="Square" Width="12" Height="12" Foreground="#C8C9CD" />
-          </Button>
-          <Button Style="{StaticResource ChromeButton}" ToolTip="Close to tray" AutomationProperties.Name="Close to tray" Click="Close_Click">
-            <controls:LucideIcon Icon="X" Width="12" Height="12" Foreground="#C8C9CD" />
-          </Button>
-        </StackPanel>
-      </Grid>
-    </Border>
-    <Grid Grid.Row="1" Margin="36,18,36,20">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="*" />
-      </Grid.RowDefinitions>
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    <Style x:Key="ThinScrollBar" TargetType="ScrollBar">
+      <Setter Property="Width" Value="6" />
+      <Setter Property="MinWidth" Value="6" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ScrollBar">
+            <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}" ViewportSize="{TemplateBinding ViewportSize}">
+              <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.PageUpCommand" Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent" /></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
+              <Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="#45474D" CornerRadius="3" /></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+              <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.PageDownCommand" Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent" /></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
+            </Track>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- Round icon buttons in the library header (sort, grid/list). -->
+    <Style x:Key="RoundIconButton" TargetType="Button">
+      <Setter Property="Width" Value="46" />
+      <Setter Property="Height" Value="46" />
+      <Setter Property="Foreground" Value="#D9DADD" />
+      <Setter Property="Background" Value="#202124" />
+      <Setter Property="BorderBrush" Value="#34363A" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="23">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#2B2C30" /></Trigger>
+              <Trigger Property="IsPressed" Value="True"><Setter Property="Opacity" Value="0.75" /></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#FFD84A" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- The big "Images" / "Videos" headers; the selected one is large and white. -->
+    <Style x:Key="LibraryTab" TargetType="Button">
+      <Setter Property="Foreground" Value="#8E9097" />
+      <Setter Property="FontSize" Value="26" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="VerticalAlignment" Value="Bottom" />
+      <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome" Background="Transparent" BorderBrush="Transparent" BorderThickness="0,0,0,2" Padding="0,0,0,2">
+              <ContentPresenter />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter Property="Opacity" Value="0.86" /></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#FFD84A" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- Rows in the capture menu opened by the yellow + button. -->
+    <Style x:Key="MenuRowButton" TargetType="Button">
+      <Setter Property="Height" Value="40" />
+      <Setter Property="Foreground" Value="#F0F1F3" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}" BorderBrush="Transparent" BorderThickness="1">
+              <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#2E3034" /></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#FFD84A" /></Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.42" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <ContextMenu x:Key="CaptureRowMenu" Background="#242527" Foreground="White" BorderBrush="#3F4044">
+      <MenuItem Header="Mark up" Click="RowMarkUp_Click"><MenuItem.Icon><controls:LucideIcon Icon="Pencil" Width="15" Height="15" Foreground="White" /></MenuItem.Icon></MenuItem>
+      <MenuItem Header="Copy" Click="RowCopy_Click"><MenuItem.Icon><controls:LucideIcon Icon="Copy" Width="15" Height="15" Foreground="White" /></MenuItem.Icon></MenuItem>
+      <MenuItem Header="Save as…" Click="RowSave_Click"><MenuItem.Icon><controls:LucideIcon Icon="Save" Width="15" Height="15" Foreground="White" /></MenuItem.Icon></MenuItem>
+      <MenuItem Header="Copy text" Click="RowCopyText_Click"><MenuItem.Icon><controls:LucideIcon Icon="ScanText" Width="15" Height="15" Foreground="White" /></MenuItem.Icon></MenuItem>
+      <MenuItem Header="Ask Claude" Click="RowAskClaude_Click"><MenuItem.Icon><controls:LucideIcon Icon="Sparkles" Width="15" Height="15" Foreground="#FFD400" /></MenuItem.Icon></MenuItem>
+      <Separator Background="#3F4044" />
+      <MenuItem Header="Delete permanently" Click="RowDelete_Click"><MenuItem.Icon><controls:LucideIcon Icon="Trash2" Width="15" Height="15" Foreground="#FF8787" /></MenuItem.Icon></MenuItem>
+    </ContextMenu>
+    <Style x:Key="LibraryRow" TargetType="ListBoxItem">
+      <Setter Property="ToolTip" Value="{Binding Details}" />
+      <Setter Property="AutomationProperties.Name" Value="{Binding Details}" />
+      <Setter Property="ContextMenu" Value="{StaticResource CaptureRowMenu}" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Margin" Value="0,0,0,2" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="RowChrome" Background="Transparent" BorderBrush="Transparent" BorderThickness="1.5" CornerRadius="14" Padding="10,9">
+              <ContentPresenter />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="RowChrome" Property="Background" Value="#232427" /></Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="RowChrome" Property="Background" Value="#29261A" />
+                <Setter TargetName="RowChrome" Property="BorderBrush" Value="#E3C23A" />
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="RowChrome" Property="BorderBrush" Value="#FFF07A" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="LibraryTile" TargetType="ListBoxItem" BasedOn="{StaticResource LibraryRow}">
+      <Setter Property="Width" Value="168" />
+      <Setter Property="Margin" Value="0,0,6,6" />
+    </Style>
+    <DataTemplate x:Key="CaptureRowTemplate">
       <Grid>
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="70" />
           <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-        <Button x:Name="AreaButton" Width="190" Height="40" Background="#FFD84A" Foreground="#17150B" BorderBrush="#FFD84A" Click="Area_Click" ToolTip="Select a region (Ctrl + Shift + F9)">
-          <StackPanel Orientation="Horizontal">
-            <controls:LucideIcon Icon="Maximize" Width="16" Height="16" Margin="0,0,8,0" Foreground="#17150B" />
-            <TextBlock Text="Capture area" Foreground="#17150B" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
-          </StackPanel>
-        </Button>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
-          <Button x:Name="WindowButton" Style="{StaticResource QuietButton}" Height="40" Width="160" FontSize="14" Click="Window_Click">
-            <StackPanel Orientation="Horizontal">
-              <controls:LucideIcon Icon="AppWindow" Width="16" Height="16" Margin="0,0,8,0" />
-              <TextBlock x:Name="WindowButtonText" Text="Capture window" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
-          <Button x:Name="DisplayButton" Style="{StaticResource QuietButton}" Height="40" Width="160" FontSize="14" Margin="10,0,0,0" Click="Display_Click">
-            <StackPanel Orientation="Horizontal">
-              <controls:LucideIcon Icon="Monitor" Width="16" Height="16" Margin="0,0,8,0" />
-              <TextBlock x:Name="DisplayButtonText" Text="Capture display" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
-        </StackPanel>
-        <TextBlock x:Name="CaptureShortcutText" Grid.Column="3" Text="Ctrl + Shift + F9" Foreground="#8F9299" FontSize="12" Margin="16,0,0,0" VerticalAlignment="Center" />
-      </Grid>
-      <Border Grid.Row="1" Margin="0,14,0,0" Background="Transparent" CornerRadius="12" BorderBrush="Transparent" BorderThickness="0">
-        <Grid>
-          <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="430">
-            <Border Width="70" Height="70" CornerRadius="35" Background="#242318" BorderBrush="#464021" BorderThickness="1" Margin="0,0,0,18">
-              <controls:LucideIcon Icon="PanelBottom" Width="29" Height="29" Foreground="#FFD84A" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Border Width="64" Height="54" CornerRadius="9" BorderBrush="#33FFFFFF" BorderThickness="1" Background="#111214" HorizontalAlignment="Left">
+          <Border.Effect><DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.4" /></Border.Effect>
+          <Rectangle RadiusX="8" RadiusY="8">
+            <Rectangle.Fill><ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" AlignmentY="Top" /></Rectangle.Fill>
+          </Rectangle>
+        </Border>
+        <Grid Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="{Binding DisplayName}" FontSize="16" FontWeight="SemiBold" Foreground="#F4F4F5" TextTrimming="CharacterEllipsis" />
+          <TextBlock Grid.Column="1" Text="{Binding AgeText}" FontSize="14" Foreground="#9A9CA2" Margin="10,1,0,0" />
+          <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,5,0,0">
+            <TextBlock Text="{Binding DimensionsText}" FontSize="14" Foreground="#A3A5AB" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <Border Background="#2D2E32" CornerRadius="6" Padding="7,1,7,2" Margin="9,0,0,0" VerticalAlignment="Center" Visibility="{Binding HasText, Converter={StaticResource BoolToVisibility}}">
+              <TextBlock Text="Text" FontSize="13" Foreground="#C9CBD0" />
             </Border>
-            <TextBlock Text="Ready for your next capture" FontSize="19" FontWeight="SemiBold" HorizontalAlignment="Center" />
-            <TextBlock Text="Capture an area, window, or display. Your screenshot will stay close by as a thumbnail until you need it." Foreground="#9B9DA5" TextAlignment="Center" TextWrapping="Wrap" LineHeight="21" Margin="0,9,0,0" />
-          </StackPanel>
-          <Grid x:Name="RecentState" Visibility="Collapsed" Margin="0,4,0,0">
-            <Grid.RowDefinitions>
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="*" />
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <Grid>
-              <TextBlock x:Name="CaptureHeading" Text="Latest capture" Foreground="#F0F1F3" FontSize="18" FontWeight="SemiBold" />
-              <TextBlock x:Name="SelectedTimeText" HorizontalAlignment="Right" Foreground="#A0A2A9" FontSize="14" />
-            </Grid>
-            <Border Grid.Row="1" MinHeight="160" Margin="0,12,0,12" Background="#191B1F" CornerRadius="10" BorderBrush="#303238" BorderThickness="1" Padding="4">
-              <Image x:Name="PreviewImage" Stretch="Uniform" Cursor="Hand" MouseLeftButtonUp="PreviewImage_MouseLeftButtonUp" ToolTip="Open this capture in the editor" />
-            </Border>
-            <Grid Grid.Row="2" Margin="0,0,0,14">
-              <TextBlock x:Name="SelectedMetaText" Foreground="#A0A2A9" FontSize="14" VerticalAlignment="Center" />
-              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Style="{StaticResource ActionButton}" Click="OpenRecent_Click">
-                  <StackPanel Orientation="Horizontal">
-                    <controls:LucideIcon Icon="Pencil" Width="16" Height="16" Margin="0,0,7,0" />
-                    <TextBlock Text="Edit" />
-                  </StackPanel>
-                </Button>
-                <Button Style="{StaticResource ActionButton}" Click="CopyRecent_Click">
-                  <StackPanel Orientation="Horizontal">
-                    <controls:LucideIcon Icon="Copy" Width="16" Height="16" Margin="0,0,7,0" />
-                    <TextBlock Text="Copy" />
-                  </StackPanel>
-                </Button>
-                <Button Style="{StaticResource ActionButton}" Click="SaveRecent_Click">
-                  <StackPanel Orientation="Horizontal">
-                    <controls:LucideIcon Icon="Save" Width="16" Height="16" Margin="0,0,7,0" />
-                    <TextBlock Text="Save" />
-                  </StackPanel>
-                </Button>
+            <Border Background="#3A3417" CornerRadius="6" Padding="6,1,7,2" Margin="6,0,0,0" VerticalAlignment="Center" Visibility="{Binding HasMarkup, Converter={StaticResource BoolToVisibility}}">
+              <StackPanel Orientation="Horizontal">
+                <controls:LucideIcon Icon="Pencil" Width="11" Height="11" Foreground="#FFD84A" Margin="0,1,4,0" VerticalAlignment="Center" />
+                <TextBlock Text="Markup" FontSize="13" Foreground="#FFD84A" />
               </StackPanel>
-            </Grid>
-            <Grid Grid.Row="3">
-              <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-              </Grid.RowDefinitions>
-              <Grid Margin="0,0,0,8">
-                <TextBlock Text="Recent captures" Foreground="#F0F1F3" FontSize="17" FontWeight="SemiBold" />
-                <TextBlock Text="Stored locally" HorizontalAlignment="Right" Foreground="#92959C" FontSize="13" />
-              </Grid>
-              <ListBox x:Name="RecentList" ItemsSource="{Binding}" SelectionChanged="RecentList_SelectionChanged" PreviewKeyDown="RecentList_PreviewKeyDown" Background="Transparent" BorderThickness="0" Grid.Row="1" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="False" ItemContainerStyle="{StaticResource RecentCard}">
+            </Border>
+          </StackPanel>
+        </Grid>
+      </Grid>
+    </DataTemplate>
+    <DataTemplate x:Key="CaptureTileTemplate">
+      <StackPanel>
+        <Border Height="100" CornerRadius="10" BorderBrush="#33FFFFFF" BorderThickness="1" Background="#111214">
+          <Grid>
+            <Rectangle RadiusX="9" RadiusY="9">
+              <Rectangle.Fill><ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" AlignmentY="Top" /></Rectangle.Fill>
+            </Rectangle>
+            <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="5" Background="#E03A3417" CornerRadius="5" Padding="4,2" Visibility="{Binding HasMarkup, Converter={StaticResource BoolToVisibility}}">
+              <controls:LucideIcon Icon="Pencil" Width="11" Height="11" Foreground="#FFD84A" />
+            </Border>
+          </Grid>
+        </Border>
+        <Grid Margin="2,7,2,0">
+          <TextBlock Text="{Binding TimeText}" FontSize="13" FontWeight="SemiBold" Foreground="#F0F1F3" TextTrimming="CharacterEllipsis" />
+          <TextBlock Text="{Binding AgeText}" FontSize="12" Foreground="#9A9CA2" HorizontalAlignment="Right" />
+        </Grid>
+      </StackPanel>
+    </DataTemplate>
+    <ItemsPanelTemplate x:Key="CaptureRowPanel"><StackPanel /></ItemsPanelTemplate>
+    <ItemsPanelTemplate x:Key="CaptureTilePanel"><WrapPanel /></ItemsPanelTemplate>
+  </Window.Resources>
+  <Grid x:Name="RootGrid">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition x:Name="LibraryColumn" Width="*" />
+      <ColumnDefinition x:Name="EditorColumn" Width="0" />
+    </Grid.ColumnDefinitions>
+
+    <!-- Library: Images / Videos, save location, day-grouped captures, search, and the + capture menu. -->
+    <Border x:Name="LibraryPanel" Margin="10,10,0,10" Background="#19191C" BorderBrush="#2A2B2F" BorderThickness="1" CornerRadius="18">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid x:Name="LibraryHeader" Margin="22,26,16,0">
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
+            <Button x:Name="ImagesTabButton" Style="{StaticResource LibraryTab}" Content="Images" Click="ImagesTab_Click" AutomationProperties.Name="Images" />
+            <Button x:Name="VideosTabButton" Style="{StaticResource LibraryTab}" Content="Videos" Margin="20,0,0,0" Click="VideosTab_Click" AutomationProperties.Name="Videos" />
+          </StackPanel>
+          <StackPanel x:Name="LibraryHeaderButtons" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <Button x:Name="SortButton" Style="{StaticResource RoundIconButton}" Click="Sort_Click" ToolTip="Newest first" AutomationProperties.Name="Sort order">
+              <controls:LucideIcon Icon="ArrowUpDown" Width="19" Height="19" />
+            </Button>
+            <Button x:Name="ViewModeButton" Style="{StaticResource RoundIconButton}" Margin="10,0,0,0" Click="ViewMode_Click" ToolTip="Show as a grid" AutomationProperties.Name="Grid or list">
+              <controls:LucideIcon x:Name="ViewModeIcon" Icon="LayoutGrid" Width="19" Height="19" />
+            </Button>
+          </StackPanel>
+        </Grid>
+        <Grid Grid.Row="1" Margin="24,10,20,6">
+          <StackPanel x:Name="SaveLocationRow" Orientation="Horizontal">
+            <Ellipse x:Name="SaveLocationDot" Width="8" Height="8" Fill="#34C759" VerticalAlignment="Center" Margin="0,1,10,0" />
+            <TextBlock x:Name="SaveLocationText" Text="Saving to Pictures › BetterShot" Foreground="#C4C6CB" FontSize="15" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <TextBlock x:Name="StatusText" Text="" Foreground="#A5A7AD" FontSize="13" Background="#19191C" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
+        </Grid>
+
+        <Grid Grid.Row="2" Margin="12,6,10,0">
+          <Grid x:Name="ImagesPane">
+            <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="300" Margin="12,0">
+              <Border Width="64" Height="64" CornerRadius="32" Background="#242318" BorderBrush="#464021" BorderThickness="1" Margin="0,0,0,16">
+                <controls:LucideIcon Icon="Image" Width="26" Height="26" Foreground="#FFD84A" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <TextBlock Text="Ready for your next capture" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+              <TextBlock Text="Press + to capture an area, window, or display. Captures float in the corner and land here." Foreground="#9B9DA5" TextAlignment="Center" TextWrapping="Wrap" LineHeight="20" Margin="0,8,0,0" />
+            </StackPanel>
+            <ListBox x:Name="RecentList" ItemsSource="{Binding}" Visibility="Collapsed" SelectionChanged="RecentList_SelectionChanged" PreviewKeyDown="RecentList_PreviewKeyDown" MouseDoubleClick="RecentList_MouseDoubleClick" Background="Transparent" BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="False" ItemContainerStyle="{StaticResource LibraryRow}" ItemTemplate="{StaticResource CaptureRowTemplate}" ItemsPanel="{StaticResource CaptureRowPanel}" AutomationProperties.Name="Captures">
+              <ListBox.Resources>
+                <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinScrollBar}" />
+              </ListBox.Resources>
+              <ListBox.GroupStyle>
+                <GroupStyle>
+                  <GroupStyle.HeaderTemplate>
+                    <DataTemplate>
+                      <StackPanel Orientation="Horizontal" Margin="12,14,0,8">
+                        <TextBlock Text="{Binding Name}" FontSize="20" FontWeight="SemiBold" Foreground="#F4F4F5" />
+                        <TextBlock Text="{Binding ItemCount}" FontSize="20" Foreground="#8E9097" Margin="10,0,0,0" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </GroupStyle.HeaderTemplate>
+                </GroupStyle>
+              </ListBox.GroupStyle>
+            </ListBox>
+            <TextBlock x:Name="SearchEmptyText" Visibility="Collapsed" Foreground="#9B9DA5" FontSize="13" TextWrapping="Wrap" Margin="12,14,12,10" VerticalAlignment="Top" />
+          </Grid>
+
+          <!-- Videos: recordings from the recording library; click one to open the recording editor. -->
+          <Grid x:Name="VideosPane" Visibility="Collapsed">
+            <TextBlock Text="No recordings yet. Choose Record from the + menu." Foreground="#9B9DA5" FontSize="14" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20,0">
+              <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Visibility, ElementName=RecordingsPanel}" Value="Visible"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </TextBlock.Style>
+            </TextBlock>
+            <Grid x:Name="RecordingsPanel" Visibility="Collapsed">
+              <ListBox x:Name="RecordingsList" Background="Transparent" BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="False" PreviewKeyDown="RecordingsList_PreviewKeyDown" AutomationProperties.Name="Recordings">
                 <ListBox.Resources>
-                  <Style TargetType="ScrollBar">
-                    <Setter Property="Height" Value="10" />
-                    <Setter Property="Margin" Value="0,8,0,0" />
+                  <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinScrollBar}" />
+                </ListBox.Resources>
+                <ListBox.ItemContainerStyle>
+                  <Style TargetType="ListBoxItem">
+                    <Setter Property="ToolTip" Value="{Binding Details}" />
+                    <Setter Property="AutomationProperties.Name" Value="{Binding Details}" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Margin" Value="0,0,0,2" />
+                    <EventSetter Event="MouseLeftButtonUp" Handler="RecordingRow_MouseLeftButtonUp" />
                     <Setter Property="Template">
                       <Setter.Value>
-                        <ControlTemplate TargetType="ScrollBar">
-                          <Grid Background="Transparent">
-                            <Track x:Name="PART_Track" Orientation="Horizontal" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}" ViewportSize="{TemplateBinding ViewportSize}">
-                              <Track.DecreaseRepeatButton>
-                                <RepeatButton Command="ScrollBar.PageLeftCommand" Focusable="False">
-                                  <RepeatButton.Template>
-                                    <ControlTemplate TargetType="RepeatButton">
-                                      <Border Background="Transparent" />
-                                    </ControlTemplate>
-                                  </RepeatButton.Template>
-                                </RepeatButton>
-                              </Track.DecreaseRepeatButton>
-                              <Track.Thumb>
-                                <Thumb>
-                                  <Thumb.Template>
-                                    <ControlTemplate TargetType="Thumb">
-                                      <Border x:Name="Grip" Background="#383B42" CornerRadius="4" Margin="0,2" />
-                                      <ControlTemplate.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                          <Setter TargetName="Grip" Property="Background" Value="#646873" />
-                                        </Trigger>
-                                      </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                  </Thumb.Template>
-                                </Thumb>
-                              </Track.Thumb>
-                              <Track.IncreaseRepeatButton>
-                                <RepeatButton Command="ScrollBar.PageRightCommand" Focusable="False">
-                                  <RepeatButton.Template>
-                                    <ControlTemplate TargetType="RepeatButton">
-                                      <Border Background="Transparent" />
-                                    </ControlTemplate>
-                                  </RepeatButton.Template>
-                                </RepeatButton>
-                              </Track.IncreaseRepeatButton>
-                            </Track>
-                          </Grid>
+                        <ControlTemplate TargetType="ListBoxItem">
+                          <Border x:Name="RowChrome" Background="Transparent" BorderBrush="Transparent" BorderThickness="1.5" CornerRadius="14" Padding="10,9">
+                            <ContentPresenter />
+                          </Border>
+                          <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="RowChrome" Property="Background" Value="#232427" /></Trigger>
+                            <Trigger Property="IsSelected" Value="True"><Setter TargetName="RowChrome" Property="BorderBrush" Value="#E3C23A" /><Setter TargetName="RowChrome" Property="Background" Value="#29261A" /></Trigger>
+                          </ControlTemplate.Triggers>
                         </ControlTemplate>
                       </Setter.Value>
                     </Setter>
                   </Style>
-                </ListBox.Resources>
-                <ListBox.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" />
-                  </ItemsPanelTemplate>
-                </ListBox.ItemsPanel>
+                </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                   <DataTemplate>
                     <Grid>
-                      <Grid.RowDefinitions>
-                        <RowDefinition Height="{Binding RecentImageHeight, RelativeSource={RelativeSource AncestorType=Window}}" />
-                        <RowDefinition Height="Auto" />
-                      </Grid.RowDefinitions>
-                      <Border x:Name="ThumbnailFrame" Background="#191B1F" CornerRadius="7" BorderBrush="#34363B" BorderThickness="1" Padding="3" ClipToBounds="True">
-                        <Image Source="{Binding Thumbnail}" Stretch="Uniform" />
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="92" />
+                        <ColumnDefinition Width="*" />
+                      </Grid.ColumnDefinitions>
+                      <Border x:Name="RecordingFrame" Width="86" Height="54" CornerRadius="9" Background="#111214" BorderBrush="#33FFFFFF" BorderThickness="1" ClipToBounds="True" Cursor="Hand" HorizontalAlignment="Left" PreviewMouseLeftButtonDown="RecordingCard_MouseDown" PreviewMouseMove="RecordingCard_MouseMove">
+                        <Grid>
+                          <controls:LucideIcon Icon="Video" Width="22" Height="22" Foreground="#5E616A" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                          <Rectangle RadiusX="8" RadiusY="8">
+                            <Rectangle.Fill><ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" /></Rectangle.Fill>
+                          </Rectangle>
+                          <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="4" Background="#D8141518" CornerRadius="4" Padding="4,0,4,1">
+                            <TextBlock Text="{Binding DurationText}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                          </Border>
+                        </Grid>
                       </Border>
-                      <Button x:Name="DeleteRecentButton" Tag="{Binding Document}" HorizontalAlignment="Right" VerticalAlignment="Top" Width="34" Height="34" Margin="6" Padding="8" Background="#E6282A30" BorderBrush="#555861" BorderThickness="1" Visibility="Hidden" ToolTip="Delete capture permanently" AutomationProperties.Name="Delete capture permanently" Click="DeleteRecent_Click">
-                        <controls:LucideIcon Icon="Trash2" Width="17" Height="17" />
-                      </Button>
-                      <TextBlock Grid.Row="1" Text="{Binding ShortLabel}" Foreground="#B4B6BC" FontSize="14" Margin="3,8,3,0" TextTrimming="CharacterEllipsis" />
+                      <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Label}" FontSize="16" FontWeight="SemiBold" Foreground="#F4F4F5" TextTrimming="CharacterEllipsis" />
+                        <StackPanel x:Name="RecordingActions" Orientation="Horizontal" Margin="0,5,0,0">
+                          <Button Tag="{Binding}" Width="28" Height="28" Padding="6" Margin="0,0,4,0" Background="#26272A" BorderBrush="#3A3B3F" Click="PlayRecording_Click" ToolTip="Play recording" AutomationProperties.Name="Play recording"><controls:LucideIcon Icon="Play" Width="13" Height="13" /></Button>
+                          <Button Tag="{Binding}" Width="28" Height="28" Padding="6" Margin="0,0,4,0" Background="#26272A" BorderBrush="#3A3B3F" Click="EditRecording_Click" ToolTip="Edit: trim, mark up, and export" AutomationProperties.Name="Edit recording"><controls:LucideIcon Icon="Scissors" Width="13" Height="13" /></Button>
+                          <Button Tag="{Binding}" Width="28" Height="28" Padding="6" Margin="0,0,4,0" Background="#26272A" BorderBrush="#3A3B3F" Click="ShowRecordingInFolder_Click" ToolTip="Show in folder" AutomationProperties.Name="Show recording in folder"><controls:LucideIcon Icon="FolderOpen" Width="13" Height="13" /></Button>
+                          <Button Tag="{Binding}" Width="28" Height="28" Padding="6" Background="#26272A" BorderBrush="#3A3B3F" Click="DeleteRecording_Click" ToolTip="Move recording to the Recycle Bin" AutomationProperties.Name="Delete recording"><controls:LucideIcon Icon="Trash2" Width="13" Height="13" /></Button>
+                        </StackPanel>
+                      </StackPanel>
                     </Grid>
-                    <DataTemplate.Triggers>
-                      <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                        <Setter TargetName="ThumbnailFrame" Property="BorderBrush" Value="#747984" />
-                        <Setter TargetName="DeleteRecentButton" Property="Visibility" Value="Visible" />
-                      </DataTrigger>
-                      <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                        <Setter TargetName="ThumbnailFrame" Property="BorderBrush" Value="#D7DADF" />
-                        <Setter TargetName="DeleteRecentButton" Property="Visibility" Value="Visible" />
-                      </DataTrigger>
-                      <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                        <Setter TargetName="ThumbnailFrame" Property="BorderBrush" Value="#FFD84A" />
-                        <Setter TargetName="ThumbnailFrame" Property="BorderThickness" Value="2" />
-                      </DataTrigger>
-                    </DataTemplate.Triggers>
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
             </Grid>
           </Grid>
         </Grid>
-      </Border>
-    </Grid>
-    <Border Grid.Row="2" Background="#151619" BorderBrush="#292B30" BorderThickness="0,1,0,0" Padding="36,0">
-      <Grid>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <controls:LucideIcon Icon="PanelBottom" Foreground="#90939A" Width="17" Height="17" Margin="0,0,10,0" />
-          <TextBlock Text="Available in your tray" Foreground="#90939A" FontSize="13" VerticalAlignment="Center" />
-        </StackPanel>
-        <TextBlock Grid.Column="1" x:Name="StatusText" Text="" Foreground="#A5A7AD" FontSize="13" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="590" />
+
+        <Grid Grid.Row="3" Margin="14,10,14,14">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <Border x:Name="SearchFrame" Height="54" CornerRadius="27" Background="#202124" BorderBrush="#323337" BorderThickness="1" Cursor="IBeam">
+            <Grid>
+              <controls:LucideIcon Icon="Search" Width="20" Height="20" Foreground="#A3A5AB" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20,0,0,0" IsHitTestVisible="False" />
+              <TextBlock x:Name="SearchPlaceholder" Text="Search names and text" Foreground="#8E9097" FontSize="16" Margin="52,0,34,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsHitTestVisible="False" />
+              <TextBox x:Name="SearchBox" Style="{StaticResource SearchTextBox}" FontSize="16" Margin="50,0,34,0" VerticalAlignment="Center" TextChanged="SearchBox_TextChanged" PreviewKeyDown="SearchBox_PreviewKeyDown" ToolTip="Search by time, date, typed markup, and text inside images (Ctrl+F)" AutomationProperties.Name="Search names and text" />
+              <Button x:Name="ClearSearchButton" HorizontalAlignment="Right" VerticalAlignment="Center" Width="26" Height="26" Margin="0,0,12,0" Padding="6" Background="Transparent" BorderThickness="0" Visibility="Collapsed" Click="ClearSearch_Click" ToolTip="Clear search" AutomationProperties.Name="Clear search">
+                <controls:LucideIcon Icon="X" Width="12" Height="12" />
+              </Button>
+            </Grid>
+          </Border>
+          <Button x:Name="AddCaptureButton" Grid.Column="1" Width="58" Height="58" Margin="12,0,0,0" Click="AddCapture_Click" ToolTip="Capture or record" AutomationProperties.Name="New capture" Cursor="Hand">
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <Grid>
+                  <Ellipse x:Name="Disc" Fill="#FFD400" />
+                  <controls:LucideIcon Icon="Plus" Width="26" Height="26" Foreground="#141414" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  <Ellipse x:Name="Ring" Stroke="Transparent" StrokeThickness="2" />
+                </Grid>
+                <ControlTemplate.Triggers>
+                  <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Disc" Property="Fill" Value="#FFDF3D" /></Trigger>
+                  <Trigger Property="IsPressed" Value="True"><Setter TargetName="Disc" Property="Fill" Value="#E6BF00" /></Trigger>
+                  <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Ring" Property="Stroke" Value="White" /></Trigger>
+                </ControlTemplate.Triggers>
+              </ControlTemplate>
+            </Button.Template>
+          </Button>
+          <Popup x:Name="CaptureMenuPopup" PlacementTarget="{Binding ElementName=AddCaptureButton}" Placement="Top" HorizontalOffset="-220" VerticalOffset="-8" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+            <Border Background="#202124" BorderBrush="#3A3B3F" BorderThickness="1" CornerRadius="14" Padding="6" Width="278" Button.Click="CaptureMenu_ItemClick">
+              <StackPanel>
+                <Button x:Name="AreaButton" Style="{StaticResource MenuRowButton}" Click="Area_Click" ToolTip="Select a region (Ctrl + Shift + F9)" AutomationProperties.Name="Capture area">
+                  <Grid>
+                    <StackPanel Orientation="Horizontal"><controls:LucideIcon Icon="Maximize" Width="16" Height="16" Margin="0,0,10,0" /><TextBlock Text="Capture area" /></StackPanel>
+                    <TextBlock x:Name="CaptureShortcutText" Text="Ctrl + Shift + F9" Foreground="#8F9299" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                  </Grid>
+                </Button>
+                <Button x:Name="WindowButton" Style="{StaticResource MenuRowButton}" Click="Window_Click" ToolTip="Click a window to capture it" AutomationProperties.Name="Capture window">
+                  <StackPanel Orientation="Horizontal"><controls:LucideIcon Icon="AppWindow" Width="16" Height="16" Margin="0,0,10,0" /><TextBlock x:Name="WindowButtonText" Text="Capture window" /></StackPanel>
+                </Button>
+                <Button x:Name="DisplayButton" Style="{StaticResource MenuRowButton}" Click="Display_Click" ToolTip="Click a display to capture it" AutomationProperties.Name="Capture display">
+                  <StackPanel Orientation="Horizontal"><controls:LucideIcon Icon="Monitor" Width="16" Height="16" Margin="0,0,10,0" /><TextBlock x:Name="DisplayButtonText" Text="Capture display" /></StackPanel>
+                </Button>
+                <Button x:Name="FullscreenButton" Style="{StaticResource MenuRowButton}" Click="Fullscreen_Click" ToolTip="Capture the whole display under the pointer immediately" AutomationProperties.Name="Capture fullscreen">
+                  <StackPanel Orientation="Horizontal"><controls:LucideIcon Icon="Fullscreen" Width="16" Height="16" Margin="0,0,10,0" /><TextBlock x:Name="FullscreenButtonText" Text="Capture fullscreen" /></StackPanel>
+                </Button>
+                <Button x:Name="ScrollingButton" Style="{StaticResource MenuRowButton}" Click="Scrolling_Click" ToolTip="Select an area or window; BetterShot scrolls it and stitches one tall capture" AutomationProperties.Name="Scrolling capture">
+                  <StackPanel Orientation="Horizontal"><controls:LucideIcon Icon="ScrollText" Width="16" Height="16" Margin="0,0,10,0" /><TextBlock x:Name="ScrollingButtonText" Text="Scrolling capture" /></StackPanel>
+                </Button>
+                <Border Height="1" Background="#34363A" Margin="6,4" />
+                <!-- Phase 6: screen recording. Record opens the region picker; the chevron offers window and display. -->
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <Button x:Name="RecordButton" Style="{StaticResource MenuRowButton}" Click="Record_Click" AutomationProperties.Name="Record screen">
+                    <StackPanel Orientation="Horizontal">
+                      <Grid Width="16" Height="16" Margin="0,0,10,0">
+                        <controls:LucideIcon x:Name="RecordButtonIcon" Icon="Video" Width="16" Height="16" Foreground="#FF6B6B" />
+                        <Border x:Name="RecordStopSquare" Width="11" Height="11" CornerRadius="2" Background="#FF4D4D" Visibility="Collapsed" />
+                      </Grid>
+                      <TextBlock x:Name="RecordButtonText" Text="Record" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                  <Button x:Name="RecordModeButton" Grid.Column="1" Style="{StaticResource MenuRowButton}" Width="40" Padding="0" HorizontalContentAlignment="Center" Click="RecordMode_Click" ToolTip="Record a window or a whole display" AutomationProperties.Name="More recording options">
+                    <controls:LucideIcon Icon="ChevronRight" Width="15" Height="15" />
+                  </Button>
+                  <Popup x:Name="RecordModePopup" PlacementTarget="{Binding ElementName=RecordModeButton}" Placement="Right" HorizontalOffset="8" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                    <Border Background="#202226" BorderBrush="#50535B" BorderThickness="1" CornerRadius="10" Padding="4" MinWidth="200">
+                      <StackPanel>
+                        <Button Style="{StaticResource MenuRowButton}" Click="RecordRegion_Click" AutomationProperties.Name="Record a region">
+                          <StackPanel Orientation="Horizontal"><controls:LucideIcon Icon="Maximize" Width="15" Height="15" Margin="0,0,9,0" /><TextBlock Text="Record a region…" /></StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource MenuRowButton}" Click="RecordWindow_Click" AutomationProperties.Name="Record a window">
+                          <StackPanel Orientation="Horizontal"><controls:LucideIcon Icon="AppWindow" Width="15" Height="15" Margin="0,0,9,0" /><TextBlock Text="Record a window…" /></StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource MenuRowButton}" Click="RecordDisplay_Click" AutomationProperties.Name="Record a display">
+                          <StackPanel Orientation="Horizontal"><controls:LucideIcon Icon="Monitor" Width="15" Height="15" Margin="0,0,9,0" /><TextBlock Text="Record a display…" /></StackPanel>
+                        </Button>
+                      </StackPanel>
+                    </Border>
+                  </Popup>
+                </Grid>
+                <Border Height="1" Background="#34363A" Margin="6,4" />
+                <Button Style="{StaticResource MenuRowButton}" Click="MenuSettings_Click" AutomationProperties.Name="Settings">
+                  <StackPanel Orientation="Horizontal"><controls:LucideIcon Icon="Settings" Width="16" Height="16" Margin="0,0,10,0" /><TextBlock Text="Settings" /></StackPanel>
+                </Button>
+              </StackPanel>
+            </Border>
+          </Popup>
+        </Grid>
       </Grid>
     </Border>
-    <Border x:Name="SettingsPanel" Grid.Row="1" Visibility="Collapsed" Width="430" HorizontalAlignment="Right" Background="#1B1C20" BorderBrush="#36383E" BorderThickness="1,0,0,0" Padding="30" Panel.ZIndex="10">
+
+    <!-- The editor for the open capture (EditorSurface, shared with the standalone editor window). -->
+    <ContentControl x:Name="EditorHost" Grid.Column="1" Focusable="False" Visibility="Collapsed" />
+
+    <!-- Windows caption buttons. The top 56 DIP of the window drags it; controls there opt out. -->
+    <StackPanel x:Name="CaptionButtons" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Panel.ZIndex="20">
+      <Button x:Name="SettingsButton" Style="{StaticResource ChromeButton}" ToolTip="Settings" AutomationProperties.Name="Settings" Click="Settings_Click">
+        <controls:LucideIcon Icon="Settings" Width="17" Height="17" Foreground="#C8C9CD" />
+      </Button>
+      <Button Style="{StaticResource ChromeButton}" ToolTip="Minimize" AutomationProperties.Name="Minimize" Click="Minimize_Click">
+        <controls:LucideIcon Icon="Minus" Width="14" Height="14" Foreground="#C8C9CD" />
+      </Button>
+      <Button Style="{StaticResource ChromeButton}" ToolTip="Maximize or restore" AutomationProperties.Name="Maximize or restore" Click="Maximize_Click">
+        <controls:LucideIcon Icon="Square" Width="13" Height="13" Foreground="#C8C9CD" />
+      </Button>
+      <Button Style="{StaticResource CloseChromeButton}" ToolTip="Close to tray" AutomationProperties.Name="Close to tray" Click="Close_Click">
+        <controls:LucideIcon Icon="X" Width="14" Height="14" Foreground="#C8C9CD" />
+      </Button>
+    </StackPanel>
+    <Border x:Name="SettingsPanel" Grid.ColumnSpan="2" Visibility="Collapsed" Margin="0,40,0,0" Width="430" HorizontalAlignment="Right" Background="#1B1C20" BorderBrush="#36383E" BorderThickness="1,0,0,0" Padding="30" Panel.ZIndex="10">
       <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0">
         <ScrollViewer.Resources>
           <Style TargetType="ScrollBar">
@@ -389,6 +660,87 @@
           <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
         </Grid.RowDefinitions>
+        <Grid.Resources>
+          <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#D7D8DB" />
+          </Style>
+          <Style x:Key="SettingHint" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#9B9EA5" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="LineHeight" Value="17" />
+          </Style>
+          <Style x:Key="SettingLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#E7E8EB" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+          </Style>
+          <Style x:Key="SettingToggle" TargetType="CheckBox" BasedOn="{StaticResource ShortcutToggle}">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Margin" Value="0,12,0,0" />
+          </Style>
+          <Style x:Key="RecorderButton" TargetType="controls:HotkeyRecorderButton" BasedOn="{StaticResource QuietButton}">
+            <Setter Property="Width" Value="190" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Margin" Value="0,5,0,5" />
+          </Style>
+          <Style x:Key="DarkTextBox" TargetType="TextBox">
+            <Setter Property="Foreground" Value="#F0F1F3" />
+            <Setter Property="Background" Value="#24262A" />
+            <Setter Property="BorderBrush" Value="#484B53" />
+            <Setter Property="CaretBrush" Value="#FFD84A" />
+            <Setter Property="SelectionBrush" Value="#8A7A2E" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                  <Border x:Name="Frame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="7" Padding="10,0">
+                    <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center" />
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#747984" /></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#FFD84A" /></Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+          </Style>
+          <Style x:Key="DarkSlider" TargetType="Slider">
+            <Setter Property="Focusable" Value="True" />
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                  <Grid Height="22" Background="Transparent">
+                    <Border Height="4" CornerRadius="2" Background="#373A41" VerticalAlignment="Center" />
+                    <Track x:Name="PART_Track">
+                      <Track.DecreaseRepeatButton>
+                        <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
+                          <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Height="4" CornerRadius="2" Background="#FFD84A" VerticalAlignment="Center" /></ControlTemplate></RepeatButton.Template>
+                        </RepeatButton>
+                      </Track.DecreaseRepeatButton>
+                      <Track.IncreaseRepeatButton>
+                        <RepeatButton Command="Slider.IncreaseLarge" Focusable="False">
+                          <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent" /></ControlTemplate></RepeatButton.Template>
+                        </RepeatButton>
+                      </Track.IncreaseRepeatButton>
+                      <Track.Thumb>
+                        <Thumb>
+                          <Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse x:Name="Knob" Width="16" Height="16" Fill="#FFD84A" Stroke="#17150B" StrokeThickness="1" /></ControlTemplate></Thumb.Template>
+                        </Thumb>
+                      </Track.Thumb>
+                    </Track>
+                  </Grid>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45" /></Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+          </Style>
+        </Grid.Resources>
         <Grid>
           <TextBlock Text="Settings" FontSize="24" FontWeight="SemiBold" />
           <Button HorizontalAlignment="Right" Width="34" Height="34" Padding="8" Background="Transparent" BorderThickness="0" AutomationProperties.Name="Close settings" Click="SettingsClose_Click">
@@ -396,23 +748,203 @@
           </Button>
         </Grid>
         <StackPanel Grid.Row="1" Margin="0,28,0,0">
-          <TextBlock Text="Startup" FontSize="16" FontWeight="SemiBold" Foreground="#D7D8DB" />
+          <TextBlock Text="Startup" Style="{StaticResource SectionHeader}" />
           <CheckBox x:Name="StartWithWindowsCheckBox" Style="{StaticResource ShortcutToggle}" Content="Start with Windows" Foreground="{StaticResource TextBrush}" Margin="0,14,0,0" Checked="StartWithWindows_Changed" Unchecked="StartWithWindows_Changed" />
           <TextBlock Text="Open quietly in the tray when you sign in." Foreground="#9B9EA5" FontSize="12" TextWrapping="Wrap" Margin="24,8,0,24" />
-          <TextBlock Text="Capture shortcuts" FontSize="16" FontWeight="SemiBold" Foreground="#D7D8DB" />
-          <CheckBox Style="{StaticResource ShortcutToggle}" x:Name="ReplaceShortcutCheckBox" Content="Use Win + Shift + S for BetterShot" Foreground="{StaticResource TextBrush}" Margin="0,16,0,0" Checked="ReplaceShortcut_Changed" Unchecked="ReplaceShortcut_Changed" />
-          <TextBlock Text="Remembered across restarts. Fallback: Ctrl + Shift + F9" Foreground="#9B9EA5" FontSize="12" TextWrapping="Wrap" Margin="24,8,0,0" />
+
+          <TextBlock Text="Capture" Style="{StaticResource SectionHeader}" />
+          <CheckBox Style="{StaticResource ShortcutToggle}" x:Name="ReplaceShortcutCheckBox" Content="Use Win + Shift + S for area capture" Foreground="{StaticResource TextBrush}" Margin="0,16,0,0" Checked="ReplaceShortcut_Changed" Unchecked="ReplaceShortcut_Changed" />
+          <TextBlock Text="Remembered across restarts. Ctrl + Shift + F9 always captures an area." Style="{StaticResource SettingHint}" Margin="24,8,0,10" />
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Area" Style="{StaticResource SettingLabel}" />
+            <controls:HotkeyRecorderButton x:Name="AreaHotkeyRecorder" Grid.Column="1" Style="{StaticResource RecorderButton}" Tag="Area" AutomationProperties.Name="Area capture shortcut" RecordingStarted="HotkeyRecorder_RecordingStarted" RecordingEnded="HotkeyRecorder_RecordingEnded" Recorded="HotkeyRecorder_Recorded" />
+            <TextBlock Grid.Row="1" Text="Window" Style="{StaticResource SettingLabel}" />
+            <controls:HotkeyRecorderButton x:Name="WindowHotkeyRecorder" Grid.Row="1" Grid.Column="1" Style="{StaticResource RecorderButton}" Tag="Window" AutomationProperties.Name="Window capture shortcut" RecordingStarted="HotkeyRecorder_RecordingStarted" RecordingEnded="HotkeyRecorder_RecordingEnded" Recorded="HotkeyRecorder_Recorded" />
+            <TextBlock Grid.Row="2" Text="Fullscreen (display under pointer)" Style="{StaticResource SettingLabel}" TextTrimming="CharacterEllipsis" />
+            <controls:HotkeyRecorderButton x:Name="FullscreenHotkeyRecorder" Grid.Row="2" Grid.Column="1" Style="{StaticResource RecorderButton}" Tag="Fullscreen" AutomationProperties.Name="Fullscreen capture shortcut" RecordingStarted="HotkeyRecorder_RecordingStarted" RecordingEnded="HotkeyRecorder_RecordingEnded" Recorded="HotkeyRecorder_Recorded" />
+            <TextBlock Grid.Row="3" Text="Open library" Style="{StaticResource SettingLabel}" />
+            <controls:HotkeyRecorderButton x:Name="LibraryHotkeyRecorder" Grid.Row="3" Grid.Column="1" Style="{StaticResource RecorderButton}" Tag="Library" AutomationProperties.Name="Open library shortcut" RecordingStarted="HotkeyRecorder_RecordingStarted" RecordingEnded="HotkeyRecorder_RecordingEnded" Recorded="HotkeyRecorder_Recorded" />
+            <TextBlock Grid.Row="4" Text="Scrolling capture" Style="{StaticResource SettingLabel}" />
+            <controls:HotkeyRecorderButton x:Name="ScrollingHotkeyRecorder" Grid.Row="4" Grid.Column="1" Style="{StaticResource RecorderButton}" Tag="Scrolling" AutomationProperties.Name="Scrolling capture shortcut" RecordingStarted="HotkeyRecorder_RecordingStarted" RecordingEnded="HotkeyRecorder_RecordingEnded" Recorded="HotkeyRecorder_Recorded" />
+          </Grid>
+          <TextBlock Text="Click a shortcut, then press the keys. Esc cancels; Backspace clears." Style="{StaticResource SettingHint}" Margin="0,6,0,0" />
+          <TextBlock x:Name="HotkeyProblemText" Style="{StaticResource SettingHint}" Foreground="#FF8787" Margin="0,6,0,0" Visibility="Collapsed" />
+          <Grid Margin="0,14,0,0">
+            <TextBlock Text="Delay before capture" Style="{StaticResource SettingLabel}" />
+            <ComboBox x:Name="DelayComboBox" Style="{StaticResource DarkComboBox}" Width="130" Height="34" HorizontalAlignment="Right" SelectionChanged="DelayCombo_SelectionChanged" AutomationProperties.Name="Delay before capture">
+              <ComboBoxItem Content="Off" Tag="0" />
+              <ComboBoxItem Content="3 seconds" Tag="3" />
+              <ComboBoxItem Content="5 seconds" Tag="5" />
+              <ComboBoxItem Content="10 seconds" Tag="10" />
+            </ComboBox>
+          </Grid>
+          <TextBlock Text="Gives you time to open menus. A countdown appears at the bottom of the screen; use the shortcut again to cancel." Style="{StaticResource SettingHint}" Margin="0,8,0,24" />
+
+          <TextBlock Text="After capture" Style="{StaticResource SectionHeader}" />
+          <CheckBox x:Name="CopyToClipboardCheckBox" Style="{StaticResource SettingToggle}" Content="Copy to clipboard" Checked="AfterCaptureToggle_Changed" Unchecked="AfterCaptureToggle_Changed" />
+          <CheckBox x:Name="ShowThumbnailCheckBox" Style="{StaticResource SettingToggle}" Content="Show floating thumbnail" Checked="AfterCaptureToggle_Changed" Unchecked="AfterCaptureToggle_Changed" />
+          <TextBlock Text="When off, each capture is saved straight to the save folder." Style="{StaticResource SettingHint}" Margin="24,6,0,0" />
+          <CheckBox x:Name="OpenEditorCheckBox" Style="{StaticResource SettingToggle}" Content="Open editor after capture" Checked="AfterCaptureToggle_Changed" Unchecked="AfterCaptureToggle_Changed" />
+          <CheckBox x:Name="PlaySoundCheckBox" Style="{StaticResource SettingToggle}" Content="Play capture sound" Checked="AfterCaptureToggle_Changed" Unchecked="AfterCaptureToggle_Changed" />
+          <Grid Margin="0,16,0,0">
+            <TextBlock Text="Auto-dismiss thumbnails" Style="{StaticResource SettingLabel}" />
+            <ComboBox x:Name="AutoDismissComboBox" Style="{StaticResource DarkComboBox}" Width="130" Height="34" HorizontalAlignment="Right" SelectionChanged="AutoDismissCombo_SelectionChanged" AutomationProperties.Name="Auto-dismiss thumbnails">
+              <ComboBoxItem Content="Never" Tag="0" />
+              <ComboBoxItem Content="10 seconds" Tag="10" />
+              <ComboBoxItem Content="30 seconds" Tag="30" />
+              <ComboBoxItem Content="60 seconds" Tag="60" />
+            </ComboBox>
+          </Grid>
+          <TextBlock Text="Hovering a thumbnail pauses the countdown. Dismissed captures stay in the library." Style="{StaticResource SettingHint}" Margin="0,8,0,24" />
+
+          <TextBlock Text="Saving" Style="{StaticResource SectionHeader}" />
+          <TextBlock Text="Save folder" Style="{StaticResource SettingLabel}" Margin="0,14,0,0" />
+          <Border Background="#121316" BorderBrush="#34363B" BorderThickness="1" CornerRadius="7" Padding="10,7" Margin="0,8,0,0">
+            <TextBlock x:Name="SaveFolderText" Foreground="#C9CBD0" FontSize="12" TextTrimming="CharacterEllipsis" />
+          </Border>
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <Button x:Name="ChooseSaveFolderButton" Style="{StaticResource QuietButton}" Click="ChooseSaveFolder_Click" ToolTip="Choose where captures are saved">
+              <StackPanel Orientation="Horizontal">
+                <controls:LucideIcon Icon="Folder" Width="15" Height="15" Margin="0,0,7,0" />
+                <TextBlock Text="Choose…" />
+              </StackPanel>
+            </Button>
+            <Button x:Name="OpenSaveFolderButton" Style="{StaticResource QuietButton}" Margin="8,0,0,0" Click="OpenSaveFolder_Click" ToolTip="Open the save folder in File Explorer">
+              <StackPanel Orientation="Horizontal">
+                <controls:LucideIcon Icon="FolderOpen" Width="15" Height="15" Margin="0,0,7,0" />
+                <TextBlock Text="Open save folder" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+          <CheckBox x:Name="AutoSaveCheckBox" Style="{StaticResource SettingToggle}" Content="Save every capture to this folder" Margin="0,14,0,0" Checked="AfterCaptureToggle_Changed" Unchecked="AfterCaptureToggle_Changed" />
+          <TextBlock Text="File name" Style="{StaticResource SettingLabel}" Margin="0,16,0,0" />
+          <TextBox x:Name="FileNamePatternBox" Style="{StaticResource DarkTextBox}" Height="34" Margin="0,8,0,0" TextChanged="FileNamePattern_TextChanged" LostKeyboardFocus="FileNamePattern_LostKeyboardFocus" KeyDown="FileNamePattern_KeyDown" AutomationProperties.Name="File name pattern" />
+          <TextBlock x:Name="FileNamePreviewText" Foreground="#FFE477" FontSize="12" Margin="0,7,0,0" TextTrimming="CharacterEllipsis" />
+          <TextBlock Text="Tokens: %date (2026-08-05), %time (10.22.31), %year, %month, %day, %hour, %minute, %second, %counter. Characters Windows doesn't allow become dashes; existing files get (2), (3)…" Style="{StaticResource SettingHint}" Margin="0,6,0,0" />
+          <Grid Margin="0,16,0,0">
+            <TextBlock Text="Format" Style="{StaticResource SettingLabel}" />
+            <ComboBox x:Name="FormatComboBox" Style="{StaticResource DarkComboBox}" Width="130" Height="34" HorizontalAlignment="Right" SelectionChanged="FormatCombo_SelectionChanged" AutomationProperties.Name="Image format">
+              <ComboBoxItem Content="PNG" Tag="png" />
+              <ComboBoxItem Content="JPEG" Tag="jpeg" />
+            </ComboBox>
+          </Grid>
+          <Grid x:Name="JpegQualityRow" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="40" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="JPEG quality" Style="{StaticResource SettingLabel}" />
+            <Slider x:Name="JpegQualitySlider" Grid.Column="1" Style="{StaticResource DarkSlider}" Minimum="10" Maximum="100" SmallChange="1" LargeChange="10" IsSnapToTickEnabled="True" TickFrequency="1" Margin="14,0,10,0" VerticalAlignment="Center" ValueChanged="JpegQuality_ValueChanged" LostMouseCapture="JpegQuality_Commit" LostKeyboardFocus="JpegQuality_Commit" AutomationProperties.Name="JPEG quality" />
+            <TextBlock x:Name="JpegQualityText" Grid.Column="2" Style="{StaticResource SettingLabel}" HorizontalAlignment="Right" />
+          </Grid>
+          <Grid Margin="0,14,0,0">
+            <TextBlock Text="Export size" Style="{StaticResource SettingLabel}" />
+            <ComboBox x:Name="ResizeComboBox" Style="{StaticResource DarkComboBox}" Width="190" Height="34" HorizontalAlignment="Right" SelectionChanged="ResizeCombo_SelectionChanged" AutomationProperties.Name="Export size">
+              <ComboBoxItem Content="Full size" Tag="0" />
+              <ComboBoxItem Content="Fit within 1920 px" Tag="1920" />
+              <ComboBoxItem Content="Fit within 1280 px" Tag="1280" />
+            </ComboBox>
+          </Grid>
+          <CheckBox x:Name="ResizeClipboardCheckBox" Style="{StaticResource SettingToggle}" Content="Also resize clipboard copies" Checked="AfterCaptureToggle_Changed" Unchecked="AfterCaptureToggle_Changed" />
+          <TextBlock Text="Format and size apply to saved files and dragged images. Clipboard copies stay full size unless the option above is on; the library always keeps the original." Style="{StaticResource SettingHint}" Margin="0,8,0,0" />
+
+          <!-- Phase 6: screen recording options (MainWindow.Recording.cs). -->
+          <StackPanel x:Name="RecordingSettingsSection" Margin="0,30,0,0">
+            <TextBlock Text="Recording" Style="{StaticResource SectionHeader}" />
+            <Grid Margin="0,10,0,0">
+              <TextBlock Text="Record screen" Style="{StaticResource SettingLabel}" />
+              <controls:HotkeyRecorderButton x:Name="RecordHotkeyRecorder" Style="{StaticResource RecorderButton}" Tag="Record" AutomationProperties.Name="Record screen shortcut" RecordingStarted="HotkeyRecorder_RecordingStarted" RecordingEnded="HotkeyRecorder_RecordingEnded" Recorded="HotkeyRecorder_Recorded" />
+            </Grid>
+            <TextBlock Text="Starts a region recording; press it again to stop." Style="{StaticResource SettingHint}" Margin="0,4,0,0" />
+            <Grid Margin="0,14,0,0">
+              <TextBlock Text="Countdown" Style="{StaticResource SettingLabel}" />
+              <ComboBox x:Name="RecordingCountdownComboBox" Style="{StaticResource DarkComboBox}" Width="130" Height="34" HorizontalAlignment="Right" SelectionChanged="RecordingCombo_SelectionChanged" AutomationProperties.Name="Recording countdown">
+                <ComboBoxItem Content="Off" Tag="0" />
+                <ComboBoxItem Content="3 seconds" Tag="3" />
+                <ComboBoxItem Content="5 seconds" Tag="5" />
+              </ComboBox>
+            </Grid>
+            <Grid Margin="0,12,0,0">
+              <TextBlock Text="Frame rate" Style="{StaticResource SettingLabel}" />
+              <ComboBox x:Name="RecordingFrameRateComboBox" Style="{StaticResource DarkComboBox}" Width="130" Height="34" HorizontalAlignment="Right" SelectionChanged="RecordingCombo_SelectionChanged" AutomationProperties.Name="Recording frame rate">
+                <ComboBoxItem Content="30 fps" Tag="30" />
+                <ComboBoxItem Content="60 fps" Tag="60" />
+              </ComboBox>
+            </Grid>
+            <CheckBox x:Name="RecordMicrophoneCheckBox" Style="{StaticResource SettingToggle}" Content="Record microphone" Margin="0,16,0,0" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <ComboBox x:Name="MicrophoneComboBox" Style="{StaticResource DarkComboBox}" Height="34" Margin="42,10,0,0" SelectionChanged="RecordingDevice_SelectionChanged" AutomationProperties.Name="Microphone" />
+            <CheckBox x:Name="RecordSystemAudioCheckBox" Style="{StaticResource SettingToggle}" Content="Record system audio" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <TextBlock Text="Sound playing on your default output device, mixed with the microphone into one track." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <CheckBox x:Name="RecordCameraCheckBox" Style="{StaticResource SettingToggle}" Content="Record webcam" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <ComboBox x:Name="CameraComboBox" Style="{StaticResource DarkComboBox}" Height="34" Margin="42,10,0,0" SelectionChanged="RecordingDevice_SelectionChanged" AutomationProperties.Name="Camera" />
+            <TextBlock Text="Saved beside the screen recording with a &quot;-camera&quot; suffix." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <CheckBox x:Name="HighlightClicksCheckBox" Style="{StaticResource SettingToggle}" Content="Highlight mouse clicks" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <CheckBox x:Name="ShowKeystrokesCheckBox" Style="{StaticResource SettingToggle}" Content="Show keystrokes" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <TextBlock Text="Shows shortcuts such as Ctrl+Shift+K. Ordinary typing is never shown or saved." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <CheckBox x:Name="ReviewAfterRecordingCheckBox" Style="{StaticResource SettingToggle}" Content="Review and trim after recording" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <TextBlock Text="Opens the recording editor when a recording finishes. Edit from the library or a recording thumbnail at any time." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <CheckBox x:Name="KeepMarkedCopyCheckBox" Style="{StaticResource SettingToggle}" Content="Keep a marked copy for sharing" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <TextBlock Text="Dragging an edited recording shares a rendered copy with its cuts and marks. Recordings with a redaction always share the covered copy." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <CheckBox x:Name="TrimReplacesOriginalCheckBox" Style="{StaticResource SettingToggle}" Content="Save trim replaces the original" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <TextBlock Text="Off keeps the original and saves the trimmed copy beside it." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <Grid Margin="0,14,0,0">
+              <TextBlock Text="GIF frame rate" Style="{StaticResource SettingLabel}" />
+              <ComboBox x:Name="GifFpsComboBox" Style="{StaticResource DarkComboBox}" Width="130" Height="34" HorizontalAlignment="Right" SelectionChanged="RecordingCombo_SelectionChanged" AutomationProperties.Name="GIF frame rate">
+                <ComboBoxItem Content="8 fps" Tag="8" />
+                <ComboBoxItem Content="10 fps" Tag="10" />
+                <ComboBoxItem Content="12 fps" Tag="12" />
+                <ComboBoxItem Content="15 fps" Tag="15" />
+                <ComboBoxItem Content="20 fps" Tag="20" />
+                <ComboBoxItem Content="24 fps" Tag="24" />
+              </ComboBox>
+            </Grid>
+            <Grid Margin="0,12,0,0">
+              <TextBlock Text="GIF size" Style="{StaticResource SettingLabel}" />
+              <ComboBox x:Name="GifMaxDimensionComboBox" Style="{StaticResource DarkComboBox}" Width="130" Height="34" HorizontalAlignment="Right" SelectionChanged="RecordingCombo_SelectionChanged" AutomationProperties.Name="GIF size">
+                <ComboBoxItem Content="480 px" Tag="480" />
+                <ComboBoxItem Content="640 px" Tag="640" />
+                <ComboBoxItem Content="800 px" Tag="800" />
+                <ComboBoxItem Content="960 px" Tag="960" />
+                <ComboBoxItem Content="1280 px" Tag="1280" />
+                <ComboBoxItem Content="Original" Tag="0" />
+              </ComboBox>
+            </Grid>
+            <TextBlock Text="The longest side of exported GIFs. Smaller GIFs share faster." Style="{StaticResource SettingHint}" Margin="0,6,0,0" />
+            <TextBlock Text="Recording file name" Style="{StaticResource SettingLabel}" Margin="0,16,0,0" />
+            <TextBox x:Name="RecordingFileNamePatternBox" Style="{StaticResource DarkTextBox}" Height="34" Margin="0,8,0,0" TextChanged="RecordingFileNamePattern_TextChanged" LostKeyboardFocus="RecordingFileNamePattern_LostKeyboardFocus" KeyDown="RecordingFileNamePattern_KeyDown" AutomationProperties.Name="Recording file name pattern" />
+            <TextBlock x:Name="RecordingFileNamePreviewText" Foreground="#FFE477" FontSize="12" Margin="0,7,0,0" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="Recordings are saved as MP4 (H.264 video, AAC audio) in the save folder above and use the same tokens." Style="{StaticResource SettingHint}" Margin="0,6,0,0" />
+          </StackPanel>
         </StackPanel>
         <StackPanel Grid.Row="2" Margin="0,30,0,0">
-          <TextBlock Text="Capture history" FontSize="16" FontWeight="SemiBold" Foreground="#D7D8DB" />
-          <TextBlock Text="Automatically delete captures after this many days. Saved copies are kept." Foreground="#9B9EA5" FontSize="13" TextWrapping="Wrap" LineHeight="19" Margin="0,8,0,10" />
+          <TextBlock Text="Library" Style="{StaticResource SectionHeader}" />
+          <TextBlock Text="Automatically delete captures from the library after this long. Saved copies are kept." Foreground="#9B9EA5" FontSize="13" TextWrapping="Wrap" LineHeight="19" Margin="0,8,0,10" />
           <ComboBox x:Name="RetentionComboBox" Style="{StaticResource DarkComboBox}" Width="160" Height="38" HorizontalAlignment="Left" SelectionChanged="RetentionCombo_SelectionChanged">
             <ComboBoxItem Content="1 day" Tag="1" />
             <ComboBoxItem Content="7 days" Tag="7" />
             <ComboBoxItem Content="14 days" Tag="14" />
             <ComboBoxItem Content="30 days" Tag="30" />
             <ComboBoxItem Content="90 days" Tag="90" />
+            <ComboBoxItem Content="180 days" Tag="180" />
+            <ComboBoxItem Content="Never" Tag="0" />
           </ComboBox>
+          <CheckBox x:Name="SearchTextCheckBox" Style="{StaticResource SettingToggle}" Content="Search text inside images" Margin="0,18,0,0" Checked="SearchText_Changed" Unchecked="SearchText_Changed" />
+          <TextBlock Text="Reads the words in your captures on this PC with Windows text recognition so library search can find them. Images are never uploaded. Turning this off deletes the stored text." Style="{StaticResource SettingHint}" Margin="24,6,0,0" />
+          <TextBlock x:Name="TextIndexStatusText" Style="{StaticResource SettingHint}" Foreground="#C9CBD0" Margin="24,6,0,0" />
+          <TextBlock Text="Keep markup editable" Style="{StaticResource SettingLabel}" FontWeight="SemiBold" Margin="0,18,0,0" />
+          <TextBlock Text="Arrows, shapes, text, and other markup stay editable for as long as a capture is in the library. Open it again to move, restyle, or delete anything. Redactions are always burned into copied, saved, and dragged images." Style="{StaticResource SettingHint}" Margin="0,6,0,0" />
         </StackPanel>
         <StackPanel Grid.Row="3" Margin="0,30,0,0">
           <TextBlock Text="Drag screenshots" FontSize="16" FontWeight="SemiBold" Foreground="#D7D8DB" />
@@ -421,6 +953,67 @@
             <ComboBoxItem Content="PNG file" Tag="file" />
           </ComboBox>
           <TextBlock Text="Image mode includes a PNG attachment for Slack and other upload targets. PNG file mode offers only a file." Foreground="#9B9EA5" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,26" />
+          <StackPanel x:Name="AskClaudeSection">
+            <StackPanel.Resources>
+              <Style x:Key="DarkPasswordBox" TargetType="PasswordBox">
+                <Setter Property="Foreground" Value="#F0F1F3" />
+                <Setter Property="Background" Value="#24262A" />
+                <Setter Property="BorderBrush" Value="#484B53" />
+                <Setter Property="CaretBrush" Value="#FFD84A" />
+                <Setter Property="SelectionBrush" Value="#8A7A2E" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="Template">
+                  <Setter.Value>
+                    <ControlTemplate TargetType="PasswordBox">
+                      <Border x:Name="Frame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="7" Padding="10,0">
+                        <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center" />
+                      </Border>
+                      <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#747984" /></Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#FFD84A" /></Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </Setter.Value>
+                </Setter>
+              </Style>
+            </StackPanel.Resources>
+            <TextBlock Text="Ask Claude" Style="{StaticResource SectionHeader}" />
+            <TextBlock Text="Ask Claude about a capture with your own Anthropic API key." Style="{StaticResource SettingHint}" FontSize="13" Margin="0,8,0,0" />
+            <TextBlock Text="API key" Style="{StaticResource SettingLabel}" Margin="0,14,0,0" />
+            <Grid Margin="0,8,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <PasswordBox x:Name="ApiKeyBox" Style="{StaticResource DarkPasswordBox}" Height="34" PasswordChanged="ApiKeyBox_PasswordChanged" KeyDown="ApiKeyBox_KeyDown" AutomationProperties.Name="Anthropic API key" />
+              <TextBlock x:Name="ApiKeyPlaceholder" Text="Paste your API key" Foreground="#73767E" FontSize="13" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" TextTrimming="CharacterEllipsis" />
+              <Button x:Name="SaveApiKeyButton" Grid.Column="1" Style="{StaticResource QuietButton}" Margin="8,0,0,0" Content="Save" Click="SaveApiKey_Click" ToolTip="Encrypt and save the key for this Windows account" />
+              <Button x:Name="RemoveApiKeyButton" Grid.Column="2" Style="{StaticResource QuietButton}" Margin="8,0,0,0" Content="Remove" Click="RemoveApiKey_Click" ToolTip="Delete the saved key from this PC" />
+            </Grid>
+            <StackPanel x:Name="ApiKeySavedState" Orientation="Horizontal" Margin="0,8,0,0">
+              <controls:LucideIcon Icon="Check" Width="14" Height="14" Foreground="#7FD99A" Margin="0,0,6,0" />
+              <TextBlock Text="Saved securely" Foreground="#7FD99A" FontSize="12" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock x:Name="ApiKeyProblemText" Style="{StaticResource SettingHint}" Foreground="#FF8787" Margin="0,6,0,0" Visibility="Collapsed" />
+            <Grid Margin="0,14,0,0">
+              <TextBlock Text="Model" Style="{StaticResource SettingLabel}" />
+              <ComboBox x:Name="AiModelComboBox" Style="{StaticResource DarkComboBox}" Width="250" Height="34" HorizontalAlignment="Right" SelectionChanged="AiModelCombo_SelectionChanged" AutomationProperties.Name="Ask Claude model" />
+            </Grid>
+            <TextBlock Text="The key is stored with Windows data protection and only sent to api.anthropic.com. Create one at console.anthropic.com." Style="{StaticResource SettingHint}" Margin="0,8,0,26" />
+          </StackPanel>
+          <TextBlock Text="Updates" FontSize="16" FontWeight="SemiBold" Foreground="#D7D8DB" />
+          <CheckBox x:Name="AutoUpdateCheckBox" Style="{StaticResource ShortcutToggle}" Content="Automatically check for updates" Foreground="{StaticResource TextBrush}" Margin="0,14,0,0" Checked="AutoUpdate_Changed" Unchecked="AutoUpdate_Changed" />
+          <TextBlock Text="Once a day in the background, never while capturing. BetterShot only asks GitHub for the latest release and never installs anything without asking." Style="{StaticResource SettingHint}" Margin="24,8,0,0" />
+          <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+            <Button x:Name="CheckForUpdatesButton" Style="{StaticResource QuietButton}" Click="CheckForUpdates_Click" ToolTip="Ask GitHub whether a newer BetterShot release is available">
+              <StackPanel Orientation="Horizontal">
+                <controls:LucideIcon Icon="RefreshCw" Width="15" Height="15" Margin="0,0,7,0" />
+                <TextBlock Text="Check for updates" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+          <TextBlock x:Name="UpdateStatusText" Style="{StaticResource SettingHint}" Margin="0,8,0,26" />
           <TextBlock Text="About" FontSize="16" FontWeight="SemiBold" Foreground="#D7D8DB" />
           <TextBlock x:Name="VersionText" Margin="0,12,0,0" Foreground="#A6A8AE" />
           <Button Style="{StaticResource QuietButton}" Content="Open-source licenses" HorizontalAlignment="Left" Margin="0,13,0,0" Click="Licenses_Click" />

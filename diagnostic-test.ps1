@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$app = Join-Path $PSScriptRoot 'BetterShot\bin\Release\net10.0-windows\BetterShot.exe'
+$app = Join-Path $PSScriptRoot 'BetterShot\bin\Release\net10.0-windows10.0.19041.0\BetterShot.exe'
 $localDotnetRoot = Join-Path $PSScriptRoot '.tools\dotnet'
 if (!(Test-Path $app)) { throw 'BetterShot is not built. Run build.ps1 first.' }
 if (Test-Path (Join-Path $localDotnetRoot 'dotnet.exe')) {

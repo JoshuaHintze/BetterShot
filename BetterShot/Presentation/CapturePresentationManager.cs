@@ -1,4 +1,6 @@
+using BetterShot.Ai;
 using BetterShot.Editing;
+using BetterShot.Export;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -18,7 +20,24 @@ public sealed class CapturePresentationManager : IDisposable
     public event EventHandler<CaptureDocumentEventArgs>? DeleteRequested;
     public event EventHandler<CaptureDocumentEventArgs>? Removed;
 
+    private TimeSpan _autoDismissAfter = TimeSpan.Zero;
+
     public bool DragAsFile { get; set; }
+    /// <summary>Format/resize used by thumbnail Save, Copy, and drag exports; read live so open thumbnails follow Settings.</summary>
+    internal ExportOptions Export { get; set; } = ExportOptions.Default;
+    /// <summary>Settings-provided save state used to suggest file names in Save dialogs.</summary>
+    internal Func<int> FileNameCounter { get; set; } = () => 1;
+
+    /// <summary>Zero keeps thumbnails until dismissed. Changing it restarts the countdown on visible thumbnails.</summary>
+    internal TimeSpan AutoDismissAfter
+    {
+        get => _autoDismissAfter;
+        set
+        {
+            _autoDismissAfter = value < TimeSpan.Zero ? TimeSpan.Zero : value;
+            foreach (CaptureThumbnailWindow thumbnail in _thumbnails) thumbnail.RestartAutoDismiss();
+        }
+    }
     public IReadOnlyList<CaptureDocument> Recent => _recent;
     internal IReadOnlyList<CaptureThumbnailWindow> Thumbnails => _thumbnails;
     internal int OpenEditorCount => _editors.Count;
@@ -32,7 +51,14 @@ public sealed class CapturePresentationManager : IDisposable
         _screens[thumbnail] = Forms.Screen.FromPoint(Forms.Cursor.Position).DeviceName;
         thumbnail.Show();
         Reflow();
+        thumbnail.RestartAutoDismiss();
         return thumbnail;
+    }
+
+    /// <summary>Adds a new capture to the front of Recent without a floating thumbnail.</summary>
+    public void AddWithoutThumbnail(CaptureDocument document)
+    {
+        if (!_recent.Contains(document)) _recent.Insert(0, document);
     }
 
     public void Retain(CaptureDocument document)
@@ -61,6 +87,17 @@ public sealed class CapturePresentationManager : IDisposable
         Reflow();
         Removed?.Invoke(this, new CaptureDocumentEventArgs(document));
     }
+    /// <summary>Set by the library window: opens a capture in its embedded editor. Without it, <see cref="Edit"/> uses a separate window.</summary>
+    internal Action<CaptureDocument>? EditInLibrary { get; set; }
+
+    /// <summary>Thumbnail click, thumbnail Edit, and "open editor after capture": the library window when available.</summary>
+    public void Edit(CaptureDocument document)
+    {
+        if (EditInLibrary is { } edit) edit(document);
+        else OpenEditor(document);
+    }
+
+    /// <summary>Opens (or brings forward) the standalone editor window for a capture.</summary>
     public void OpenEditor(CaptureDocument document)
     {
         if (_editors.TryGetValue(document, out EditorWindow? existing))
@@ -74,9 +111,23 @@ public sealed class CapturePresentationManager : IDisposable
         editor.Show();
     }
 
+    /// <summary>
+    /// Opens Ask Claude with the live capture (annotations included, re-rendered before the first question so later edits
+    /// are sent). Nothing is sent until the user asks.
+    /// </summary>
+    internal AskClaudeWindow AskClaude(CaptureDocument document, Window? owner = null) =>
+        AskClaudeWindow.Show(owner, document, AskClaudeTitle(document));
+
+    internal static string AskClaudeTitle(CaptureDocument document)
+    {
+        DateTime local = document.CreatedUtc.ToLocalTime();
+        string when = local.Date == DateTime.Today ? $"Today, {local:h:mm tt}" : local.ToString("MMM d, h:mm tt");
+        return $"{when} · {document.Original.PixelWidth:N0} × {document.Original.PixelHeight:N0}";
+    }
+
     internal void Dismiss(CaptureThumbnailWindow thumbnail)
     {
-        _thumbnails.Remove(thumbnail);
+        if (!_thumbnails.Remove(thumbnail)) return;
         _screens.Remove(thumbnail);
         thumbnail.Close();
         Reflow();

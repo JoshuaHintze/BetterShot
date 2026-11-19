@@ -1,11 +1,12 @@
 using BetterShot.Editing;
-using Microsoft.Win32;
+using BetterShot.Export;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 
 namespace BetterShot.Presentation;
 
@@ -15,6 +16,9 @@ public partial class CaptureThumbnailWindow : Window
     private Point _pointerDown;
     private bool _clickArmed;
     private bool _dragInProgress;
+    private readonly DispatcherTimer _autoDismissTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private TimeSpan _autoDismissRemaining;
+    private DateTime _autoDismissLastTickUtc;
     internal CaptureDocument Document { get; }
 
     internal CaptureThumbnailWindow(CapturePresentationManager manager, CaptureDocument document)
@@ -30,8 +34,42 @@ public partial class CaptureThumbnailWindow : Window
         MouseLeave += (_, _) => ShowActions(IsKeyboardFocusWithin);
         GotKeyboardFocus += (_, _) => ShowActions(true);
         LostKeyboardFocus += (_, _) => ShowActions(IsMouseOver);
-        Closed += (_, _) => document.Changed -= Document_Changed;
+        _autoDismissTimer.Tick += AutoDismissTimer_Tick;
+        Closed += (_, _) => { _autoDismissTimer.Stop(); document.Changed -= Document_Changed; };
     }
+
+    /// <summary>Starts (or restarts) the auto-dismiss countdown from the manager's current setting.</summary>
+    internal void RestartAutoDismiss()
+    {
+        _autoDismissTimer.Stop();
+        if (_manager.AutoDismissAfter <= TimeSpan.Zero) return;
+        _autoDismissRemaining = _manager.AutoDismissAfter;
+        _autoDismissLastTickUtc = DateTime.UtcNow;
+        _autoDismissTimer.Start();
+    }
+
+    /// <summary>Hover, keyboard focus, an in-progress click or drag, or being hidden (capture in progress, over capacity) pause the countdown.</summary>
+    private bool AutoDismissPaused => IsMouseOver || IsKeyboardFocusWithin || _clickArmed || _dragInProgress || !IsVisible;
+
+    private void AutoDismissTimer_Tick(object? sender, EventArgs e)
+    {
+        DateTime now = DateTime.UtcNow;
+        TimeSpan elapsed = now - _autoDismissLastTickUtc;
+        _autoDismissLastTickUtc = now;
+        if (AutoDismissPaused) return;
+        _autoDismissRemaining -= elapsed;
+        if (_autoDismissRemaining > TimeSpan.Zero) return;
+        _autoDismissTimer.Stop();
+        _manager.Dismiss(this);
+    }
+
+    internal void AdvanceAutoDismissForTest(TimeSpan elapsed)
+    {
+        _autoDismissLastTickUtc = DateTime.UtcNow - elapsed;
+        AutoDismissTimer_Tick(this, EventArgs.Empty);
+    }
+
+    internal bool AutoDismissActiveForTest => _autoDismissTimer.IsEnabled;
 
     private void Document_Changed(object? sender, EventArgs e) =>
         Dispatcher.BeginInvoke(() => ThumbnailImage.Source = Document.Render(), System.Windows.Threading.DispatcherPriority.Background);
@@ -73,7 +111,7 @@ public partial class CaptureThumbnailWindow : Window
         GiveFeedbackEventHandler? updatePreview = null;
         try
         {
-            DataObject data = CaptureDragData.CreateData(Document, _manager.DragAsFile);
+            DataObject data = CaptureDragData.CreateData(Document, _manager.DragAsFile, _manager.Export);
             try
             {
                 if ((data.GetImage() ?? Document.Render()) is BitmapSource bitmap)
@@ -126,7 +164,7 @@ public partial class CaptureThumbnailWindow : Window
         if (Math.Abs(released.X - _pointerDown.X) < SystemParameters.MinimumHorizontalDragDistance &&
             Math.Abs(released.Y - _pointerDown.Y) < SystemParameters.MinimumVerticalDragDistance &&
             released.X >= 0 && released.Y >= 0 && released.X <= Card.ActualWidth && released.Y <= Card.ActualHeight)
-            _manager.OpenEditor(Document);
+            _manager.Edit(Document);
     }
 
     private void Card_LostMouseCapture(object sender, MouseEventArgs e)
@@ -134,11 +172,11 @@ public partial class CaptureThumbnailWindow : Window
         if (!_dragInProgress) _clickArmed = false;
     }
 
-    private void Edit_Click(object sender, RoutedEventArgs e) { e.Handled = true; _manager.OpenEditor(Document); }
+    private void Edit_Click(object sender, RoutedEventArgs e) { e.Handled = true; _manager.Edit(Document); }
     private async void Copy_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
-        BitmapSource rendered = Document.Render();
+        BitmapSource rendered = ImageExporter.PrepareForClipboard(Document.Render(), _manager.Export);
         for (int attempt = 1; attempt <= 5; attempt++)
         {
             try { Clipboard.SetImage(rendered); return; }
@@ -150,13 +188,12 @@ public partial class CaptureThumbnailWindow : Window
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
-        var dialog = new SaveFileDialog { Title = "Save capture", Filter = "PNG image (*.png)|*.png", DefaultExt = ".png", AddExtension = true, FileName = $"BetterShot-{DateTime.Now:yyyy-MM-dd-HHmmss}.png" };
-        if (dialog.ShowDialog() != true) return;
-        try { SavePng(Document.Render(), dialog.FileName); }
+        try { ImageExporter.SaveWithDialog(null, Document.Render(), _manager.Export, Document.CreatedUtc.ToLocalTime(), _manager.FileNameCounter()); }
         catch (Exception ex) { MessageBox.Show(ex.Message, "Could not save capture", MessageBoxButton.OK, MessageBoxImage.Error); }
     }
 
 
+    private void AskClaude_Click(object sender, RoutedEventArgs e) { e.Handled = true; _manager.AskClaude(Document); }
     private void Dismiss_Click(object sender, RoutedEventArgs e) { e.Handled = true; _manager.Dismiss(this); }
     private void Delete_Click(object sender, RoutedEventArgs e) { e.Handled = true; _manager.RequestDelete(Document); }
 
