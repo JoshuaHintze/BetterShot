@@ -98,6 +98,7 @@ public partial class MainWindow : Window
         DragModeComboBox.SelectedIndex = _presentation.DragAsFile ? 1 : 0;
         ApplySettingsToPresentation();
         LoadCaptureSettingsIntoControls();
+        InitializeAskClaude(enableHistory, historyRoot);
         Version? version = Assembly.GetExecutingAssembly().GetName().Version;
         VersionText.Text = $"BetterShot {version?.ToString(3) ?? "1.0.0"}";
         _shortcutHook = new KeyboardShortcutHook(() => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Area)));
@@ -235,6 +236,8 @@ public partial class MainWindow : Window
         }
         SetStatus("Clipboard is busy. Please try again.", true);
     }
+
+    private void AskRecent_Click(object sender, RoutedEventArgs e) { if (_latest is not null) _presentation.AskClaude(_latest, this); }
 
     private void SaveRecent_Click(object sender, RoutedEventArgs e)
     {

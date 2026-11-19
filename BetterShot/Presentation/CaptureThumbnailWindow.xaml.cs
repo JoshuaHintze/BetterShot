@@ -193,6 +193,7 @@ public partial class CaptureThumbnailWindow : Window
     }
 
 
+    private void AskClaude_Click(object sender, RoutedEventArgs e) { e.Handled = true; _manager.AskClaude(Document); }
     private void Dismiss_Click(object sender, RoutedEventArgs e) { e.Handled = true; _manager.Dismiss(this); }
     private void Delete_Click(object sender, RoutedEventArgs e) { e.Handled = true; _manager.RequestDelete(Document); }
 

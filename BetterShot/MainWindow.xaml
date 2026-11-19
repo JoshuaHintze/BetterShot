@@ -254,6 +254,12 @@
                     <TextBlock Text="Save" />
                   </StackPanel>
                 </Button>
+                <Button Style="{StaticResource ActionButton}" Width="122" Click="AskRecent_Click" ToolTip="Ask Claude about this capture (sends the image only when you ask)">
+                  <StackPanel Orientation="Horizontal">
+                    <controls:LucideIcon Icon="Sparkles" Width="16" Height="16" Margin="0,0,7,0" />
+                    <TextBlock Text="Ask Claude" />
+                  </StackPanel>
+                </Button>
               </StackPanel>
             </Grid>
             <Grid Grid.Row="3">
@@ -612,6 +618,55 @@
             <ComboBoxItem Content="PNG file" Tag="file" />
           </ComboBox>
           <TextBlock Text="Image mode includes a PNG attachment for Slack and other upload targets. PNG file mode offers only a file." Foreground="#9B9EA5" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,26" />
+          <StackPanel x:Name="AskClaudeSection">
+            <StackPanel.Resources>
+              <Style x:Key="DarkPasswordBox" TargetType="PasswordBox">
+                <Setter Property="Foreground" Value="#F0F1F3" />
+                <Setter Property="Background" Value="#24262A" />
+                <Setter Property="BorderBrush" Value="#484B53" />
+                <Setter Property="CaretBrush" Value="#FFD84A" />
+                <Setter Property="SelectionBrush" Value="#8A7A2E" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="Template">
+                  <Setter.Value>
+                    <ControlTemplate TargetType="PasswordBox">
+                      <Border x:Name="Frame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="7" Padding="10,0">
+                        <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center" />
+                      </Border>
+                      <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#747984" /></Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#FFD84A" /></Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </Setter.Value>
+                </Setter>
+              </Style>
+            </StackPanel.Resources>
+            <TextBlock Text="Ask Claude" Style="{StaticResource SectionHeader}" />
+            <TextBlock Text="Ask Claude about a capture with your own Anthropic API key." Style="{StaticResource SettingHint}" FontSize="13" Margin="0,8,0,0" />
+            <TextBlock Text="API key" Style="{StaticResource SettingLabel}" Margin="0,14,0,0" />
+            <Grid Margin="0,8,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <PasswordBox x:Name="ApiKeyBox" Style="{StaticResource DarkPasswordBox}" Height="34" PasswordChanged="ApiKeyBox_PasswordChanged" KeyDown="ApiKeyBox_KeyDown" AutomationProperties.Name="Anthropic API key" />
+              <TextBlock x:Name="ApiKeyPlaceholder" Text="Paste your API key" Foreground="#73767E" FontSize="13" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" TextTrimming="CharacterEllipsis" />
+              <Button x:Name="SaveApiKeyButton" Grid.Column="1" Style="{StaticResource QuietButton}" Margin="8,0,0,0" Content="Save" Click="SaveApiKey_Click" ToolTip="Encrypt and save the key for this Windows account" />
+              <Button x:Name="RemoveApiKeyButton" Grid.Column="2" Style="{StaticResource QuietButton}" Margin="8,0,0,0" Content="Remove" Click="RemoveApiKey_Click" ToolTip="Delete the saved key from this PC" />
+            </Grid>
+            <StackPanel x:Name="ApiKeySavedState" Orientation="Horizontal" Margin="0,8,0,0">
+              <controls:LucideIcon Icon="Check" Width="14" Height="14" Foreground="#7FD99A" Margin="0,0,6,0" />
+              <TextBlock Text="Saved securely" Foreground="#7FD99A" FontSize="12" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock x:Name="ApiKeyProblemText" Style="{StaticResource SettingHint}" Foreground="#FF8787" Margin="0,6,0,0" Visibility="Collapsed" />
+            <Grid Margin="0,14,0,0">
+              <TextBlock Text="Model" Style="{StaticResource SettingLabel}" />
+              <ComboBox x:Name="AiModelComboBox" Style="{StaticResource DarkComboBox}" Width="250" Height="34" HorizontalAlignment="Right" SelectionChanged="AiModelCombo_SelectionChanged" AutomationProperties.Name="Ask Claude model" />
+            </Grid>
+            <TextBlock Text="The key is stored with Windows data protection and only sent to api.anthropic.com. Create one at console.anthropic.com." Style="{StaticResource SettingHint}" Margin="0,8,0,26" />
+          </StackPanel>
           <TextBlock Text="About" FontSize="16" FontWeight="SemiBold" Foreground="#D7D8DB" />
           <TextBlock x:Name="VersionText" Margin="0,12,0,0" Foreground="#A6A8AE" />
           <Button Style="{StaticResource QuietButton}" Content="Open-source licenses" HorizontalAlignment="Left" Margin="0,13,0,0" Click="Licenses_Click" />
