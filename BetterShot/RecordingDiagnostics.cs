@@ -2,10 +2,13 @@ using BetterShot.Capture;
 using BetterShot.Export;
 using BetterShot.Persistence;
 using BetterShot.Platform;
+using BetterShot.Presentation;
 using BetterShot.Recording;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Windows.Controls.Primitives;
+using Key = System.Windows.Input.Key;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -39,10 +42,13 @@ internal static class RecordingDiagnostics
         VerifyClock();
         VerifyAudio();
         VerifyLibrary(Path.Combine(runRoot, "library"));
+        VerifySetupLayout();
+        VerifyControlsBar();
+        VerifySetupPanel(Path.Combine(runRoot, "setup"), directory);
         await VerifyUiAsync(directory);
         string live = await VerifyLiveRecordingAsync(Path.Combine(runRoot, "live"));
         App.WriteTestResult(Path.Combine(directory, "recording-test.txt"),
-            "PASS: recording settings round-trip/migration/clamping, recording file names, crop and even-size math with odd sizes, negative origins and DPI, event sidecar JSON, keystroke filtering, state machine incl. cancel paths, pausable clock, PCM conversion/resampling/mixing with pause, recordings library index, Settings rendering; " + live);
+            "PASS: recording settings round-trip/migration/clamping, recording file names, crop and even-size math with odd sizes, negative origins and DPI, event sidecar JSON, keystroke filtering, state machine incl. cancel paths, pausable clock, PCM conversion/resampling/mixing with pause, recordings library index, setup panel (toggle/countdown/device round-trip, Enter/Esc, placement near edges, full-screen and negative-origin monitors, 100%/150% renders), controls bar time format/placement/level bars, Settings rendering and sync from the setup panel; " + live);
     }
 
     private static void VerifySettings(string root)
@@ -267,6 +273,111 @@ internal static class RecordingDiagnostics
         Check(new RecordingLibraryStore(root).Load().Count == 0, "Removing a recording did not persist.");
     }
 
+    private static void VerifySetupLayout()
+    {
+        var primaryWork = new Int32Rect(0, 0, 2560, 1392);
+        var leftWork = new Int32Rect(-1920, -200, 1920, 1040);
+        const int width = 534, height = 900, gap = 24, label = 44;
+        Check(RecordingSetupLayout.PlaceCard(new Int32Rect(200, 100, 2000, 1200), primaryWork, width, height, gap, label) == new Int32Rect(933, 250, width, height), "Card is not centered inside a large area.");
+        Check(RecordingSetupLayout.PlaceCard(new Int32Rect(0, 0, 2560, 1440), primaryWork, width, height, gap, 0) == new Int32Rect(1013, 246, width, height), "Card is not centered on the work area for a full-screen area.");
+        Check(RecordingSetupLayout.PlaceCard(new Int32Rect(1000, 40, 400, 200), primaryWork, width, height, gap, label) == new Int32Rect(933, 308, width, height), "Card is not placed below a small area, clear of the label.");
+        Check(RecordingSetupLayout.PlaceCard(new Int32Rect(1000, 1100, 400, 200), primaryWork, width, height, gap, label) == new Int32Rect(933, 176, width, height), "Card is not placed above a small area near the bottom.");
+        Check(RecordingSetupLayout.PlaceCard(new Int32Rect(100, 300, 300, 700), primaryWork, width, height, gap, label) == new Int32Rect(424, 200, width, height), "Card is not placed right of a tall narrow area.");
+        Check(RecordingSetupLayout.PlaceCard(new Int32Rect(2200, 300, 300, 700), primaryWork, width, height, gap, label) == new Int32Rect(1642, 200, width, height), "Card is not placed left of a tall area near the right edge.");
+        Check(RecordingSetupLayout.PlaceCard(new Int32Rect(-1920, -200, 200, 120), leftWork, width, height, gap, label) == new Int32Rect(-1696, -200, width, height), "Card near a negative-origin corner is not kept on that monitor.");
+        Int32Rect cramped = RecordingSetupLayout.PlaceCard(new Int32Rect(-1920, -200, 1920, 1080), leftWork with { Height = 1080 }, width, 1200, gap, 0);
+        Check(cramped.X == -1227 && cramped.Y == -200, "An oversized card is not centered and clamped to the top of its monitor.");
+
+        var monitor = new Int32Rect(-1920, -200, 1920, 1080);
+        Check(RecordingSetupLayout.PlaceDimensionLabel(new Int32Rect(-1500, 0, 600, 300), monitor, 120, 30, 8) == new Int32Rect(-1260, 308, 120, 30), "Dimension label is not centered below the area.");
+        Check(RecordingSetupLayout.PlaceDimensionLabel(monitor, monitor, 120, 30, 8) == new Int32Rect(-1020, 842, 120, 30), "Dimension label is not inside a full-screen area.");
+        Check(RecordingSetupLayout.LabelReserve(new Int32Rect(-1500, 0, 600, 300), monitor, 30, 8) == 38 && RecordingSetupLayout.LabelReserve(monitor, monitor, 30, 8) == 0, "Label reserve is wrong.");
+        Check(RecordingSetupLayout.Dimensions(2960, 1840) == "2960 × 1840", "Dimension text changed.");
+        Check(RecordingSetupLayout.AbbreviateFolder("C:\\Users\\Ada\\Pictures\\BetterShot", "C:\\Users\\Ada") == "~\\Pictures\\BetterShot", "Save folder is not abbreviated with ~.");
+        Check(RecordingSetupLayout.AbbreviateFolder("C:\\Users\\Adam\\Pictures", "C:\\Users\\Ada") == "C:\\Users\\Adam\\Pictures" && RecordingSetupLayout.AbbreviateFolder("D:\\Clips", "C:\\Users\\Ada") == "D:\\Clips", "Unrelated folders were abbreviated.");
+    }
+
+    private static void VerifyControlsBar()
+    {
+        Check(RecordingControlsWindow.FormatElapsed(TimeSpan.FromMilliseconds(860)) == "00:00.8" && RecordingControlsWindow.FormatElapsed(TimeSpan.FromSeconds(754.29)) == "12:34.2", "Elapsed time format changed.");
+        Check(RecordingControlsWindow.FormatElapsed(TimeSpan.FromSeconds(3725.5)) == "1:02:05.5" && RecordingControlsWindow.FormatElapsed(TimeSpan.FromSeconds(-1)) == "00:00.0", "Long or negative elapsed time format is wrong.");
+        Check(RecordingControlsWindow.TopPlacement(new Int32Rect(-1920, -200, 1920, 1040), 600, 90, 18, 15) == new Int32Rect(-1260, -203, 600, 90), "Controls are not centered at the top of a negative-origin display.");
+        Check(MicrophoneLevelMeter.LitBars(0, 5) == 0 && MicrophoneLevelMeter.LitBars(1, 5) == 5 && MicrophoneLevelMeter.LitBars(0.005f, 5) == 1 && MicrophoneLevelMeter.LitBars(0.05f, 5) == 3, "Microphone level bars are wrong.");
+    }
+
+    /// <summary>Setup card: settings round-trip through a fixture store, Enter/Esc/Area behavior, and 100%/150% renders.</summary>
+    private static void VerifySetupPanel(string root, string directory)
+    {
+        var store = new CaptureHistoryStore(root);
+        RecordingDevice[] microphones = [new("{mic-1}", "Studio USB Microphone"), new("{mic-2}", "Headset Microphone (Wireless)")];
+        RecordingDevice[] cameras = [new("\\\\?\\USB#cam-1", "Integrated Webcam"), new("\\\\?\\USB#cam-2", "Desk Camera 4K")];
+        var info = new RecordingSetupInfo("Area", RecordingSetupLayout.Dimensions(2960, 1840), Controls.LucideIconKind.SquareDashed, microphones, "Studio USB Microphone", cameras, "~\\Pictures\\BetterShot");
+        var card = new RecordingSetupCard(info, store.Settings, change => { store.UpdateSettings(change); return store.Settings; });
+        var choices = new List<RecordingSetupChoice>();
+        card.Chosen += (_, choice) => choices.Add(choice);
+
+        Check(card.MicrophoneToggle.IsChecked == false && card.CountdownThree.IsChecked == true && card.CameraIcon.Icon == Controls.LucideIconKind.CameraOff, "Setup card did not show the default settings.");
+        Check((string)card.MicrophoneDeviceButton.Content == "Studio USB Microphone" && (string)card.CameraDeviceButton.Content == "Integrated Webcam", "Default device names are wrong.");
+        card.Flip(card.MicrophoneToggle);
+        card.Flip(card.SystemAudioToggle);
+        card.Flip(card.ClicksToggle);
+        card.Flip(card.CameraToggle);
+        card.SelectCountdown(5);
+        card.SelectMicrophone("{mic-2}");
+        card.SelectCamera("\\\\?\\USB#cam-2");
+        CaptureSettings saved = new CaptureHistoryStore(root).Settings;
+        Check(saved.RecordMicrophone && saved.RecordSystemAudio && saved.HighlightClicks && saved.RecordCamera && !saved.ShowKeystrokes, "Setup toggles did not round-trip through settings.json.");
+        Check(saved.RecordingCountdownSeconds == 5 && saved.MicrophoneDeviceId == "{mic-2}" && saved.CameraDeviceId == "\\\\?\\USB#cam-2", "Setup countdown or devices did not round-trip.");
+        Check(card.CameraIcon.Icon == Controls.LucideIconKind.Camera && (string)card.MicrophoneDeviceButton.Content == "Headset Microphone (Wireless)" && card.CountdownFive.IsChecked == true, "Setup card did not reflect the saved choices.");
+        card.Flip(card.CameraToggle);
+        Check(!new CaptureHistoryStore(root).Settings.RecordCamera && card.CameraIcon.Icon == Controls.LucideIconKind.CameraOff, "Turning the camera off did not save.");
+        card.SelectMicrophone("{unplugged}");
+        Check((string)card.MicrophoneDeviceButton.Content == "Saved device (not connected)", "A missing microphone is not labeled.");
+
+        Check(!card.HandleKey(Key.Tab) && choices.Count == 0, "Tab was swallowed or chose an action.");
+        Check(card.HandleKey(Key.Escape) && choices.SequenceEqual([RecordingSetupChoice.Cancel]), "Esc did not cancel.");
+        Check(card.HandleKey(Key.Enter) && choices.SequenceEqual([RecordingSetupChoice.Cancel, RecordingSetupChoice.Start]), "Enter did not start.");
+        card.AreaButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, card.AreaButton));
+        Check(choices[^1] == RecordingSetupChoice.Reselect, "The Area row did not ask to pick the area again.");
+
+        CaptureSettings shown = CaptureSettings.Default with { RecordMicrophone = true, RecordSystemAudio = true, HighlightClicks = true, RecordingCountdownSeconds = 3 };
+        var reference = new RecordingSetupCard(info, shown, change => change(shown));
+        SaveElement(reference, Path.Combine(directory, "recording-setup-100.png"), 1.0);
+        SaveElement(reference, Path.Combine(directory, "recording-setup-150.png"), 1.5);
+        var noDevices = new RecordingSetupCard(info with { AreaTitle = "Window — A very long window title that should be trimmed neatly", AreaIcon = Controls.LucideIconKind.AppWindow, Microphones = [], DefaultMicrophoneName = string.Empty, Cameras = [] },
+            CaptureSettings.Default, change => change(CaptureSettings.Default));
+        Check((string)noDevices.CameraDeviceButton.Content == "No camera found" && !noDevices.CameraDeviceButton.IsEnabled && (string)noDevices.MicrophoneDeviceButton.Content == "Default microphone", "Device fallbacks are wrong.");
+        SaveElement(noDevices, Path.Combine(directory, "recording-setup-no-devices.png"), 1.0);
+        SaveElement(RecordingSetupBackdrop.CreateDimensionLabel(RecordingSetupLayout.Dimensions(2960, 1840)), Path.Combine(directory, "recording-setup-label-150.png"), 1.5);
+
+        var controls = new RecordingControlsWindow(() => TimeSpan.FromMilliseconds(800), showMicrophone: true, showCamera: false, () => 0.2f);
+        var pill = (FrameworkElement)controls.Content;
+        controls.Content = null;
+        SaveElement(pill, Path.Combine(directory, "recording-controls-100.png"), 1.0);
+        SaveElement(pill, Path.Combine(directory, "recording-controls-150.png"), 1.5);
+        controls.Close();
+    }
+
+    /// <summary>Renders an unparented element on a neutral backdrop at the given DPI scale (1.0 = 100%, 1.5 = 150%).</summary>
+    private static void SaveElement(FrameworkElement element, string path, double scale)
+    {
+        var surface = new System.Windows.Controls.Border { Background = new SolidColorBrush(Color.FromRgb(0x30, 0x34, 0x3C)), Padding = new Thickness(24), Child = element };
+        try
+        {
+            surface.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            surface.Arrange(new Rect(surface.DesiredSize));
+            surface.UpdateLayout();
+            int width = (int)Math.Ceiling(surface.ActualWidth * scale), height = (int)Math.Ceiling(surface.ActualHeight * scale);
+            var bitmap = new RenderTargetBitmap(width, height, 96 * scale, 96 * scale, PixelFormats.Pbgra32);
+            bitmap.Render(surface);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using var stream = File.Create(path);
+            encoder.Save(stream);
+        }
+        finally { surface.Child = null; }
+    }
+
     private static async Task VerifyUiAsync(string directory)
     {
         var shell = new MainWindow();
@@ -279,6 +390,10 @@ internal static class RecordingDiagnostics
             Check(shell.RecordButton.IsVisible && shell.RecordModeButton.IsVisible, "Record button is not visible.");
             Check(shell.RecordingSettingsSection is not null && shell.RecorderFor(HotkeyAction.Record) == shell.RecordHotkeyRecorder, "Recording settings are not wired.");
             Check(shell.RecordingStateForTest == RecordingState.Idle && shell.RecordingsPanel.Visibility == Visibility.Collapsed, "Recording UI did not start idle.");
+            CaptureSettings synced = shell.SaveFromRecordingSetupForTest(settings => settings with { RecordMicrophone = true, ShowKeystrokes = true, RecordingCountdownSeconds = 0 });
+            Check(synced.RecordMicrophone && synced.ShowKeystrokes && synced.RecordingCountdownSeconds == 0, "Setup panel changes were not saved.");
+            Check(shell.RecordMicrophoneCheckBox.IsChecked == true && shell.ShowKeystrokesCheckBox.IsChecked == true && (shell.RecordingCountdownComboBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string == "0", "Settings > Recording did not follow the setup panel.");
+            shell.SaveFromRecordingSetupForTest(settings => settings with { RecordMicrophone = false, ShowKeystrokes = false, RecordingCountdownSeconds = 3 });
             shell.RecordingSettingsSection!.BringIntoView();
             await shell.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             SaveWindow(shell, Path.Combine(directory, "recording-settings.png"));

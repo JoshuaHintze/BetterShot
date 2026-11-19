@@ -80,7 +80,12 @@ public enum LucideIconKind
     Rows3,
     Eye,
     EyeOff,
-    MoveHorizontal
+    MoveHorizontal,
+    SquareDashed,
+    Volume2,
+    MousePointerClick,
+    CircleDot,
+    VideoOff
 }
 
 public partial class LucideIcon : UserControl
@@ -187,6 +192,12 @@ public partial class LucideIcon : UserControl
             case LucideIconKind.Eye: Path("M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"); Circle(12, 12, 3); break;
             case LucideIconKind.EyeOff: Path("M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"); Path("M14.084 14.158a3 3 0 0 1-4.242-4.242"); Path("M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"); Path("m2 2 20 20"); break;
             case LucideIconKind.MoveHorizontal: Path("m18 8 4 4-4 4"); Path("M2 12h20"); Path("m6 8-4 4 4 4"); break;
+            // Official Lucide square-dashed, volume-2, mouse-pointer-click, circle-dot, and video-off.
+            case LucideIconKind.SquareDashed: Path("M5 3a2 2 0 0 0-2 2"); Path("M19 3a2 2 0 0 1 2 2"); Path("M21 19a2 2 0 0 1-2 2"); Path("M5 21a2 2 0 0 1-2-2"); Path("M9 3h1"); Path("M9 21h1"); Path("M14 3h1"); Path("M14 21h1"); Path("M3 9v1"); Path("M21 9v1"); Path("M3 14v1"); Path("M21 14v1"); break;
+            case LucideIconKind.Volume2: Path("M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"); Path("M16 9a5 5 0 0 1 0 6"); Path("M19.364 18.364a9 9 0 0 0 0-12.728"); break;
+            case LucideIconKind.MousePointerClick: Path("M14 4.1 12 6"); Path("m5.1 8-2.9-.8"); Path("m6 12-1.9 2"); Path("M7.2 2.2 8 5.1"); Path("M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z"); break;
+            case LucideIconKind.CircleDot: Circle(12, 12, 10); Circle(12, 12, 1); break;
+            case LucideIconKind.VideoOff: Path("M10.66 6H14a2 2 0 0 1 2 2v2.5l5.248-3.062A.5.5 0 0 1 22 7.87v8.196"); Path("M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"); Path("m2 2 20 20"); break;
         }
     }
 

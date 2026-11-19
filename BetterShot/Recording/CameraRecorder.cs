@@ -115,6 +115,15 @@ internal static class RecordingDevices
         return result;
     }
 
+    /// <summary>Name of the Windows default recording device, or empty when there is none.</summary>
+    internal static string DefaultMicrophoneName()
+    {
+        using var enumerator = new NAudio.CoreAudioApi.MMDeviceEnumerator();
+        if (!enumerator.HasDefaultAudioEndpoint(NAudio.CoreAudioApi.DataFlow.Capture, NAudio.CoreAudioApi.Role.Console)) return string.Empty;
+        using NAudio.CoreAudioApi.MMDevice device = enumerator.GetDefaultAudioEndpoint(NAudio.CoreAudioApi.DataFlow.Capture, NAudio.CoreAudioApi.Role.Console);
+        return device.FriendlyName;
+    }
+
     internal static async Task<IReadOnlyList<RecordingDevice>> CamerasAsync()
     {
         DeviceInformationCollection cameras = await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture);

@@ -42,11 +42,15 @@ public partial class MainWindow
     private CaptureSettings _recordingSettings = CaptureSettings.Default;
     private DateTime _recordingStartedLocal;
     private string? _recordingFailureNote;
-    private bool _recordingDevicesLoaded;
+    private Task? _recordingDevicesLoad;
+    private string _defaultMicrophoneName = string.Empty;
+    private RecordingSetupPanel? _recordingSetup;
+    private MicrophoneLevelMeter? _microphoneMeter;
     private Point _recordingCardPointerDown;
 
     internal RecordingState RecordingStateForTest => _recordingState.State;
     internal IReadOnlyList<RecordingLibraryItem> RecordingItemsForTest => _recordingItems;
+    internal CaptureSettings SaveFromRecordingSetupForTest(Func<CaptureSettings, CaptureSettings> change) => SaveFromRecordingSetup(change);
 
     private void InitializeRecording(string? historyRoot)
     {
@@ -136,14 +140,16 @@ public partial class MainWindow
         _recordingHiddenWindows = _presentation.HideForCapture();
         try
         {
+            Task devices = EnsureRecordingDevicesLoadedAsync();
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             await Task.Delay(180);
-            if (await _captureService.SelectAsync(mode) is not Int32Rect selection) { CancelRecordingStart("Recording canceled."); return; }
-            _recordingTarget = RecordingTargetResolver.Resolve(mode, selection);
+            if (await SelectRecordingTargetAsync(mode, devices) is not RecordingTarget target) { CancelRecordingStart("Recording canceled."); return; }
+            _recordingTarget = target;
+            _recordingSettings = CurrentSettings;
             if (!await RunRecordingCountdownAsync()) { CancelRecordingStart("Recording canceled."); return; }
             _recordingState.TryMove(RecordingState.Starting);
-            ShowDimOverlays(_recordingTarget);
-            await BeginRecorderAsync(_recordingTarget);
+            ShowDimOverlays(target);
+            await BeginRecorderAsync(target);
         }
         catch (RecordingException ex)
         {
@@ -152,6 +158,51 @@ public partial class MainWindow
             RestoreHiddenWindows();
             ShowRecordingError(ex);
         }
+    }
+
+    /// <summary>
+    /// Picks the area, then shows the "New recording" panel over it until the user starts (the target) or cancels (null).
+    /// Clicking the Area row closes the panel and picks again.
+    /// </summary>
+    private async Task<RecordingTarget?> SelectRecordingTargetAsync(CaptureMode mode, Task devices)
+    {
+        while (true)
+        {
+            if (await _captureService.SelectAsync(mode) is not Int32Rect selection) return null;
+            RecordingTarget target = RecordingTargetResolver.Resolve(mode, selection);
+            await Task.WhenAny(devices, Task.Delay(TimeSpan.FromSeconds(2))); // Device names are cosmetic; never block on a slow driver.
+            switch (await RunRecordingSetupAsync(target))
+            {
+                case RecordingSetupChoice.Start: return target;
+                case RecordingSetupChoice.Cancel: return null;
+            }
+            // Reselect: let the panel and backdrops disappear before the selector freezes the desktop again.
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await Task.Delay(120);
+        }
+    }
+
+    private async Task<RecordingSetupChoice> RunRecordingSetupAsync(RecordingTarget target)
+    {
+        (string title, string detail, Controls.LucideIconKind icon) = RecordingSetupPanel.Describe(target);
+        string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var info = new RecordingSetupInfo(title, detail, icon, _microphones, _defaultMicrophoneName, _cameras,
+            RecordingSetupLayout.AbbreviateFolder(CurrentSettings.EffectiveSaveFolder, userProfile));
+        var panel = new RecordingSetupPanel(new RecordingSetupCard(info, CurrentSettings, SaveFromRecordingSetup));
+        _recordingSetup = panel;
+        try { return await panel.RunAsync(target.ScreenArea); }
+        finally
+        {
+            _recordingSetup = null;
+            panel.Dismiss();
+        }
+    }
+
+    /// <summary>Saves a change made on the setup panel (Settings > Recording refreshes too) and returns what was saved.</summary>
+    private CaptureSettings SaveFromRecordingSetup(Func<CaptureSettings, CaptureSettings> change)
+    {
+        TrySaveSettings(change, "the recording options");
+        return CurrentSettings;
     }
 
     private async Task<bool> RunRecordingCountdownAsync()
@@ -331,7 +382,9 @@ public partial class MainWindow
 
     private void ShowRecordingControls(RecordingTarget target, ScreenRecorder recorder)
     {
-        var controls = new RecordingControlsWindow(() => recorder.Clock.Elapsed, recorder.HasMicrophone, recorder.HasCamera);
+        _microphoneMeter = recorder.HasMicrophone ? MicrophoneLevelMeter.TryOpen(_recordingSettings.MicrophoneDeviceId) : null;
+        MicrophoneLevelMeter? meter = _microphoneMeter;
+        var controls = new RecordingControlsWindow(() => recorder.Clock.Elapsed, recorder.HasMicrophone, recorder.HasCamera, meter is null ? null : meter.ReadPeak);
         controls.StopRequested += (_, _) => _ = StopRecordingAsync();
         controls.PauseToggled += (_, _) => _ = TogglePauseAsync();
         controls.MicrophoneToggled += (_, _) => ToggleMicrophoneMute();
@@ -339,7 +392,7 @@ public partial class MainWindow
         controls.Show();
         Forms.Screen screen = Forms.Screen.FromRectangle(new System.Drawing.Rectangle(target.MonitorBounds.X, target.MonitorBounds.Y, target.MonitorBounds.Width, target.MonitorBounds.Height));
         System.Drawing.Rectangle work = screen.WorkingArea;
-        controls.PlaceNear(target.ScreenArea, new Int32Rect(work.X, work.Y, work.Width, work.Height));
+        controls.PlaceAtTop(new Int32Rect(work.X, work.Y, work.Width, work.Height));
         _recordingControls = controls;
     }
 
@@ -396,8 +449,12 @@ public partial class MainWindow
         _recordingCountdown?.Cancel();
         _inputHook?.Dispose();
         _inputHook = null;
+        _recordingSetup?.Dismiss();
+        _recordingSetup = null;
         _recordingControls?.Close();
         _recordingControls = null;
+        _microphoneMeter?.Dispose();
+        _microphoneMeter = null;
         foreach (Window overlay in _recordingOverlays) overlay.Close();
         _recordingOverlays.Clear();
         _inputOverlay = null;
@@ -601,20 +658,21 @@ public partial class MainWindow
     }
 
     /// <summary>Called when Settings opens; device enumeration is deferred until then.</summary>
-    private void EnsureRecordingDevicesLoaded()
-    {
-        if (!_recordingDevicesLoaded) _ = LoadRecordingDevicesAsync();
-    }
+    private void EnsureRecordingDevicesLoaded() => _ = EnsureRecordingDevicesLoadedAsync();
+
+    /// <summary>Starts device enumeration once (Settings or the recording setup panel) and returns the shared task.</summary>
+    private Task EnsureRecordingDevicesLoadedAsync() => _recordingDevicesLoad ??= LoadRecordingDevicesAsync();
 
     private IReadOnlyList<RecordingDevice> _microphones = [];
     private IReadOnlyList<RecordingDevice> _cameras = [];
 
-    /// <summary>Enumerates microphones and cameras off the UI thread the first time Settings is shown.</summary>
+    /// <summary>Enumerates microphones and cameras off the UI thread the first time Settings or the setup panel needs them.</summary>
     private async Task LoadRecordingDevicesAsync()
     {
-        _recordingDevicesLoaded = true;
         try { _microphones = await Task.Run(RecordingDevices.Microphones); }
         catch (Exception) { _microphones = []; } // Audio service unavailable; the default device choice still works.
+        try { _defaultMicrophoneName = await Task.Run(RecordingDevices.DefaultMicrophoneName); }
+        catch (Exception) { _defaultMicrophoneName = string.Empty; } // Shown as "Default microphone" instead.
         try { _cameras = await RecordingDevices.CamerasAsync(); }
         catch (Exception) { _cameras = []; }
         LoadRecordingSettingsIntoControls();
