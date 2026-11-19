@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace BetterShot.Persistence;
 
 /// <summary>Immutable snapshot of every persisted preference. Setters build a modified copy, write it, then swap it in.</summary>
-internal sealed record CaptureSettings
+internal sealed partial record CaptureSettings
 {
     internal const int NeverExpire = 0;
     /// <summary>Written to RetentionDays when captures are kept forever, so older builds keep them for a year instead of resetting.</summary>
@@ -78,6 +78,7 @@ internal sealed record CaptureSettings
         HotkeyAction.Fullscreen => FullscreenHotkey,
         HotkeyAction.Library => LibraryHotkey,
         HotkeyAction.Record => RecordHotkey,
+        HotkeyAction.Scrolling => ScrollingHotkey,
         _ => HotkeyBinding.None
     };
 
@@ -88,6 +89,7 @@ internal sealed record CaptureSettings
         HotkeyAction.Fullscreen => this with { FullscreenHotkey = binding },
         HotkeyAction.Library => this with { LibraryHotkey = binding },
         HotkeyAction.Record => this with { RecordHotkey = binding },
+        HotkeyAction.Scrolling => this with { ScrollingHotkey = binding },
         _ => this
     };
 
@@ -113,7 +115,9 @@ internal sealed record CaptureSettings
         CameraDeviceId = CameraDeviceId?.Trim() ?? string.Empty,
         RecordingCountdownSeconds = RecordingCountdownChoices.Contains(RecordingCountdownSeconds) ? RecordingCountdownSeconds : 3,
         RecordingFileNamePattern = string.IsNullOrWhiteSpace(RecordingFileNamePattern) ? DefaultRecordingFileNamePattern : RecordingFileNamePattern,
-        RecordingFrameRate = RecordingFrameRateChoices.Contains(RecordingFrameRate) ? RecordingFrameRate : 30
+        RecordingFrameRate = RecordingFrameRateChoices.Contains(RecordingFrameRate) ? RecordingFrameRate : 30,
+        ScrollingHotkey = SafeHotkey(ScrollingHotkey),
+        SkippedUpdateVersion = SkippedUpdateVersion?.Trim() ?? string.Empty
     };
 
     private static HotkeyBinding SafeHotkey(HotkeyBinding binding) =>
@@ -121,7 +125,7 @@ internal sealed record CaptureSettings
 }
 
 /// <summary>Converts between the on-disk settings.json shape and <see cref="CaptureSettings"/>.</summary>
-internal static class CaptureSettingsMapper
+internal static partial class CaptureSettingsMapper
 {
     internal static CaptureSettings FromDto(HistorySettingsDto dto)
     {
@@ -165,7 +169,7 @@ internal static class CaptureSettingsMapper
             ReviewAfterRecording = dto.ReviewAfterRecording ?? defaults.ReviewAfterRecording,
             RecordingFileNamePattern = dto.RecordingFileNamePattern ?? defaults.RecordingFileNamePattern,
             RecordingFrameRate = dto.RecordingFrameRate ?? defaults.RecordingFrameRate
-        }.Normalize();
+        }.WithExtrasFrom(dto).Normalize();
     }
 
     internal static HistorySettingsDto ToDto(CaptureSettings settings, Dictionary<string, JsonElement>? additionalFields)
@@ -211,7 +215,7 @@ internal static class CaptureSettingsMapper
             RecordingFileNamePattern = settings.RecordingFileNamePattern,
             RecordingFrameRate = settings.RecordingFrameRate,
             AdditionalFields = additionalFields
-        };
+        }.WithExtrasFrom(settings);
     }
 
     private static CaptureImageFormat ParseFormat(string? value) =>

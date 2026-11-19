@@ -57,7 +57,16 @@ public enum LucideIconKind
     Camera,
     CameraOff,
     Pause,
-    Play
+    Play,
+    ScrollText,
+    CircleStop,
+    Eraser,
+    Keyboard,
+    Power,
+    Download,
+    RefreshCw,
+    ChevronRight,
+    ChevronLeft
 }
 
 public partial class LucideIcon : UserControl
@@ -90,6 +99,16 @@ public partial class LucideIcon : UserControl
         {
             // Official pinned Lucide trash.svg (formerly trash-2).
             case LucideIconKind.Trash2: Path("M10 11v6"); Path("M14 11v6"); Path("M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"); Path("M3 6h18"); Path("M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"); break;
+            case LucideIconKind.ScrollText: Path("M15 12h-5"); Path("M15 8h-5"); Path("M19 17V5a2 2 0 0 0-2-2H4"); Path("M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"); break;
+            case LucideIconKind.CircleStop: Circle(12, 12, 10); Rectangle(9, 9, 6, 6, 1); break;
+            case LucideIconKind.Eraser: Path("M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"); Path("m5.082 11.09 8.828 8.828"); break;
+            case LucideIconKind.Keyboard: Path("M10 8h.01"); Path("M12 12h.01"); Path("M14 8h.01"); Path("M16 12h.01"); Path("M18 8h.01"); Path("M6 8h.01"); Path("M7 16h10"); Path("M8 12h.01"); Rectangle(2, 4, 20, 16, 2); break;
+            case LucideIconKind.Power: Path("M12 2v10"); Path("M18.4 6.6a9 9 0 1 1-12.77.04"); break;
+            case LucideIconKind.Camera: Path("M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"); Circle(12, 13, 3); break;
+            case LucideIconKind.Download: Path("M12 15V3"); Path("M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"); Path("m7 10 5 5 5-5"); break;
+            case LucideIconKind.RefreshCw: Path("M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"); Path("M21 3v5h-5"); Path("M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"); Path("M8 16H3v5"); break;
+            case LucideIconKind.ChevronRight: Path("m9 18 6-6-6-6"); break;
+            case LucideIconKind.ChevronLeft: Path("m15 18-6-6 6-6"); break;
             case LucideIconKind.Settings: Path("M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"); Path("M15 12a3 3 0 1 1-6 0a3 3 0 1 1 6 0"); break;
             case LucideIconKind.Monitor: Rectangle(2, 3, 20, 14, 2); Path("M8 21h8"); Path("M12 17v4"); break;
             case LucideIconKind.AppWindow: Rectangle(2, 4, 20, 16, 2); Path("M10 4v4"); Path("M2 8h20"); Path("M6 4v4"); break;
@@ -137,7 +156,6 @@ public partial class LucideIcon : UserControl
             case LucideIconKind.Video: Path("m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"); Rectangle(2, 6, 14, 12, 2); break;
             case LucideIconKind.Mic: Path("M12 19v3"); Path("M19 10v2a7 7 0 0 1-14 0v-2"); Rectangle(9, 2, 6, 13, 3); break;
             case LucideIconKind.MicOff: Path("M12 19v3"); Path("M15 9.34V5a3 3 0 0 0-5.68-1.33"); Path("M16.95 16.95A7 7 0 0 1 5 12v-2"); Path("M18.89 13.23A7 7 0 0 0 19 12v-2"); Path("m2 2 20 20"); Path("M9 9v3a3 3 0 0 0 5.12 2.12"); break;
-            case LucideIconKind.Camera: Path("M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"); Path("M15 13a3 3 0 1 1-6 0a3 3 0 1 1 6 0"); break;
             case LucideIconKind.CameraOff: Path("M14.564 14.558a3 3 0 1 1-4.122-4.121"); Path("m2 2 20 20"); Path("M20 20H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 .819-.175"); Path("M9.695 4.024A2 2 0 0 1 10.004 4h3.993a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v7.344"); break;
             case LucideIconKind.Pause: Rectangle(14, 3, 5, 18, 1); Rectangle(5, 3, 5, 18, 1); break;
             case LucideIconKind.Play: Path("M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"); break;

@@ -110,6 +110,7 @@ public partial class MainWindow : Window
         menu.Items.Add("Capture display", null, (_, _) => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Display)));
         menu.Items.Add("Capture fullscreen", null, (_, _) => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Fullscreen)));
         menu.Items.Add(CreateRecordingTrayMenu());
+        menu.Items.Add("Scrolling capture", null, (_, _) => Dispatcher.BeginInvoke(() => _ = ScrollingCaptureAsync()));
         menu.Items.Add("Open BetterShot", null, (_, _) => Dispatcher.BeginInvoke(ShowAndActivate));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => Dispatcher.BeginInvoke(ExitApplication));
@@ -204,8 +205,7 @@ public partial class MainWindow : Window
         if (LicensePanel.Visibility == Visibility.Visible) { LicensePanel.Visibility = Visibility.Collapsed; return; }
         if (string.IsNullOrWhiteSpace(LicenseText.Text))
         {
-            string folder = Path.Combine(AppContext.BaseDirectory, "ThirdPartyNotices");
-            try { LicenseText.Text = ReadLicenseNotices(folder); }
+            try { LicenseText.Text = ReadLicenseNotices(); }
             catch { LicenseText.Text = "Lucide icons · ISC License\n\nThe license file is included with distributed BetterShot builds."; }
         }
         LicensePanel.Visibility = Visibility.Visible;
@@ -645,7 +645,7 @@ public partial class MainWindow : Window
     }
 
     private void ShowAndActivate() { ShowActivated = true; Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); Focus(); }
-    private void SetCaptureControls(bool enabled) { AreaButton.IsEnabled = enabled; WindowButton.IsEnabled = enabled; DisplayButton.IsEnabled = enabled; FullscreenButton.IsEnabled = enabled; }
+    private void SetCaptureControls(bool enabled) { AreaButton.IsEnabled = enabled; WindowButton.IsEnabled = enabled; DisplayButton.IsEnabled = enabled; FullscreenButton.IsEnabled = enabled; ScrollingButton.IsEnabled = enabled; }
     private void SetStatus(string text, bool error = false, bool persistent = false)
     {
         SetStatusCore(text, error); _statusResetTimer.Stop(); if (!persistent) _statusResetTimer.Start();

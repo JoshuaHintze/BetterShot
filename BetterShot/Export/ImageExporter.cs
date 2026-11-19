@@ -43,9 +43,20 @@ internal static class ImageExporter
         encoder.Save(destination);
     }
 
-    private static BitmapSource FlattenForJpeg(BitmapSource image)
+    /// <summary>JPEG has no transparency, so transparent areas (for example a removed background) become white instead of black.</summary>
+    internal static BitmapSource FlattenForJpeg(BitmapSource image)
     {
-        var converted = new FormatConvertedBitmap(image, PixelFormats.Bgr24, null, 0);
+        var visual = new DrawingVisual();
+        var bounds = new Rect(0, 0, image.PixelWidth, image.PixelHeight);
+        using (DrawingContext context = visual.RenderOpen())
+        {
+            context.DrawRectangle(Brushes.White, null, bounds);
+            context.DrawImage(image, bounds);
+        }
+        var flattened = new RenderTargetBitmap(image.PixelWidth, image.PixelHeight, 96, 96, PixelFormats.Pbgra32);
+        flattened.Render(visual);
+        flattened.Freeze();
+        var converted = new FormatConvertedBitmap(flattened, PixelFormats.Bgr24, null, 0);
         converted.Freeze();
         return converted;
     }

@@ -45,6 +45,19 @@ Nothing is sent until you click a preset or send a question. The rendered captur
 Settings > Ask Claude holds the API key and model (Claude Sonnet 5.5, the default; Claude Opus 5.5; Claude Haiku 5.5). The key is encrypted with Windows data protection (DPAPI, current user) in `%LOCALAPPDATA%\BetterShot\ask-claude-key.bin`, never in settings.json, and is never shown again after saving; Remove deletes it. The model is saved as `AiModel` in settings.json. Other code can open the window with `AskClaudeWindow.Show(owner, renderedBitmap, title)`.
 
 Run .\ai-test.ps1 to verify the request format, streaming parser, error messages, timeouts, conversation history, image downscaling, model setting, and key storage using a fake HTTP handler (no network). It renders `ai-settings-panel.png`, `ai-window-empty.png`, and `ai-window-conversation.png`.
+## Scrolling capture
+
+Click **Scrolling** in the main window, choose **Scrolling capture** from the tray menu, or assign a shortcut in Settings > Capture. Drag over the scrollable part of a page or click a window. BetterShot scrolls the content under the center of the selection with mouse-wheel input (falling back to UI Automation), captures each step, and stitches the frames by matching their overlap. Title bars, sticky headers, and status bars that stay put appear once. It stops at the end of the content, at 20,000 px, or when you press Esc or click **Stop and keep what's captured** (that pill is excluded from the capture). The result is a normal capture with a thumbnail, library entry, and editor. If nothing moves, BetterShot reports "Nothing scrolled". Apps running as administrator ignore synthesized input from a normal app and cannot be scrolled.
+
+## Background removal
+
+In the editor, open **Background** and choose **Remove the background**. A small salient-object model (U²-Netp, Apache-2.0) runs on this PC through ONNX Runtime (MIT); screenshots are never uploaded. The first use asks before downloading the 4.4 MB model from the rembg GitHub release into `%LOCALAPPDATA%\BetterShot\Models`, and the file is checked against a pinned SHA-256. The removal is a mask stored with the capture, so Undo or **Restore the background** brings the original back. PNG copies, saves, and drags keep the transparency; JPEG exports fill it with white.
+
+## First-run setup and updates
+
+A new install opens **Welcome to BetterShot** once: shortcuts (Win+Shift+S and the capture recorders), start with Windows, and a first screenshot. Every step can be skipped. Settings > Updates checks GitHub Releases for JoshuaHintze/BetterShot once a day (never while capturing) and has a **Check for updates** button. A newer release shows its notes with Download, Skip this version, and Later; the installer and its `.sha256` file are downloaded to `%LOCALAPPDATA%\BetterShot\Updates`, verified, and run only after you click **Install now**.
+
+Run `.\extras-test.ps1` (optionally `-Area scrolling|background-removal|update|onboarding`) to check stitching with synthetic frames, background-removal math, mask undo/persistence, update parsing and verified downloads with a fake HTTP handler, and first-run settings, and to render the new windows. It never downloads anything; model inference runs only if the model is already installed.
 
 ## Current limits
 

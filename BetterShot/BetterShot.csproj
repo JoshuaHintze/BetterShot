@@ -12,6 +12,7 @@
     <AssemblyName>BetterShot</AssemblyName>
     <RootNamespace>BetterShot</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <OnnxRuntimeVersion>1.32.0</OnnxRuntimeVersion>
   </PropertyGroup>
   <ItemGroup>
     <!-- MIT licensed (see ThirdPartyNotices/NAudio-LICENSE.txt): WASAPI microphone and system-audio (loopback) capture for screen recording. -->
@@ -24,5 +25,12 @@
     <Content Include="ThirdPartyNotices\Lucide-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="ThirdPartyNotices\NAudio-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="ThirdPartyNotices\Microsoft-Windows-SDK-NET-NOTICE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="ThirdPartyNotices\OnnxRuntime-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="ThirdPartyNotices\U2Net-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- ONNX Runtime (MIT) runs the U2-Netp background-removal model locally. The model (Apache-2.0) is downloaded on first use, never bundled. -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="$(OnnxRuntimeVersion)" />
+    <Content Include="$(NuGetPackageRoot)microsoft.ml.onnxruntime/$(OnnxRuntimeVersion)/ThirdPartyNotices.txt" Link="ThirdPartyNotices\OnnxRuntime-ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" Condition="'$(NuGetPackageRoot)' != '' And Exists('$(NuGetPackageRoot)microsoft.ml.onnxruntime/$(OnnxRuntimeVersion)/ThirdPartyNotices.txt')" />
   </ItemGroup>
 </Project>

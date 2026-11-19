@@ -73,7 +73,7 @@ internal sealed class PointDto
     [JsonRequired] public double Y { get; set; }
 }
 
-internal sealed class HistorySettingsDto
+internal sealed partial class HistorySettingsDto
 {
     [JsonRequired] public int RetentionDays { get; set; } = 7;
     public bool ReplaceScreenshotShortcut { get; set; }

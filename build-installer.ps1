@@ -7,6 +7,9 @@ if(-not(Test-Path -LiteralPath $compiler)){throw 'Install Inno Setup 6.7.3 in .t
 $publish=Join-Path $projectRoot ('artifacts\installer-publish-'+$Version+'-'+[DateTime]::UtcNow.ToString('yyyyMMddHHmmss'))
 & $dotnet publish (Join-Path $projectRoot 'BetterShot\BetterShot.csproj') -c Release -r win-x64 --self-contained true --source https://api.nuget.org/v3/index.json -o $publish "-p:Version=$Version" -p:DebugType=None -p:DebugSymbols=false -p:UseSharedCompilation=false -nodeReuse:false
 if($LASTEXITCODE -ne 0){throw 'Self-contained publish failed.'}
+foreach($notice in @('Lucide-LICENSE.txt','OnnxRuntime-LICENSE.txt','OnnxRuntime-ThirdPartyNotices.txt','U2Net-LICENSE.txt')){
+ if(-not(Test-Path -LiteralPath (Join-Path $publish ('ThirdPartyNotices\'+$notice)))){throw "The publish output is missing ThirdPartyNotices\$notice."}
+}
 $runtime=Get-Content -LiteralPath (Join-Path $publish 'BetterShot.runtimeconfig.json') -Raw | ConvertFrom-Json
 $assets=Get-Content -LiteralPath (Join-Path $projectRoot 'BetterShot\obj\project.assets.json') -Raw | ConvertFrom-Json
 $packageRoot=$assets.packageFolders.PSObject.Properties.Name | Select-Object -First 1

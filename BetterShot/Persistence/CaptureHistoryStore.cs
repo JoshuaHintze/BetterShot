@@ -11,6 +11,7 @@ namespace BetterShot.Persistence;
 internal sealed class CaptureHistoryStore
 {
     private const int CurrentVersion = 1;
+    private const string BackgroundMaskEntry = "background-mask.png";
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private readonly string _root;
     private readonly string _settingsPath;
@@ -118,6 +119,14 @@ internal sealed class CaptureHistoryStore
                     imageBuffer.CopyTo(imageStream);
                 }
 
+                if (document.BackgroundMask is { } mask)
+                {
+                    // Optional since phase 5; older builds ignore it and show the opaque original.
+                    ZipArchiveEntry maskEntry = archive.CreateEntry(BackgroundMaskEntry, CompressionLevel.Optimal);
+                    using Stream maskStream = maskEntry.Open();
+                    maskStream.Write(mask.EncodePng());
+                }
+
                 ZipArchiveEntry documentEntry = archive.CreateEntry("document.json", CompressionLevel.Optimal);
                 using Stream jsonStream = documentEntry.Open();
                 JsonSerializer.Serialize(jsonStream, ToDto(document), JsonOptions);
@@ -213,6 +222,14 @@ internal sealed class CaptureHistoryStore
             ?? throw new InvalidDataException("The annotation list is missing.");
         var document = new CaptureDocument(original, dto.Id, dto.CreatedUtc);
         document.RestoreState(annotations, FromDto(dto.Crop), FromDto(dto.Background));
+        if (archive.GetEntry(BackgroundMaskEntry) is { } maskEntry)
+        {
+            using var maskBuffer = new MemoryStream();
+            using (Stream stream = maskEntry.Open()) stream.CopyTo(maskBuffer);
+            maskBuffer.Position = 0;
+            var mask = Editing.BackgroundRemoval.AlphaMask.DecodePng(maskBuffer);
+            if (mask.Fits(original)) document.RestoreBackgroundMask(mask); // A mismatched mask is ignored rather than losing the capture.
+        }
         return document;
     }
 

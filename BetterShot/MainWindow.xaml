@@ -232,6 +232,12 @@
               <TextBlock x:Name="FullscreenButtonText" Text="Fullscreen" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
+          <Button x:Name="ScrollingButton" Style="{StaticResource QuietButton}" Height="40" MinWidth="112" Padding="14,6" FontSize="14" Margin="10,0,0,0" Click="Scrolling_Click" ToolTip="Select an area or window; BetterShot scrolls it and stitches one tall capture" AutomationProperties.Name="Scrolling capture">
+            <StackPanel Orientation="Horizontal">
+              <controls:LucideIcon Icon="ScrollText" Width="16" Height="16" Margin="0,0,8,0" />
+              <TextBlock x:Name="ScrollingButtonText" Text="Scrolling" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
         </StackPanel>
         <!-- Phase 6: screen recording. Record opens the region picker; the chevron offers window and display. -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="10,0,0,0">
@@ -647,6 +653,7 @@
               <RowDefinition Height="Auto" />
               <RowDefinition Height="Auto" />
               <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <TextBlock Text="Area" Style="{StaticResource SettingLabel}" />
             <controls:HotkeyRecorderButton x:Name="AreaHotkeyRecorder" Grid.Column="1" Style="{StaticResource RecorderButton}" Tag="Area" AutomationProperties.Name="Area capture shortcut" RecordingStarted="HotkeyRecorder_RecordingStarted" RecordingEnded="HotkeyRecorder_RecordingEnded" Recorded="HotkeyRecorder_Recorded" />
@@ -656,6 +663,8 @@
             <controls:HotkeyRecorderButton x:Name="FullscreenHotkeyRecorder" Grid.Row="2" Grid.Column="1" Style="{StaticResource RecorderButton}" Tag="Fullscreen" AutomationProperties.Name="Fullscreen capture shortcut" RecordingStarted="HotkeyRecorder_RecordingStarted" RecordingEnded="HotkeyRecorder_RecordingEnded" Recorded="HotkeyRecorder_Recorded" />
             <TextBlock Grid.Row="3" Text="Open library" Style="{StaticResource SettingLabel}" />
             <controls:HotkeyRecorderButton x:Name="LibraryHotkeyRecorder" Grid.Row="3" Grid.Column="1" Style="{StaticResource RecorderButton}" Tag="Library" AutomationProperties.Name="Open library shortcut" RecordingStarted="HotkeyRecorder_RecordingStarted" RecordingEnded="HotkeyRecorder_RecordingEnded" Recorded="HotkeyRecorder_Recorded" />
+            <TextBlock Grid.Row="4" Text="Scrolling capture" Style="{StaticResource SettingLabel}" />
+            <controls:HotkeyRecorderButton x:Name="ScrollingHotkeyRecorder" Grid.Row="4" Grid.Column="1" Style="{StaticResource RecorderButton}" Tag="Scrolling" AutomationProperties.Name="Scrolling capture shortcut" RecordingStarted="HotkeyRecorder_RecordingStarted" RecordingEnded="HotkeyRecorder_RecordingEnded" Recorded="HotkeyRecorder_Recorded" />
           </Grid>
           <TextBlock Text="Click a shortcut, then press the keys. Esc cancels; Backspace clears." Style="{StaticResource SettingHint}" Margin="0,6,0,0" />
           <TextBlock x:Name="HotkeyProblemText" Style="{StaticResource SettingHint}" Foreground="#FF8787" Margin="0,6,0,0" Visibility="Collapsed" />
@@ -854,6 +863,18 @@
             </Grid>
             <TextBlock Text="The key is stored with Windows data protection and only sent to api.anthropic.com. Create one at console.anthropic.com." Style="{StaticResource SettingHint}" Margin="0,8,0,26" />
           </StackPanel>
+          <TextBlock Text="Updates" FontSize="16" FontWeight="SemiBold" Foreground="#D7D8DB" />
+          <CheckBox x:Name="AutoUpdateCheckBox" Style="{StaticResource ShortcutToggle}" Content="Automatically check for updates" Foreground="{StaticResource TextBrush}" Margin="0,14,0,0" Checked="AutoUpdate_Changed" Unchecked="AutoUpdate_Changed" />
+          <TextBlock Text="Once a day in the background, never while capturing. BetterShot only asks GitHub for the latest release and never installs anything without asking." Style="{StaticResource SettingHint}" Margin="24,8,0,0" />
+          <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+            <Button x:Name="CheckForUpdatesButton" Style="{StaticResource QuietButton}" Click="CheckForUpdates_Click" ToolTip="Ask GitHub whether a newer BetterShot release is available">
+              <StackPanel Orientation="Horizontal">
+                <controls:LucideIcon Icon="RefreshCw" Width="15" Height="15" Margin="0,0,7,0" />
+                <TextBlock Text="Check for updates" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+          <TextBlock x:Name="UpdateStatusText" Style="{StaticResource SettingHint}" Margin="0,8,0,26" />
           <TextBlock Text="About" FontSize="16" FontWeight="SemiBold" Foreground="#D7D8DB" />
           <TextBlock x:Name="VersionText" Margin="0,12,0,0" Foreground="#A6A8AE" />
           <Button Style="{StaticResource QuietButton}" Content="Open-source licenses" HorizontalAlignment="Left" Margin="0,13,0,0" Click="Licenses_Click" />

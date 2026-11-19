@@ -646,16 +646,6 @@ public partial class MainWindow
         RecordingFileNamePreviewText.Text = "Preview: " + name;
         RecordingFileNamePreviewText.ToolTip = name;
     }
-
-    private static string ReadLicenseNotices(string folder)
-    {
-        string lucide = Path.Combine(folder, "Lucide-LICENSE.txt");
-        IEnumerable<string> others = Directory.Exists(folder)
-            ? Directory.EnumerateFiles(folder, "*.txt").Where(path => !string.Equals(path, lucide, StringComparison.OrdinalIgnoreCase)).OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            : [];
-        return string.Join(Environment.NewLine + Environment.NewLine + new string('-', 40) + Environment.NewLine + Environment.NewLine,
-            new[] { lucide }.Concat(others).Where(File.Exists).Select(File.ReadAllText));
-    }
 }
 
 /// <summary>A recording card in the library strip; the shell thumbnail loads asynchronously.</summary>

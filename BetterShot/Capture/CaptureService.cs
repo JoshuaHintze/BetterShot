@@ -19,7 +19,7 @@ public enum CaptureMode { Area, Window, Display, Fullscreen }
 /// The first prototype uses GDI BitBlt: output is SDR and protected, occluded, or
 /// hardware-overlay content can be absent. Window mode captures visible pixels only.
 /// </summary>
-public sealed class CaptureService
+public sealed partial class CaptureService
 {
     /// <summary>Renders the real loupe at center and edge positions for deterministic visual diagnostics.</summary>
     public static BitmapSource RenderLoupePreviewForTest()

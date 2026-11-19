@@ -23,6 +23,7 @@ public partial class MainWindow
         HotkeyAction.Window => WindowHotkeyRecorder,
         HotkeyAction.Fullscreen => FullscreenHotkeyRecorder,
         HotkeyAction.Record => RecordHotkeyRecorder,
+        HotkeyAction.Scrolling => ScrollingHotkeyRecorder,
         _ => LibraryHotkeyRecorder
     };
 
@@ -32,6 +33,7 @@ public partial class MainWindow
         HotkeyAction.Window => "Window capture",
         HotkeyAction.Fullscreen => "Fullscreen capture",
         HotkeyAction.Record => "Record screen",
+        HotkeyAction.Scrolling => "Scrolling capture",
         _ => "Open library"
     };
 
@@ -87,6 +89,7 @@ public partial class MainWindow
             JpegQualitySlider.Value = settings.JpegQuality;
             SelectTagged(ResizeComboBox, settings.ExportMaxDimension.ToString(CultureInfo.InvariantCulture));
             ResizeClipboardCheckBox.IsChecked = settings.ResizeClipboardCopies;
+            LoadUpdateSettingsIntoControls();
         }
         finally { _updatingSettings = false; }
         LoadRecordingSettingsIntoControls();
@@ -242,6 +245,7 @@ public partial class MainWindow
             case HotkeyAction.Fullscreen: _ = CaptureAsync(CaptureMode.Fullscreen); break;
             case HotkeyAction.Library: ShowAndActivate(); break;
             case HotkeyAction.Record: ToggleRecordingFromShortcut(); break;
+            case HotkeyAction.Scrolling: _ = ScrollingCaptureAsync(); break;
         }
     }
 
@@ -314,6 +318,7 @@ public partial class MainWindow
         DisplayButton.ToolTip = "Click a display to capture it";
         FullscreenButton.ToolTip = WithShortcut("Capture the whole display under the pointer immediately", CurrentSettings.FullscreenHotkey);
         RefreshRecordButtonToolTip();
+        ScrollingButton.ToolTip = WithShortcut("Select an area or window; BetterShot scrolls it and stitches one tall capture", CurrentSettings.ScrollingHotkey);
     }
 
     private static string WithShortcut(string text, HotkeyBinding binding) => binding.IsEmpty ? text : $"{text} ({binding})";
