@@ -40,7 +40,7 @@ public static class EditorDiagnostics
         if (Pixel(imageDecoder.Frames[0], 45, 14) != Colors.Black || imageDecoder.Frames[0].PixelWidth != document.Original.PixelWidth)
             throw new InvalidOperationException("Image drag lost redaction or native dimensions.");
         pngStream.Position = 0;
-        var paths = new List<string>((string[])imageData.GetData(DataFormats.FileDrop, false));
+        var paths = new List<string>(imageData.GetData(DataFormats.FileDrop, false) as string[] ?? throw new InvalidOperationException("Image drag offered no file drop."));
         VerifyNativeFileDrop(imageData, paths.Single());
         try
         {

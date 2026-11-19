@@ -22,6 +22,9 @@ internal sealed record ExportOptions(
     internal string FormatLabel => Format == CaptureImageFormat.Jpeg ? "JPEG" : "PNG";
 
     /// <summary>%USERPROFILE%\Pictures\BetterShot, following a redirected Pictures library when Windows reports one.</summary>
+    /// <summary>Latest options from Settings, used by windows (such as the editor) that are not handed options directly.</summary>
+    internal static ExportOptions Current { get; set; } = Default;
+
     internal static string DefaultSaveFolder
     {
         get

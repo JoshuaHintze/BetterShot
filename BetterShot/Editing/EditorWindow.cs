@@ -7,6 +7,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
+using BetterShot.Export;
+
 namespace BetterShot.Editing;
 
 public sealed partial class EditorWindow : Window
@@ -78,6 +80,7 @@ public sealed partial class EditorWindow : Window
         bar.Children.Add(left);
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        right.Children.Add(IconButton(LucideIconKind.Sparkles, "Ask Claude about this image", AskClaude_Click));
         right.Children.Add(IconButton(LucideIconKind.Copy, "Copy rendered image (Ctrl+C)", Copy_Click));
         right.Children.Add(IconButton(LucideIconKind.Save, "Save rendered image (Ctrl+S)", Save_Click));
         var done = IconTextButton(LucideIconKind.Check, "Done", "Close editor (Ctrl+Enter)", (_, _) => Done(), 82); done.Background = Brush("#FFD400"); done.Foreground = Brushes.Black;
@@ -305,17 +308,25 @@ public sealed partial class EditorWindow : Window
     private async void Copy_Click(object sender, RoutedEventArgs e)
     {
         CommitPendingEdits();
-        for (int attempt=1; attempt<=5; attempt++) try { Clipboard.SetImage(_document.Render()); _status.Text="Copied rendered PNG to the clipboard."; return; } catch (COMException) when(attempt<5) { await Task.Delay(attempt*70); } catch (Exception ex) { _status.Text=$"Could not copy: {ex.Message}"; return; }
+        for (int attempt=1; attempt<=5; attempt++) try { Clipboard.SetImage(ImageExporter.PrepareForClipboard(_document.Render(), ExportOptions.Current)); _status.Text="Copied rendered PNG to the clipboard."; return; } catch (COMException) when(attempt<5) { await Task.Delay(attempt*70); } catch (Exception ex) { _status.Text=$"Could not copy: {ex.Message}"; return; }
         _status.Text="Clipboard is busy. Please try again.";
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         CommitPendingEdits();
-        var d = new SaveFileDialog { Title="Save screenshot",Filter="PNG image (*.png)|*.png",DefaultExt=".png",AddExtension=true,FileName=$"BetterShot-{DateTime.Now:yyyy-MM-dd-HHmmss}.png" }; if(d.ShowDialog(this)!=true)return;
-        string path=Path.GetFullPath(d.FileName), temp=Path.Combine(Path.GetDirectoryName(path)!, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
-        try { var encoder=new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(_document.Render())); using(var s=new FileStream(temp,FileMode.CreateNew,FileAccess.Write,FileShare.None)) encoder.Save(s); File.Move(temp,path,true); _status.Text=$"Saved {Path.GetFileName(path)}."; }
-        catch(Exception ex){_status.Text=$"Could not save: {ex.Message}";} finally { try { if(File.Exists(temp)) File.Delete(temp); } catch { } }
+        try
+        {
+            string? path = ImageExporter.SaveWithDialog(this, _document.Render(), ExportOptions.Current, _document.CreatedUtc.ToLocalTime(), 1);
+            if (path is not null) _status.Text = $"Saved {Path.GetFileName(path)}.";
+        }
+        catch (Exception ex) { _status.Text = $"Could not save: {ex.Message}"; }
+    }
+
+    private void AskClaude_Click(object sender, RoutedEventArgs e)
+    {
+        CommitPendingEdits();
+        BetterShot.Ai.AskClaudeWindow.Show(this, _document.Render(), Title);
     }
 
     private void OnKeyDown(object sender, KeyEventArgs e)

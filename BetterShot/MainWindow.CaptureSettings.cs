@@ -59,6 +59,7 @@ public partial class MainWindow
     {
         CaptureSettings settings = CurrentSettings;
         _presentation.Export = settings.ToExportOptions();
+        ExportOptions.Current = _presentation.Export;
         _presentation.FileNameCounter = () => CurrentSettings.FileNameCounter;
         TimeSpan dismissAfter = TimeSpan.FromSeconds(settings.ThumbnailAutoDismissSeconds);
         if (_presentation.AutoDismissAfter != dismissAfter) _presentation.AutoDismissAfter = dismissAfter;
