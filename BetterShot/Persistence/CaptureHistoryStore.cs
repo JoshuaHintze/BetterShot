@@ -279,7 +279,7 @@ internal sealed class CaptureHistoryStore
         return new BackgroundStyle(background.Preset ?? BackgroundStyle.NoneId, background.Padding, background.CornerRadius, background.Shadow);
     }
 
-    private static AnnotationDto ToDto(Annotation annotation)
+    internal static AnnotationDto ToDto(Annotation annotation)
     {
         var dto = new AnnotationDto
         {
@@ -349,7 +349,7 @@ internal sealed class CaptureHistoryStore
         return dto;
     }
 
-    private static Annotation FromDto(AnnotationDto dto)
+    internal static Annotation FromDto(AnnotationDto dto)
     {
         if (dto is null) throw new InvalidDataException("An annotation is null.");
         Color color = Color.FromArgb(dto.A, dto.R, dto.G, dto.B);

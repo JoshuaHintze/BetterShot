@@ -27,6 +27,7 @@ internal sealed class RecordingThumbnailWindow : Window
     private bool _armed;
 
     internal event EventHandler? DeleteRequested;
+    internal event EventHandler? EditRequested;
 
     internal RecordingThumbnailWindow(RecordingEntry entry)
     {
@@ -113,6 +114,7 @@ internal sealed class RecordingThumbnailWindow : Window
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(IconButton(LucideIconKind.Play, "Play recording", (_, _) => TryRun(() => RecordingFiles.Open(Entry.MoviePath))));
+        row.Children.Add(IconButton(LucideIconKind.Scissors, "Edit: trim, mark up, and export", (_, _) => EditRequested?.Invoke(this, EventArgs.Empty)));
         row.Children.Add(IconButton(LucideIconKind.FolderOpen, "Show in folder", (_, _) => TryRun(() => RecordingFiles.ShowInFolder(Entry.MoviePath))));
         row.Children.Add(IconButton(LucideIconKind.Trash2, "Move recording to the Recycle Bin", (_, _) => DeleteRequested?.Invoke(this, EventArgs.Empty)));
         return row;
@@ -153,7 +155,13 @@ internal sealed class RecordingThumbnailWindow : Window
             Math.Abs(current.Y - _pointerDown.Y) < SystemParameters.MinimumVerticalDragDistance) return;
         _armed = false;
         ReleaseMouseCapture();
-        try { DragDrop.DoDragDrop(this, RecordingFiles.CreateDragData(Entry.MoviePath), DragDropEffects.Copy); }
+        (string? share, string? note) = RecordingFiles.SharePath(Entry.MoviePath);
+        if (share is null)
+        {
+            MessageBox.Show(note, "BetterShot", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        try { DragDrop.DoDragDrop(this, RecordingFiles.CreateDragData(share), DragDropEffects.Copy); }
         catch (Exception) { } // A failing drop target must not take the thumbnail down; the file is unaffected.
     }
 

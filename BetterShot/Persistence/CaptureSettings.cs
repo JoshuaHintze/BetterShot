@@ -63,6 +63,14 @@ internal sealed partial record CaptureSettings
     public bool ReviewAfterRecording { get; init; }
     public string RecordingFileNamePattern { get; init; } = DefaultRecordingFileNamePattern;
     public int RecordingFrameRate { get; init; } = 30;
+    /// <summary>Recording editor GIF export frame rate.</summary>
+    public int GifFps { get; init; } = RecordingEditor.ExportPlanning.DefaultGifFrameRate;
+    /// <summary>Longest side of exported GIFs in pixels; 0 keeps the recording size.</summary>
+    public int GifMaxDimension { get; init; } = RecordingEditor.ExportPlanning.DefaultGifMaxDimension;
+    /// <summary>Dragging an edited recording shares a rendered copy. Recordings with a redaction always do.</summary>
+    public bool KeepMarkedCopy { get; init; } = true;
+    /// <summary>Saving a trim replaces the original movie instead of saving a trimmed copy beside it.</summary>
+    public bool TrimReplacesOriginal { get; init; }
 
     internal bool KeepForever => RetentionDays == NeverExpire;
     internal bool SavesEveryCapture => AutoSave || !ShowThumbnail;
@@ -117,7 +125,9 @@ internal sealed partial record CaptureSettings
         RecordingFileNamePattern = string.IsNullOrWhiteSpace(RecordingFileNamePattern) ? DefaultRecordingFileNamePattern : RecordingFileNamePattern,
         RecordingFrameRate = RecordingFrameRateChoices.Contains(RecordingFrameRate) ? RecordingFrameRate : 30,
         ScrollingHotkey = SafeHotkey(ScrollingHotkey),
-        SkippedUpdateVersion = SkippedUpdateVersion?.Trim() ?? string.Empty
+        SkippedUpdateVersion = SkippedUpdateVersion?.Trim() ?? string.Empty,
+        GifFps = RecordingEditor.ExportPlanning.NormalizeGifFrameRate(GifFps),
+        GifMaxDimension = RecordingEditor.ExportPlanning.NormalizeGifMaxDimension(GifMaxDimension)
     };
 
     private static HotkeyBinding SafeHotkey(HotkeyBinding binding) =>
@@ -168,7 +178,11 @@ internal static partial class CaptureSettingsMapper
             RecordingCountdownSeconds = dto.RecordingCountdownSeconds ?? defaults.RecordingCountdownSeconds,
             ReviewAfterRecording = dto.ReviewAfterRecording ?? defaults.ReviewAfterRecording,
             RecordingFileNamePattern = dto.RecordingFileNamePattern ?? defaults.RecordingFileNamePattern,
-            RecordingFrameRate = dto.RecordingFrameRate ?? defaults.RecordingFrameRate
+            RecordingFrameRate = dto.RecordingFrameRate ?? defaults.RecordingFrameRate,
+            GifFps = dto.GifFps ?? defaults.GifFps,
+            GifMaxDimension = dto.GifMaxDimension ?? defaults.GifMaxDimension,
+            KeepMarkedCopy = dto.KeepMarkedCopy ?? defaults.KeepMarkedCopy,
+            TrimReplacesOriginal = dto.TrimReplacesOriginal ?? defaults.TrimReplacesOriginal
         }.WithExtrasFrom(dto).Normalize();
     }
 
@@ -214,6 +228,10 @@ internal static partial class CaptureSettingsMapper
             ReviewAfterRecording = settings.ReviewAfterRecording,
             RecordingFileNamePattern = settings.RecordingFileNamePattern,
             RecordingFrameRate = settings.RecordingFrameRate,
+            GifFps = settings.GifFps,
+            GifMaxDimension = settings.GifMaxDimension,
+            KeepMarkedCopy = settings.KeepMarkedCopy,
+            TrimReplacesOriginal = settings.TrimReplacesOriginal,
             AdditionalFields = additionalFields
         }.WithExtrasFrom(settings);
     }

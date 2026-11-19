@@ -87,6 +87,12 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (e.Args.Contains("--recording-editor-test", StringComparer.OrdinalIgnoreCase))
+        {
+            _ = RunRecordingEditorTestAsync(testOutput);
+            return;
+        }
+
         if (e.Args.Contains("--recording-test", StringComparer.OrdinalIgnoreCase))
         {
             _ = RunRecordingTestAsync(testOutput);
@@ -380,6 +386,11 @@ public partial class App : System.Windows.Application
         catch (Exception ex) { WriteTestResult(output, $"FAIL: {ex}", resultFile); Shutdown(1); }
     }
 
+    private async Task RunRecordingEditorTestAsync(string? output)
+    {
+        try { await RecordingEditor.RecordingEditorDiagnostics.RunAsync(output); Shutdown(0); }
+        catch (Exception ex) { WriteTestResult(output, $"FAIL: recording editor test: {ex}", "recording-editor-test.txt"); Shutdown(1); }
+    }
     private async Task RunShellTestAsync(string? output)
     {
         try { await ShellDiagnostics.RunAsync(output); Shutdown(0); }

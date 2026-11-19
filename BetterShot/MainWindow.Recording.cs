@@ -2,6 +2,7 @@ using BetterShot.Export;
 using BetterShot.Persistence;
 using BetterShot.Presentation;
 using BetterShot.Recording;
+using BetterShot.RecordingEditor;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -52,6 +53,8 @@ public partial class MainWindow
         RecordingsList.ItemsSource = _recordingItems;
         _recordingMonitor.Tick += RecordingMonitor_Tick;
         _recordingState.Changed += (_, _) => UpdateRecordButton();
+        string sharingRoot = historyRoot ?? Path.Combine(Path.GetTempPath(), "BetterShot");
+        RecordingSharing.Configure(Path.Combine(sharingRoot, "MarkedCopies"), () => CurrentSettings.KeepMarkedCopy);
         if (historyRoot is null) return;
         try
         {
@@ -316,8 +319,9 @@ public partial class MainWindow
         {
             RecordingThumbnailWindow thumbnail = RecordingThumbnailWindow.Present(entry);
             thumbnail.DeleteRequested += (_, _) => DeleteRecording(item);
+            thumbnail.EditRequested += (_, _) => OpenRecordingEditor(thumbnail.Entry);
         }
-        if (_recordingSettings.ReviewAfterRecording) TryOpenRecording(entry.MoviePath);
+        if (_recordingSettings.ReviewAfterRecording) OpenRecordingEditor(entry);
         string name = Path.GetFileName(entry.MoviePath);
         string summary = $"Saved {name} ({RecordingFiles.FormatDuration(entry.DurationSeconds)}).";
         string? problem = _recordingFailureNote ?? warning;
@@ -468,6 +472,40 @@ public partial class MainWindow
         if (ItemFrom(sender) is { } item) TryOpenRecording(item.Entry.MoviePath);
     }
 
+    private void EditRecording_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (ItemFrom(sender) is { } item) OpenRecordingEditor(item.Entry);
+    }
+
+    /// <summary>Opens the recording editor (Phase 7) for a library recording.</summary>
+    private void OpenRecordingEditor(RecordingEntry entry)
+    {
+        // Prefer the library's current entry: a trim may have replaced the movie since a thumbnail was shown.
+        RecordingEntry current = _recordingItems.FirstOrDefault(item => item.Entry.Id == entry.Id)?.Entry ?? entry;
+        if (!File.Exists(current.MoviePath)) { SetStatus($"Could not open {Path.GetFileName(current.MoviePath)}: the file is missing.", true); return; }
+        try { RecordingEditorWindow.Open(current, new RecordingEditorContext(() => CurrentSettings, OnEditedRecordingChanged, OnTrimmedRecordingAdded, _recordingTempFolder)); }
+        catch (Exception ex) { SetStatus($"Could not open the recording editor: {FriendlyMessage(ex)}", true); }
+    }
+
+    /// <summary>The editor replaced a movie with its trimmed version: refresh its library card and index entry.</summary>
+    private void OnEditedRecordingChanged(RecordingEntry entry)
+    {
+        try { _recordingLibrary?.Update(entry); }
+        catch (Exception ex) { SetStatus($"The recording was trimmed, but the library list could not be updated: {FriendlyMessage(ex)}", true); }
+        int index = _recordingItems.ToList().FindIndex(item => item.Entry.Id == entry.Id);
+        if (index >= 0) _recordingItems[index] = new RecordingLibraryItem(entry);
+    }
+
+    /// <summary>The editor saved a trimmed copy beside the original: add it to the library.</summary>
+    private void OnTrimmedRecordingAdded(RecordingEntry entry)
+    {
+        try { _recordingLibrary?.Add(entry); }
+        catch (Exception ex) { SetStatus($"The trimmed copy is saved, but the library list could not be updated: {FriendlyMessage(ex)}", true); }
+        _recordingItems.Insert(0, new RecordingLibraryItem(entry));
+        UpdateRecordingsPanel();
+    }
+
     private void ShowRecordingInFolder_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
@@ -503,7 +541,10 @@ public partial class MainWindow
         if (Math.Abs(current.X - _recordingCardPointerDown.X) < SystemParameters.MinimumHorizontalDragDistance &&
             Math.Abs(current.Y - _recordingCardPointerDown.Y) < SystemParameters.MinimumVerticalDragDistance) return;
         if (!File.Exists(item.Entry.MoviePath)) return;
-        try { DragDrop.DoDragDrop((DependencyObject)sender, RecordingFiles.CreateDragData(item.Entry.MoviePath), DragDropEffects.Copy); }
+        (string? share, string? note) = RecordingFiles.SharePath(item.Entry.MoviePath);
+        if (note is not null) SetStatus(note, share is null);
+        if (share is null) return;
+        try { DragDrop.DoDragDrop((DependencyObject)sender, RecordingFiles.CreateDragData(share), DragDropEffects.Copy); }
         catch (Exception ex) { SetStatus($"Could not drag the recording: {FriendlyMessage(ex)}", true); }
     }
 
@@ -544,6 +585,10 @@ public partial class MainWindow
             HighlightClicksCheckBox.IsChecked = settings.HighlightClicks;
             ShowKeystrokesCheckBox.IsChecked = settings.ShowKeystrokes;
             ReviewAfterRecordingCheckBox.IsChecked = settings.ReviewAfterRecording;
+            KeepMarkedCopyCheckBox.IsChecked = settings.KeepMarkedCopy;
+            TrimReplacesOriginalCheckBox.IsChecked = settings.TrimReplacesOriginal;
+            SelectTagged(GifFpsComboBox, settings.GifFps.ToString(CultureInfo.InvariantCulture));
+            SelectTagged(GifMaxDimensionComboBox, settings.GifMaxDimension.ToString(CultureInfo.InvariantCulture));
             if (!RecordingFileNamePatternBox.IsKeyboardFocusWithin) RecordingFileNamePatternBox.Text = settings.RecordingFileNamePattern;
             FillDevicePicker(MicrophoneComboBox, "Default microphone", settings.MicrophoneDeviceId, _microphones);
             FillDevicePicker(CameraComboBox, "Default camera", settings.CameraDeviceId, _cameras);
@@ -591,6 +636,7 @@ public partial class MainWindow
         bool microphone = RecordMicrophoneCheckBox.IsChecked == true, systemAudio = RecordSystemAudioCheckBox.IsChecked == true;
         bool camera = RecordCameraCheckBox.IsChecked == true, clicks = HighlightClicksCheckBox.IsChecked == true;
         bool keys = ShowKeystrokesCheckBox.IsChecked == true, review = ReviewAfterRecordingCheckBox.IsChecked == true;
+        bool keepMarkedCopy = KeepMarkedCopyCheckBox.IsChecked == true, trimReplaces = TrimReplacesOriginalCheckBox.IsChecked == true;
         TrySaveSettings(settings => settings with
         {
             RecordMicrophone = microphone,
@@ -598,7 +644,9 @@ public partial class MainWindow
             RecordCamera = camera,
             HighlightClicks = clicks,
             ShowKeystrokes = keys,
-            ReviewAfterRecording = review
+            ReviewAfterRecording = review,
+            KeepMarkedCopy = keepMarkedCopy,
+            TrimReplacesOriginal = trimReplaces
         }, "the recording options");
     }
 
@@ -606,7 +654,8 @@ public partial class MainWindow
     {
         if (!IsInitialized || _updatingSettings) return;
         if (!TryParseSelectedTag(RecordingCountdownComboBox, out int countdown) || !TryParseSelectedTag(RecordingFrameRateComboBox, out int frameRate)) return;
-        TrySaveSettings(settings => settings with { RecordingCountdownSeconds = countdown, RecordingFrameRate = frameRate }, "the recording options");
+        if (!TryParseSelectedTag(GifFpsComboBox, out int gifFps) || !TryParseSelectedTag(GifMaxDimensionComboBox, out int gifSize)) return;
+        TrySaveSettings(settings => settings with { RecordingCountdownSeconds = countdown, RecordingFrameRate = frameRate, GifFps = gifFps, GifMaxDimension = gifSize }, "the recording options");
     }
 
     private void RecordingDevice_SelectionChanged(object sender, SelectionChangedEventArgs e)

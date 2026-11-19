@@ -1,5 +1,6 @@
 using BetterShot.Persistence;
 using BetterShot.Recording;
+using BetterShot.RecordingEditor;
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Media.Imaging;
@@ -40,6 +41,12 @@ internal static class RecordingFiles
     internal static void ShowInFolder(string path) =>
         Process.Start(new ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{path}\"", UseShellExecute = true })?.Dispose();
 
+    /// <summary>
+    /// The file to drag out for a recording: its marked copy when it has been edited (always when it has a redaction),
+    /// otherwise the movie. Null (with a reason) when a redacted recording has no up-to-date covered copy yet.
+    /// </summary>
+    internal static (string? Path, string? Note) SharePath(string moviePath) => RecordingSharing.ResolveSharePath(moviePath);
+
     /// <summary>The movie as a file drop (CF_HDROP) for dragging into chat apps, email, or Explorer.</summary>
     internal static DataObject CreateDragData(string path)
     {
@@ -48,10 +55,11 @@ internal static class RecordingFiles
         return data;
     }
 
-    /// <summary>Sends the movie, its camera sidecar, and its event log to the Recycle Bin.</summary>
+    /// <summary>Sends the movie, its camera sidecar, its event log, and its edit project to the Recycle Bin; drops its cached marked copy.</summary>
     internal static void DeleteToRecycleBin(RecordingEntry entry)
     {
-        foreach (string? path in new[] { entry.MoviePath, entry.CameraPath, RecordingEventLog.SidecarPath(entry.MoviePath) })
+        RecordingSharing.DeleteMarkedCopy(entry.MoviePath);
+        foreach (string? path in new[] { entry.MoviePath, entry.CameraPath, RecordingEventLog.SidecarPath(entry.MoviePath), RecordingEditProject.SidecarPath(entry.MoviePath) })
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) continue;
             VisualBasicFileSystem.DeleteFile(path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
