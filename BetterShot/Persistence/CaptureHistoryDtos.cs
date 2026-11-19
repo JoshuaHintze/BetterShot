@@ -101,6 +101,8 @@ internal sealed class HistorySettingsDto
     public HotkeyDto? WindowHotkey { get; set; }
     public HotkeyDto? FullscreenHotkey { get; set; }
     public HotkeyDto? LibraryHotkey { get; set; }
+    // Phase 3 text features. Optional; missing means on.
+    public bool? SearchTextInImages { get; set; }
 
     // Phase 4 Ask Claude. Optional like the Phase 2 fields; the API key is stored separately with DPAPI, never here.
     public string? AiModel { get; set; }

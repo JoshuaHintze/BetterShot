@@ -43,6 +43,8 @@ internal sealed record CaptureSettings
     public HotkeyBinding LibraryHotkey { get; init; }
     /// <summary>Anthropic model id used by Ask Claude. The API key is never part of these settings.</summary>
     public string AiModel { get; init; } = ClaudeModels.DefaultId;
+    /// <summary>Reads text in library captures on this PC so the library search can find it.</summary>
+    public bool SearchTextInImages { get; init; } = true;
 
     internal bool KeepForever => RetentionDays == NeverExpire;
     internal bool SavesEveryCapture => AutoSave || !ShowThumbnail;
@@ -123,7 +125,8 @@ internal static class CaptureSettingsMapper
             WindowHotkey = FromDto(dto.WindowHotkey),
             FullscreenHotkey = FromDto(dto.FullscreenHotkey),
             LibraryHotkey = FromDto(dto.LibraryHotkey),
-            AiModel = dto.AiModel ?? defaults.AiModel
+            AiModel = dto.AiModel ?? defaults.AiModel,
+            SearchTextInImages = dto.SearchTextInImages ?? defaults.SearchTextInImages
         }.Normalize();
     }
 
@@ -156,6 +159,7 @@ internal static class CaptureSettingsMapper
             FullscreenHotkey = ToDto(settings.FullscreenHotkey),
             LibraryHotkey = ToDto(settings.LibraryHotkey),
             AiModel = settings.AiModel,
+            SearchTextInImages = settings.SearchTextInImages,
             AdditionalFields = additionalFields
         };
     }

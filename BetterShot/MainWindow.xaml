@@ -108,6 +108,30 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <Style x:Key="SearchTextBox" TargetType="TextBox">
+      <Setter Property="Foreground" Value="#F0F1F3" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="CaretBrush" Value="#FFD84A" />
+      <Setter Property="SelectionBrush" Value="#8A7A2E" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <ScrollViewer x:Name="PART_ContentHost" Background="{TemplateBinding Background}" VerticalAlignment="Center" />
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="SearchFrame" TargetType="Border">
+      <Setter Property="Background" Value="#24262A" />
+      <Setter Property="BorderBrush" Value="#484B53" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True"><Setter Property="BorderBrush" Value="#747984" /></Trigger>
+        <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter Property="BorderBrush" Value="#FFD84A" /></Trigger>
+      </Style.Triggers>
+    </Style>
     <Style x:Key="ShortcutToggle" TargetType="CheckBox">
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="Template">
@@ -248,6 +272,12 @@
                     <TextBlock Text="Copy" />
                   </StackPanel>
                 </Button>
+                <Button Style="{StaticResource ActionButton}" Width="112" Click="CopyRecentText_Click" ToolTip="Copy the text in this capture (read on this PC)">
+                  <StackPanel Orientation="Horizontal">
+                    <controls:LucideIcon Icon="ScanText" Width="16" Height="16" Margin="0,0,7,0" />
+                    <TextBlock Text="Copy text" />
+                  </StackPanel>
+                </Button>
                 <Button Style="{StaticResource ActionButton}" Click="SaveRecent_Click">
                   <StackPanel Orientation="Horizontal">
                     <controls:LucideIcon Icon="Save" Width="16" Height="16" Margin="0,0,7,0" />
@@ -268,8 +298,23 @@
                 <RowDefinition Height="Auto" />
               </Grid.RowDefinitions>
               <Grid Margin="0,0,0,8">
-                <TextBlock Text="Recent captures" Foreground="#F0F1F3" FontSize="17" FontWeight="SemiBold" />
-                <TextBlock Text="Stored locally" HorizontalAlignment="Right" Foreground="#92959C" FontSize="13" />
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Recent captures" Foreground="#F0F1F3" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <Border Grid.Column="1" Style="{StaticResource SearchFrame}" Width="260" Height="32" HorizontalAlignment="Right" Margin="16,0,14,0" Cursor="IBeam">
+                  <Grid>
+                    <controls:LucideIcon Icon="Search" Width="14" Height="14" Foreground="#9B9DA5" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0,0,0" IsHitTestVisible="False" />
+                    <TextBlock x:Name="SearchPlaceholder" Text="Search names and text" Foreground="#7F828A" FontSize="13" Margin="32,0,30,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsHitTestVisible="False" />
+                    <TextBox x:Name="SearchBox" Style="{StaticResource SearchTextBox}" Margin="30,0,30,0" VerticalAlignment="Center" TextChanged="SearchBox_TextChanged" PreviewKeyDown="SearchBox_PreviewKeyDown" ToolTip="Search by time, date, typed markup, and text inside images" AutomationProperties.Name="Search names and text" />
+                    <Button x:Name="ClearSearchButton" HorizontalAlignment="Right" VerticalAlignment="Center" Width="24" Height="24" Margin="0,0,4,0" Padding="5" Background="Transparent" BorderThickness="0" Visibility="Collapsed" Click="ClearSearch_Click" ToolTip="Clear search" AutomationProperties.Name="Clear search">
+                      <controls:LucideIcon Icon="X" Width="12" Height="12" />
+                    </Button>
+                  </Grid>
+                </Border>
+                <TextBlock Grid.Column="2" Text="Stored locally" VerticalAlignment="Center" Foreground="#92959C" FontSize="13" />
               </Grid>
               <ListBox x:Name="RecentList" ItemsSource="{Binding}" SelectionChanged="RecentList_SelectionChanged" PreviewKeyDown="RecentList_PreviewKeyDown" Background="Transparent" BorderThickness="0" Grid.Row="1" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="False" ItemContainerStyle="{StaticResource RecentCard}">
                 <ListBox.Resources>
@@ -357,6 +402,7 @@
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
+              <TextBlock x:Name="SearchEmptyText" Grid.Row="1" Visibility="Collapsed" Foreground="#9B9DA5" FontSize="13" TextWrapping="Wrap" Margin="2,10,2,10" VerticalAlignment="Top" />
             </Grid>
           </Grid>
         </Grid>
@@ -610,6 +656,11 @@
             <ComboBoxItem Content="180 days" Tag="180" />
             <ComboBoxItem Content="Never" Tag="0" />
           </ComboBox>
+          <CheckBox x:Name="SearchTextCheckBox" Style="{StaticResource SettingToggle}" Content="Search text inside images" Margin="0,18,0,0" Checked="SearchText_Changed" Unchecked="SearchText_Changed" />
+          <TextBlock Text="Reads the words in your captures on this PC with Windows text recognition so library search can find them. Images are never uploaded. Turning this off deletes the stored text." Style="{StaticResource SettingHint}" Margin="24,6,0,0" />
+          <TextBlock x:Name="TextIndexStatusText" Style="{StaticResource SettingHint}" Foreground="#C9CBD0" Margin="24,6,0,0" />
+          <TextBlock Text="Keep markup editable" Style="{StaticResource SettingLabel}" FontWeight="SemiBold" Margin="0,18,0,0" />
+          <TextBlock Text="Arrows, shapes, text, and other markup stay editable for as long as a capture is in the library. Open it again to move, restyle, or delete anything. Redactions are always burned into copied, saved, and dragged images." Style="{StaticResource SettingHint}" Margin="0,6,0,0" />
         </StackPanel>
         <StackPanel Grid.Row="3" Margin="0,30,0,0">
           <TextBlock Text="Drag screenshots" FontSize="16" FontWeight="SemiBold" Foreground="#D7D8DB" />

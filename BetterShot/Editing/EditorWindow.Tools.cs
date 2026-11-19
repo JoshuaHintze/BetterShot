@@ -104,6 +104,7 @@ public sealed partial class EditorWindow
             if (tool == _tool) item.FontWeight = FontWeights.SemiBold;
             menu.Items.Add(item);
         }
+        if (group.Name == "Effects") AddEffectsMenuActions(menu);
         menu.PlacementTarget = group.Chrome;
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
         menu.IsOpen = true;
@@ -111,6 +112,7 @@ public sealed partial class EditorWindow
 
     private void SelectTool(EditorTool tool)
     {
+        CancelTextSelection(null);
         CommitTextEdit();
         if (_start is not null) { _image.ReleaseMouseCapture(); CancelDrag(); }
         if (tool == EditorTool.Crop) { BeginCrop(); return; }
