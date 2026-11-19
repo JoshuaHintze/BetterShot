@@ -36,9 +36,19 @@ Start an area capture using the main button or capture shortcut. Hover over an a
 
 Run .\capture-settings-test.ps1 to verify templating, sanitizing, collisions, resize math, PNG/JPEG export, settings migration and preservation, hotkey validation, the shutter sound format, thumbnail-off auto-save, and auto-dismiss, using isolated fixtures. It renders `capture-settings-panel.png`, `capture-settings-full.png`, and `capture-countdown.png`.
 
+## Ask Claude
+
+The sparkles button on a floating thumbnail's hover tray, or **Ask Claude** under the selected capture in the main window, opens "Ask about this capture". Pick a preset (Describe, Explain error, Draft bug report, Find UI issues, Extract text, Write alt text) or type a question (Enter sends, Shift+Enter adds a line). Answers stream in with basic Markdown formatting; ask follow-ups in the same conversation, start a new conversation, or copy the latest answer. Esc or the stop button cancels an answer in progress; closing the window cancels it too.
+
+Nothing is sent until you click a preset or send a question. The rendered capture (with annotations), downscaled so its long edge is at most 1568 px, is sent as PNG with the first question only; follow-ups send the text history. Requests go only to `https://api.anthropic.com/v1/messages` with your own key (redirects are refused).
+
+Settings > Ask Claude holds the API key and model (Claude Sonnet 5.5, the default; Claude Opus 5.5; Claude Haiku 5.5). The key is encrypted with Windows data protection (DPAPI, current user) in `%LOCALAPPDATA%\BetterShot\ask-claude-key.bin`, never in settings.json, and is never shown again after saving; Remove deletes it. The model is saved as `AiModel` in settings.json. Other code can open the window with `AskClaudeWindow.Show(owner, renderedBitmap, title)`.
+
+Run .\ai-test.ps1 to verify the request format, streaming parser, error messages, timeouts, conversation history, image downscaling, model setting, and key storage using a fake HTTP handler (no network). It renders `ai-settings-panel.png`, `ai-window-empty.png`, and `ai-window-conversation.png`.
+
 ## Current limits
 
-Capture uses Windows GDI and returns a frozen WPF bitmap. It captures SDR pixels from the visible desktop, so HDR color, protected content, hardware overlays, occluded/minimized windows, and some elevated or special Windows surfaces may be missing or differ from what is displayed. Area selection and window capture operate on what is visibly composited at capture time. History is local only; BetterShot does not upload captures. Captures that cannot be stored remain available for the session, with an error in the status area.
+Capture uses Windows GDI and returns a frozen WPF bitmap. It captures SDR pixels from the visible desktop, so HDR color, protected content, hardware overlays, occluded/minimized windows, and some elevated or special Windows surfaces may be missing or differ from what is displayed. Area selection and window capture operate on what is visibly composited at capture time. History is local only; BetterShot does not upload captures, except the single capture you explicitly ask Claude about (see Ask Claude). Captures that cannot be stored remain available for the session, with an error in the status area.
 
 BetterShot is single-instance per signed-in Windows session. Closing the window leaves it running in the notification area; choose **Exit** from the tray menu to quit fully.
 

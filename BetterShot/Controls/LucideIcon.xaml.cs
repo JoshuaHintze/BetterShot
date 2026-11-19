@@ -33,7 +33,10 @@ public enum LucideIconKind
     Fullscreen,
     Timer,
     Folder,
-    FolderOpen
+    FolderOpen,
+    Sparkles,
+    Send,
+    MessageSquarePlus
 }
 
 public partial class LucideIcon : UserControl
@@ -91,6 +94,9 @@ public partial class LucideIcon : UserControl
             case LucideIconKind.Fullscreen: Path("M3 7V5a2 2 0 0 1 2-2h2"); Path("M17 3h2a2 2 0 0 1 2 2v2"); Path("M21 17v2a2 2 0 0 1-2 2h-2"); Path("M7 21H5a2 2 0 0 1-2-2v-2"); Rectangle(7, 8, 10, 8, 1); break;
             case LucideIconKind.Timer: Path("M10 2h4"); Path("M12 14l3-3"); Path("M20 14a8 8 0 1 1-16 0a8 8 0 1 1 16 0"); break;
             case LucideIconKind.Folder: Path("M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"); break;
+            case LucideIconKind.Sparkles: Path("M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"); Path("M20 2v4"); Path("M22 4h-4"); Path("M6 20a2 2 0 1 1-4 0a2 2 0 1 1 4 0"); break;
+            case LucideIconKind.Send: Path("M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"); Path("m21.854 2.147-10.94 10.939"); break;
+            case LucideIconKind.MessageSquarePlus: Path("M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"); Path("M12 8v6"); Path("M9 11h6"); break;
             case LucideIconKind.FolderOpen: Path("m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"); break;
         }
     }

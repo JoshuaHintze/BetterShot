@@ -7,6 +7,7 @@
    <Button Style="{StaticResource IconButton}" Click="Edit_Click" ToolTip="Edit capture"><controls:LucideIcon Icon="Pencil" Width="18" Height="18" Foreground="{Binding Foreground,RelativeSource={RelativeSource AncestorType=Button}}"/></Button>
    <Button Style="{StaticResource IconButton}" Click="Copy_Click" ToolTip="Copy rendered image"><controls:LucideIcon Icon="Copy" Width="18" Height="18" Foreground="{Binding Foreground,RelativeSource={RelativeSource AncestorType=Button}}"/></Button>
    <Button Style="{StaticResource IconButton}" Click="Save_Click" ToolTip="Save rendered image (format and size follow Settings)"><controls:LucideIcon Icon="Save" Width="18" Height="18" Foreground="{Binding Foreground,RelativeSource={RelativeSource AncestorType=Button}}"/></Button>
+   <Button x:Name="AskClaudeButton" Style="{StaticResource IconButton}" Click="AskClaude_Click" ToolTip="Ask Claude about this capture" AutomationProperties.Name="Ask Claude about this capture"><controls:LucideIcon Icon="Sparkles" Width="18" Height="18" Foreground="{Binding Foreground,RelativeSource={RelativeSource AncestorType=Button}}"/></Button>
 
    <Button x:Name="DeleteButton" Style="{StaticResource IconButton}" Click="Delete_Click" ToolTip="Delete capture permanently"><controls:LucideIcon Icon="Trash2" Width="18" Height="18" Foreground="{Binding Foreground,RelativeSource={RelativeSource AncestorType=Button}}"/></Button>
   </StackPanel></Border>

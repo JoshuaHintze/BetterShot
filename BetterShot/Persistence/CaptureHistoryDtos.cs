@@ -65,6 +65,9 @@ internal sealed class HistorySettingsDto
     public HotkeyDto? FullscreenHotkey { get; set; }
     public HotkeyDto? LibraryHotkey { get; set; }
 
+    // Phase 4 Ask Claude. Optional like the Phase 2 fields; the API key is stored separately with DPAPI, never here.
+    public string? AiModel { get; set; }
+
     /// <summary>Fields written by newer builds or other features are carried through every rewrite.</summary>
     [JsonExtensionData] public Dictionary<string, JsonElement>? AdditionalFields { get; set; }
 }

@@ -1,3 +1,4 @@
+using BetterShot.Ai;
 using BetterShot.Editing;
 using BetterShot.Export;
 using System.Runtime.InteropServices;
@@ -97,6 +98,17 @@ public sealed class CapturePresentationManager : IDisposable
         _editors.Add(document, editor);
         editor.Closed += (_, _) => _editors.Remove(document);
         editor.Show();
+    }
+
+    /// <summary>Opens Ask Claude with the rendered capture (annotations included). Nothing is sent until the user asks.</summary>
+    internal AskClaudeWindow AskClaude(CaptureDocument document, Window? owner = null) =>
+        AskClaudeWindow.Show(owner, document.Render(), AskClaudeTitle(document));
+
+    internal static string AskClaudeTitle(CaptureDocument document)
+    {
+        DateTime local = document.CreatedUtc.ToLocalTime();
+        string when = local.Date == DateTime.Today ? $"Today, {local:h:mm tt}" : local.ToString("MMM d, h:mm tt");
+        return $"{when} · {document.Original.PixelWidth:N0} × {document.Original.PixelHeight:N0}";
     }
 
     internal void Dismiss(CaptureThumbnailWindow thumbnail)

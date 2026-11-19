@@ -1,3 +1,4 @@
+using BetterShot.Ai;
 using BetterShot.Export;
 using BetterShot.Platform;
 using System.Text.Json;
@@ -40,6 +41,8 @@ internal sealed record CaptureSettings
     public HotkeyBinding WindowHotkey { get; init; }
     public HotkeyBinding FullscreenHotkey { get; init; }
     public HotkeyBinding LibraryHotkey { get; init; }
+    /// <summary>Anthropic model id used by Ask Claude. The API key is never part of these settings.</summary>
+    public string AiModel { get; init; } = ClaudeModels.DefaultId;
 
     internal bool KeepForever => RetentionDays == NeverExpire;
     internal bool SavesEveryCapture => AutoSave || !ShowThumbnail;
@@ -81,7 +84,8 @@ internal sealed record CaptureSettings
         AreaHotkey = SafeHotkey(AreaHotkey),
         WindowHotkey = SafeHotkey(WindowHotkey),
         FullscreenHotkey = SafeHotkey(FullscreenHotkey),
-        LibraryHotkey = SafeHotkey(LibraryHotkey)
+        LibraryHotkey = SafeHotkey(LibraryHotkey),
+        AiModel = ClaudeModels.Normalize(AiModel)
     };
 
     private static HotkeyBinding SafeHotkey(HotkeyBinding binding) =>
@@ -118,7 +122,8 @@ internal static class CaptureSettingsMapper
             AreaHotkey = FromDto(dto.AreaHotkey),
             WindowHotkey = FromDto(dto.WindowHotkey),
             FullscreenHotkey = FromDto(dto.FullscreenHotkey),
-            LibraryHotkey = FromDto(dto.LibraryHotkey)
+            LibraryHotkey = FromDto(dto.LibraryHotkey),
+            AiModel = dto.AiModel ?? defaults.AiModel
         }.Normalize();
     }
 
@@ -150,6 +155,7 @@ internal static class CaptureSettingsMapper
             WindowHotkey = ToDto(settings.WindowHotkey),
             FullscreenHotkey = ToDto(settings.FullscreenHotkey),
             LibraryHotkey = ToDto(settings.LibraryHotkey),
+            AiModel = settings.AiModel,
             AdditionalFields = additionalFields
         };
     }
