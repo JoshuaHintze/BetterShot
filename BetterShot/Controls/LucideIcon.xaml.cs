@@ -45,7 +45,9 @@ public enum LucideIconKind
     Fullscreen,
     Timer,
     Folder,
-    FolderOpen
+    FolderOpen,
+    ScanText,
+    Search
 }
 
 public partial class LucideIcon : UserControl
@@ -116,6 +118,9 @@ public partial class LucideIcon : UserControl
             case LucideIconKind.Timer: Path("M10 2h4"); Path("M12 14l3-3"); Path("M20 14a8 8 0 1 1-16 0a8 8 0 1 1 16 0"); break;
             case LucideIconKind.Folder: Path("M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"); break;
             case LucideIconKind.FolderOpen: Path("m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"); break;
+            // Official pinned Lucide scan-text.svg and search.svg.
+            case LucideIconKind.ScanText: Path("M3 7V5a2 2 0 0 1 2-2h2"); Path("M17 3h2a2 2 0 0 1 2 2v2"); Path("M21 17v2a2 2 0 0 1-2 2h-2"); Path("M7 21H5a2 2 0 0 1-2-2v-2"); Path("M7 8h8"); Path("M7 12h10"); Path("M7 16h6"); break;
+            case LucideIconKind.Search: Path("m21 21-4.34-4.34"); Circle(11, 11, 8); break;
         }
     }
 

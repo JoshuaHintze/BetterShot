@@ -101,6 +101,8 @@ internal sealed class HistorySettingsDto
     public HotkeyDto? WindowHotkey { get; set; }
     public HotkeyDto? FullscreenHotkey { get; set; }
     public HotkeyDto? LibraryHotkey { get; set; }
+    // Phase 3 text features. Optional; missing means on.
+    public bool? SearchTextInImages { get; set; }
 
     /// <summary>Fields written by newer builds or other features are carried through every rewrite.</summary>
     [JsonExtensionData] public Dictionary<string, JsonElement>? AdditionalFields { get; set; }

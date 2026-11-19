@@ -81,6 +81,12 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (e.Args.Contains("--ocr-test", StringComparer.OrdinalIgnoreCase))
+        {
+            _ = RunOcrTestAsync(testOutput);
+            return;
+        }
+
         if (e.Args.Contains("--startup-test", StringComparer.OrdinalIgnoreCase))
         {
             try { StartupDiagnostics.Run(testOutput); Shutdown(0); }
@@ -310,6 +316,11 @@ public partial class App : System.Windows.Application
     {
         try { await CaptureSettingsDiagnostics.RunAsync(output); Shutdown(0); }
         catch (Exception ex) { WriteTestResult(output, $"FAIL: capture settings test: {ex}", "capture-settings-test.txt"); Shutdown(1); }
+    }
+    private async Task RunOcrTestAsync(string? output)
+    {
+        try { await Ocr.OcrDiagnostics.RunAsync(output); Shutdown(0); }
+        catch (Exception ex) { WriteTestResult(output, $"FAIL: OCR test: {ex}", "ocr-test.txt"); Shutdown(1); }
     }
     private async Task RunShellTestAsync(string? output)
     {

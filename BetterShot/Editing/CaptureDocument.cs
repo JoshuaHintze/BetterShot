@@ -45,6 +45,16 @@ public sealed class CaptureDocument
         RaiseChanged();
     }
 
+    /// <summary>Adds several annotations as one undo step.</summary>
+    internal void AddRange(IReadOnlyCollection<Annotation> annotations)
+    {
+        ArgumentNullException.ThrowIfNull(annotations);
+        if (annotations.Count == 0) return;
+        SaveUndo();
+        _items.AddRange(annotations);
+        RaiseChanged();
+    }
+
     internal void Replace(Annotation oldValue, Annotation newValue, string? coalesceKey = null)
     {
         int index = _items.IndexOf(oldValue);

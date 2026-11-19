@@ -43,8 +43,10 @@ public sealed partial class EditorWindow : Window
         Title = "BetterShot Editor"; Width = 1180; Height = 790; MinWidth = 780; MinHeight = 540;
         WindowStartupLocation = WindowStartupLocation.CenterOwner; Background = Brush("#151617"); Foreground = Brushes.White;
         FontFamily = new FontFamily("Segoe UI"); FontSize = 14;
+        _toast = CreateToast();
         Content = BuildLayout();
         InitializeNavigation();
+        InitializeOcr();
         _document.Changed += DocumentChanged;
         Closing += (_, _) => { CommitPendingEdits(); _styles.Flush(); };
         Deactivated += Editor_Deactivated;
@@ -78,16 +80,18 @@ public sealed partial class EditorWindow : Window
         bar.Children.Add(left);
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        right.Children.Add(BuildOcrButton());
         right.Children.Add(IconButton(LucideIconKind.Copy, "Copy rendered image (Ctrl+C)", Copy_Click));
         right.Children.Add(IconButton(LucideIconKind.Save, "Save rendered image (Ctrl+S)", Save_Click));
         var done = IconTextButton(LucideIconKind.Check, "Done", "Close editor (Ctrl+Enter)", (_, _) => Done(), 82); done.Background = Brush("#FFD400"); done.Foreground = Brushes.Black;
+        _doneButton = done;
         right.Children.Add(done); Grid.SetColumn(right, 2); bar.Children.Add(right);
         toolbar.Child = bar; root.Children.Add(toolbar);
 
         var canvasArea = new Grid { Background = Brush("#111213") };
         _scroller.Background = Brush("#111213"); _scroller.Padding = new Thickness(44); _scroller.Focusable = false;
         PreviewMouseDown += Scroller_PreviewMouseDown;
-        _imageSurface.Children.Add(_image); _imageSurface.Children.Add(_previewLayer); _imageSurface.Children.Add(_imageOverlay); _imageSurface.Children.Add(_cropOverlay);
+        _imageSurface.Children.Add(_image); _imageSurface.Children.Add(_previewLayer); _imageSurface.Children.Add(_imageOverlay); _imageSurface.Children.Add(_cropOverlay); _imageSurface.Children.Add(_ocrOverlay);
         var imageBorder = new Border { Background = Brushes.Black, BorderBrush = Brush("#4B4D50"), BorderThickness = new Thickness(1), Child = _imageSurface,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 28, Opacity = .55, ShadowDepth = 5 } };
         _image.MouseLeftButtonDown += Image_MouseDown; _image.MouseMove += Image_MouseMove; _image.MouseLeftButtonUp += Image_MouseUp;
@@ -98,7 +102,7 @@ public sealed partial class EditorWindow : Window
             if (_start is not null) CancelDrag();
             if (_cropDragStart is not null) EndCropDrag();
         });
-        _scroller.Content = imageBorder; canvasArea.Children.Add(_scroller); Grid.SetRow(canvasArea, 1); root.Children.Add(canvasArea);
+        _scroller.Content = imageBorder; canvasArea.Children.Add(_scroller); canvasArea.Children.Add(_toast); Grid.SetRow(canvasArea, 1); root.Children.Add(canvasArea);
 
         var footerBar = new Grid { Margin = new Thickness(14, 0, 14, 0) };
         footerBar.ColumnDefinitions.Add(new ColumnDefinition()); footerBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -333,6 +337,7 @@ public sealed partial class EditorWindow : Window
     private bool HandleShortcut(Key key, ModifierKeys modifiers, bool textInputFocused)
     {
         if (textInputFocused) return false;
+        if (HandleOcrShortcut(key, modifiers)) return true;
         if (_cropping && modifiers == ModifierKeys.None && key == Key.Enter) { ApplyCrop(); return true; }
         if (_cropping && key == Key.Escape) { CancelCrop(); return true; }
         if (modifiers == ModifierKeys.Control && key == Key.Enter) { Done(); return true; }

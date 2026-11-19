@@ -98,6 +98,7 @@ public partial class MainWindow : Window
         DragModeComboBox.SelectedIndex = _presentation.DragAsFile ? 1 : 0;
         ApplySettingsToPresentation();
         LoadCaptureSettingsIntoControls();
+        InitializeTextSearch(historyRoot);
         Version? version = Assembly.GetExecutingAssembly().GetName().Version;
         VersionText.Text = $"BetterShot {version?.ToString(3) ?? "1.0.0"}";
         _shortcutHook = new KeyboardShortcutHook(() => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Area)));
@@ -377,9 +378,11 @@ public partial class MainWindow : Window
             if (ReferenceEquals(_latest, document)) PreviewImage.Source = item.Thumbnail;
             try { _historyStore?.Save(document); }
             catch (Exception ex) { SetStatus($"Changes are available, but could not be stored: {FriendlyMessage(ex)}", true); }
+            QueueTextIndex(document);
         });
         _documentHandlers[document] = handler;
         document.Changed += handler;
+        QueueTextIndex(document, priority: insertFirst);
         if (!insertFirst) _presentation.Retain(document);
         EmptyState.Visibility = Visibility.Collapsed;
         RecentState.Visibility = Visibility.Visible;
@@ -425,6 +428,7 @@ public partial class MainWindow : Window
             if (ReferenceEquals(_latest, document)) PreviewImage.Source = item.Thumbnail;
             try { _historyStore?.Save(document); }
             catch (Exception ex) { SetStatus($"Changes are available, but could not be stored: {FriendlyMessage(ex)}", true); }
+            QueueTextIndex(document);
         });
         _documentHandlers[document] = handler;
         document.Changed += handler;
@@ -435,6 +439,7 @@ public partial class MainWindow : Window
         DetachDocument(e.Document);
         RecentCaptureItem? item = _recentItems.FirstOrDefault(candidate => ReferenceEquals(candidate.Document, e.Document));
         if (item is not null) _recentItems.Remove(item);
+        RemoveFromTextIndex(e.Document);
         if (_recentItems.Count == 0)
         {
             _latest = null;
@@ -613,6 +618,7 @@ public partial class MainWindow : Window
     {
         _retentionTimer.Stop();
         _countdownCancellation?.Cancel();
+        ShutdownTextSearch();
         foreach (CaptureDocument document in _presentation.Recent.ToArray()) _presentation.CloseEditor(document);
         if (_historyStore is not null)
         {

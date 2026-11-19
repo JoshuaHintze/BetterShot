@@ -40,6 +40,8 @@ internal sealed record CaptureSettings
     public HotkeyBinding WindowHotkey { get; init; }
     public HotkeyBinding FullscreenHotkey { get; init; }
     public HotkeyBinding LibraryHotkey { get; init; }
+    /// <summary>Reads text in library captures on this PC so the library search can find it.</summary>
+    public bool SearchTextInImages { get; init; } = true;
 
     internal bool KeepForever => RetentionDays == NeverExpire;
     internal bool SavesEveryCapture => AutoSave || !ShowThumbnail;
@@ -118,7 +120,8 @@ internal static class CaptureSettingsMapper
             AreaHotkey = FromDto(dto.AreaHotkey),
             WindowHotkey = FromDto(dto.WindowHotkey),
             FullscreenHotkey = FromDto(dto.FullscreenHotkey),
-            LibraryHotkey = FromDto(dto.LibraryHotkey)
+            LibraryHotkey = FromDto(dto.LibraryHotkey),
+            SearchTextInImages = dto.SearchTextInImages ?? defaults.SearchTextInImages
         }.Normalize();
     }
 
@@ -150,6 +153,7 @@ internal static class CaptureSettingsMapper
             WindowHotkey = ToDto(settings.WindowHotkey),
             FullscreenHotkey = ToDto(settings.FullscreenHotkey),
             LibraryHotkey = ToDto(settings.LibraryHotkey),
+            SearchTextInImages = settings.SearchTextInImages,
             AdditionalFields = additionalFields
         };
     }
