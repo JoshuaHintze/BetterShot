@@ -81,6 +81,12 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (TryGetExtrasTest(e.Args, out ExtrasDiagnostics.Areas extrasAreas, out string extrasResultFile))
+        {
+            _ = RunExtrasTestAsync(testOutput, extrasAreas, extrasResultFile);
+            return;
+        }
+
         if (e.Args.Contains("--startup-test", StringComparer.OrdinalIgnoreCase))
         {
             try { StartupDiagnostics.Run(testOutput); Shutdown(0); }
@@ -107,6 +113,7 @@ public partial class App : System.Windows.Application
         var window = new MainWindow(enableHistory: true);
         MainWindow = window;
         if (background) window.InitializeInTray(); else window.Show();
+        window.StartInteractiveServices(showOnboarding: !background);
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -311,6 +318,35 @@ public partial class App : System.Windows.Application
         try { await CaptureSettingsDiagnostics.RunAsync(output); Shutdown(0); }
         catch (Exception ex) { WriteTestResult(output, $"FAIL: capture settings test: {ex}", "capture-settings-test.txt"); Shutdown(1); }
     }
+    /// <summary>--extras-test runs every phase 5 check; the narrower switches run one area each.</summary>
+    private static bool TryGetExtrasTest(string[] args, out ExtrasDiagnostics.Areas areas, out string resultFile)
+    {
+        (string Switch, ExtrasDiagnostics.Areas Areas, string File)[] switches =
+        [
+            ("--extras-test", ExtrasDiagnostics.Areas.All, "extras-test.txt"),
+            ("--scrolling-test", ExtrasDiagnostics.Areas.Scrolling, "scrolling-test.txt"),
+            ("--background-removal-test", ExtrasDiagnostics.Areas.BackgroundRemoval, "background-removal-test.txt"),
+            ("--update-test", ExtrasDiagnostics.Areas.Updates, "update-test.txt"),
+            ("--onboarding-test", ExtrasDiagnostics.Areas.Onboarding, "onboarding-test.txt")
+        ];
+        foreach ((string name, ExtrasDiagnostics.Areas candidate, string file) in switches)
+        {
+            if (!args.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+            areas = candidate;
+            resultFile = file;
+            return true;
+        }
+        areas = ExtrasDiagnostics.Areas.All;
+        resultFile = string.Empty;
+        return false;
+    }
+
+    private async Task RunExtrasTestAsync(string? output, ExtrasDiagnostics.Areas areas, string resultFile)
+    {
+        try { await ExtrasDiagnostics.RunAsync(output, areas, resultFile); Shutdown(0); }
+        catch (Exception ex) { WriteTestResult(output, $"FAIL: {ex}", resultFile); Shutdown(1); }
+    }
+
     private async Task RunShellTestAsync(string? output)
     {
         try { await ShellDiagnostics.RunAsync(output); Shutdown(0); }

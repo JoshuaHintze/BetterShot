@@ -45,7 +45,7 @@ internal static class DocumentRenderer
         var visual = new DrawingVisual();
         using (DrawingContext dc = visual.RenderOpen())
         {
-            dc.DrawImage(document.Original, canvas);
+            dc.DrawImage(document.BaseImage, canvas);
             foreach (RectangleAnnotation redaction in document.Items.OfType<RectangleAnnotation>().Where(item => item.Redaction))
                 redaction.Draw(dc, false, context);
         }
@@ -66,7 +66,7 @@ internal static class DocumentRenderer
         }
         dc.PushClip(new RectangleGeometry(target, radius, radius));
         dc.PushTransform(new TranslateTransform(layout.Offset.X, layout.Offset.Y));
-        dc.DrawImage(document.Original, document.CanvasRect);
+        dc.DrawImage(document.BaseImage, document.CanvasRect);
         DrawAnnotations(dc, items, isSelected, document.RenderContext);
         dc.Pop();
         dc.Pop();

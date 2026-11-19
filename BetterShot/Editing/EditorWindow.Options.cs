@@ -227,6 +227,7 @@ public sealed partial class EditorWindow
     {
         var panel = new StackPanel { Width = 264 };
         panel.Children.Add(new TextBlock { Text = "Background", FontWeight = FontWeights.SemiBold, FontSize = 14, Foreground = Brushes.White });
+        panel.Children.Add(BuildBackgroundRemovalSection());
         var presets = new WrapPanel();
         presets.Children.Add(BackgroundSwatch(null, !background.IsEnabled));
         foreach (BackgroundPreset preset in BackgroundPresets.All) presets.Children.Add(BackgroundSwatch(preset, background.IsEnabled && background.Preset == preset.Id));

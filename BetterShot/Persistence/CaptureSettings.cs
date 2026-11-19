@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace BetterShot.Persistence;
 
 /// <summary>Immutable snapshot of every persisted preference. Setters build a modified copy, write it, then swap it in.</summary>
-internal sealed record CaptureSettings
+internal sealed partial record CaptureSettings
 {
     internal const int NeverExpire = 0;
     /// <summary>Written to RetentionDays when captures are kept forever, so older builds keep them for a year instead of resetting.</summary>
@@ -54,6 +54,7 @@ internal sealed record CaptureSettings
         HotkeyAction.Window => WindowHotkey,
         HotkeyAction.Fullscreen => FullscreenHotkey,
         HotkeyAction.Library => LibraryHotkey,
+        HotkeyAction.Scrolling => ScrollingHotkey,
         _ => HotkeyBinding.None
     };
 
@@ -63,6 +64,7 @@ internal sealed record CaptureSettings
         HotkeyAction.Window => this with { WindowHotkey = binding },
         HotkeyAction.Fullscreen => this with { FullscreenHotkey = binding },
         HotkeyAction.Library => this with { LibraryHotkey = binding },
+        HotkeyAction.Scrolling => this with { ScrollingHotkey = binding },
         _ => this
     };
 
@@ -81,7 +83,9 @@ internal sealed record CaptureSettings
         AreaHotkey = SafeHotkey(AreaHotkey),
         WindowHotkey = SafeHotkey(WindowHotkey),
         FullscreenHotkey = SafeHotkey(FullscreenHotkey),
-        LibraryHotkey = SafeHotkey(LibraryHotkey)
+        LibraryHotkey = SafeHotkey(LibraryHotkey),
+        ScrollingHotkey = SafeHotkey(ScrollingHotkey),
+        SkippedUpdateVersion = SkippedUpdateVersion?.Trim() ?? string.Empty
     };
 
     private static HotkeyBinding SafeHotkey(HotkeyBinding binding) =>
@@ -89,7 +93,7 @@ internal sealed record CaptureSettings
 }
 
 /// <summary>Converts between the on-disk settings.json shape and <see cref="CaptureSettings"/>.</summary>
-internal static class CaptureSettingsMapper
+internal static partial class CaptureSettingsMapper
 {
     internal static CaptureSettings FromDto(HistorySettingsDto dto)
     {
@@ -119,7 +123,7 @@ internal static class CaptureSettingsMapper
             WindowHotkey = FromDto(dto.WindowHotkey),
             FullscreenHotkey = FromDto(dto.FullscreenHotkey),
             LibraryHotkey = FromDto(dto.LibraryHotkey)
-        }.Normalize();
+        }.WithExtrasFrom(dto).Normalize();
     }
 
     internal static HistorySettingsDto ToDto(CaptureSettings settings, Dictionary<string, JsonElement>? additionalFields)
@@ -151,7 +155,7 @@ internal static class CaptureSettingsMapper
             FullscreenHotkey = ToDto(settings.FullscreenHotkey),
             LibraryHotkey = ToDto(settings.LibraryHotkey),
             AdditionalFields = additionalFields
-        };
+        }.WithExtrasFrom(settings);
     }
 
     private static CaptureImageFormat ParseFormat(string? value) =>

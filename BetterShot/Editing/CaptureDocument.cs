@@ -1,3 +1,4 @@
+using BetterShot.Editing.BackgroundRemoval;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -13,6 +14,8 @@ public sealed class CaptureDocument
     private string? _coalesceKey;
     private PixelBuffer? _pixels;
     private AnnotationRenderContext? _renderContext;
+    private AlphaMask? _backgroundMask;
+    private BitmapSource? _baseImage;
 
     public CaptureDocument(BitmapSource original, Guid? id = null, DateTime? createdUtc = null)
     {
@@ -34,7 +37,11 @@ public sealed class CaptureDocument
     internal Rect? Crop => _crop;
     internal BackgroundStyle Background => _background;
     internal Rect CanvasRect => new(0, 0, Original.PixelWidth, Original.PixelHeight);
-    internal PixelBuffer Pixels => _pixels ??= new PixelBuffer(Original);
+    /// <summary>Opacity mask from "Remove the background"; null keeps the capture opaque. Original pixels never change.</summary>
+    internal AlphaMask? BackgroundMask => _backgroundMask;
+    /// <summary>The image every render starts from: the original, with the background mask applied when present.</summary>
+    internal BitmapSource BaseImage => _backgroundMask is null ? Original : _baseImage ??= _backgroundMask.ApplyTo(Original);
+    internal PixelBuffer Pixels => _pixels ??= new PixelBuffer(BaseImage);
     internal AnnotationRenderContext RenderContext => _renderContext ??= new AnnotationRenderContext(this);
     internal CompositionLayout Layout(bool compose = true) => DocumentRenderer.Layout(this, compose);
 
@@ -82,6 +89,32 @@ public sealed class CaptureDocument
         SaveUndo(coalesceKey);
         _background = normalized;
         RaiseChanged();
+    }
+
+    /// <summary>Applies or clears the background mask as one undoable edit.</summary>
+    internal void SetBackgroundMask(AlphaMask? mask)
+    {
+        if (mask is not null && !mask.Fits(Original)) throw new ArgumentException("The mask does not match the capture size.", nameof(mask));
+        if (ReferenceEquals(mask, _backgroundMask)) return;
+        SaveUndo();
+        ApplyBackgroundMask(mask);
+        RaiseChanged();
+    }
+
+    /// <summary>Loads a stored mask without creating an undo step.</summary>
+    internal void RestoreBackgroundMask(AlphaMask? mask)
+    {
+        if (mask is not null && !mask.Fits(Original)) throw new ArgumentException("The mask does not match the capture size.", nameof(mask));
+        ApplyBackgroundMask(mask);
+        _renderContext = null;
+    }
+
+    private void ApplyBackgroundMask(AlphaMask? mask)
+    {
+        if (ReferenceEquals(mask, _backgroundMask)) return;
+        _backgroundMask = mask;
+        _baseImage = null;
+        _pixels = null;
     }
 
     internal Rect? NormalizeCrop(Rect? crop)
@@ -151,7 +184,7 @@ public sealed class CaptureDocument
         _coalesceKey = coalesceKey;
     }
 
-    private DocumentSnapshot Snapshot() => new(Clone(_items), _crop, _background);
+    private DocumentSnapshot Snapshot() => new(Clone(_items), _crop, _background, _backgroundMask);
 
     private void Restore(DocumentSnapshot state)
     {
@@ -159,6 +192,7 @@ public sealed class CaptureDocument
         _items.AddRange(Clone(state.Items));
         _crop = state.Crop;
         _background = state.Background;
+        ApplyBackgroundMask(state.BackgroundMask);
         _coalesceKey = null;
         RaiseChanged();
     }
@@ -170,7 +204,7 @@ public sealed class CaptureDocument
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    private sealed record DocumentSnapshot(List<Annotation> Items, Rect? Crop, BackgroundStyle Background);
+    private sealed record DocumentSnapshot(List<Annotation> Items, Rect? Crop, BackgroundStyle Background, AlphaMask? BackgroundMask);
 }
 
 internal abstract record Annotation(Color Color, double Width)
