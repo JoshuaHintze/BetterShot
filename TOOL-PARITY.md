@@ -64,3 +64,8 @@ Suggested Windows interaction rules: scope Enter/Escape to the active crop opera
 All exports must use the same composition as the preview, with intentional output dimensions after crop/background padding. Existing editable annotations must survive reopening within the session. Avoid offering inactive placeholder controls.
 
 This document records the newly supplied references; it does not claim these additional features have been implemented.
+
+## Screen recording status (Phase 6, November 19, 2026)
+
+Implemented on branch phase6-recording, compiled but not yet run on Windows: record a picked region, a window, or a display; countdown Off/3/5 s; floating controls (elapsed, pause/resume, stop, mic mute, camera toggle) and region dimming excluded from capture; microphone + system audio mixed to one AAC track; webcam sidecar MP4 ("-camera"); click highlights and Ctrl/Alt/Win shortcut keystrokes; click/key event sidecar JSON; MP4 output (KhingShot uses .mov; MP4 is the Windows-appropriate choice) named by a recording file-name pattern; recordings in the library and as floating thumbnails with drag-out; Record screen hotkey, Record button, tray menu. Not yet: the trim/review editor and camera bubble compositing (Phase 7; "Review after recording" currently opens the movie), separate audio tracks, live camera preview, and click/keystroke overlays inside window-only recordings (window capture records just that window, so those rely on the event sidecar).
+

@@ -138,6 +138,22 @@ public sealed class CaptureService
         return result;
     }
 
+    /// <summary>
+    /// Runs the same selector as a capture but returns only the chosen rectangle (virtual-screen physical pixels),
+    /// for screen recording. Fullscreen returns the display under the pointer without showing the selector.
+    /// </summary>
+    public async Task<Int32Rect?> SelectAsync(CaptureMode mode)
+    {
+        if (Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
+            return await dispatcher.InvokeAsync(() => SelectAsync(mode)).Task.Unwrap();
+
+        var (desktop, virtualBounds) = CaptureVirtualDesktop();
+        Int32Rect? selected = mode == CaptureMode.Fullscreen
+            ? DisplayUnderCursor(virtualBounds)
+            : await SelectionSession.SelectAsync(desktop, virtualBounds, mode);
+        return selected is { Width: > 0, Height: > 0 } ? selected : null;
+    }
+
     private static Int32Rect DisplayUnderCursor(Int32Rect virtualBounds)
     {
         Int32Rect[] monitors = NativeMethods.GetMonitorRects()

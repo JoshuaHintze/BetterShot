@@ -1,0 +1,10 @@
+Microsoft.Windows.SDK.NET.dll and WinRT.Runtime.dll (Windows SDK projection for .NET, 10.0.19041)
+© Microsoft Corporation. All rights reserved.
+
+These files are supplied by the .NET SDK when an app targets a Windows 10 SDK version (BetterShot targets
+net10.0-windows10.0.19041.0) and let BetterShot call Windows Runtime APIs used for screen recording
+(Windows.Graphics.Capture, Windows.Media.Transcoding, Windows.Media.Capture).
+
+Microsoft.Windows.SDK.NET.dll is licensed under the Windows SDK license terms: https://aka.ms/WinSDKLicenseURL
+WinRT.Runtime.dll is part of C#/WinRT (https://github.com/microsoft/CsWinRT), licensed under the MIT License,
+Copyright (c) Microsoft Corporation.

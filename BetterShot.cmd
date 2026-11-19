@@ -1,6 +1,6 @@
 @echo off
 setlocal
-set "APP=%~dp0BetterShot\bin\Release\net10.0-windows\BetterShot.exe"
+set "APP=%~dp0BetterShot\bin\Release\net10.0-windows10.0.19041.0\BetterShot.exe"
 set "LOCAL_DOTNET_ROOT=%~dp0.tools\dotnet"
 
 if not exist "%APP%" (

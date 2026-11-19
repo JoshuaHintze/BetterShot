@@ -19,7 +19,7 @@ internal sealed class CaptureCountdownWindow : Window
     private const int WsExTransparent = 0x00000020;
     private readonly TextBlock _secondsText = new() { FontSize = 20, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xD8, 0x4A)), VerticalAlignment = VerticalAlignment.Center };
 
-    internal CaptureCountdownWindow()
+    internal CaptureCountdownWindow(string label = "Capturing in")
     {
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
@@ -36,7 +36,7 @@ internal sealed class CaptureCountdownWindow : Window
 
         var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         row.Children.Add(new LucideIcon { Icon = LucideIconKind.Timer, Width = 18, Height = 18, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xD8, 0x4A)), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center });
-        row.Children.Add(new TextBlock { Text = "Capturing in", FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(0xE7, 0xE8, 0xEB)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+        row.Children.Add(new TextBlock { Text = label, FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(0xE7, 0xE8, 0xEB)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
         row.Children.Add(_secondsText);
         Content = new Border
         {
@@ -54,9 +54,9 @@ internal sealed class CaptureCountdownWindow : Window
     internal void SetSeconds(int seconds) => _secondsText.Text = seconds.ToString(System.Globalization.CultureInfo.CurrentCulture);
 
     /// <summary>Shows the pill, counts down once per second, and closes it. Returns false if canceled.</summary>
-    internal static async Task<bool> RunAsync(int seconds, CancellationToken cancellation)
+    internal static async Task<bool> RunAsync(int seconds, CancellationToken cancellation, string label = "Capturing in")
     {
-        var window = new CaptureCountdownWindow();
+        var window = new CaptureCountdownWindow(label);
         try
         {
             window.SetSeconds(seconds);
