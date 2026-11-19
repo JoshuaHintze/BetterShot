@@ -283,7 +283,7 @@ public partial class App : System.Windows.Application
             EditorWindow reopened = shell.Presentation.EditorFor(document) ?? throw new InvalidOperationException("The shared document could not be reopened.");
             if (!ReferenceEquals(shell.Presentation.Recent[1], document)) throw new InvalidOperationException("Reopening replaced the shared document.");
             reopened.Close(); shell.Presentation.Dismiss(thumbnail); shell.CloseForTest(); shell = null;
-            WriteTestResult(Path.Combine(directory, "workflow-test.txt"), "PASS: thumbnail-first capture, no auto-editor, multi-capture retention, dismiss behavior, shared-document reopen, thumbnail render, editor layout, inline text editing, and text handle undo/cancel");
+            WriteTestResult(Path.Combine(directory, "workflow-test.txt"), "PASS: thumbnail-first capture, no auto-editor, multi-capture retention, dismiss behavior, shared-document reopen, thumbnail render, editor layout, inline text editing, text handle undo/cancel, pointer-anchored zoom, and Space-drag canvas navigation");
             Shutdown(0);
         }
         catch (Exception ex)

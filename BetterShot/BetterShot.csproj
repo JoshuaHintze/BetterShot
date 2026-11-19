@@ -13,6 +13,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\BetterShot.ico" />
+    <Resource Include="Assets\Cursors\Grab.cur" />
+    <Resource Include="Assets\Cursors\Grabbing.cur" />
     <Content Include="ThirdPartyNotices\Lucide-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

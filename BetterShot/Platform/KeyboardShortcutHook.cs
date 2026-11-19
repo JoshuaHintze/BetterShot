@@ -59,6 +59,7 @@ internal sealed class KeyboardShortcutHook : IDisposable
         if (keyDown)
         {
             _pressed.Add(key);
+            ShortcutClassifier.PruneReleasedKeys(_pressed, key, k => (GetAsyncKeyState(k) & 0x8000) != 0);
             if (ShortcutClassifier.ShouldSuppressKeyDown(key, _pressed))
             {
                 _suppressSUntilReleased = true;
@@ -101,6 +102,8 @@ internal sealed class KeyboardShortcutHook : IDisposable
     private static extern bool UnhookWindowsHookEx(IntPtr hook);
     [DllImport("user32.dll")]
     private static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int virtualKey);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr GetModuleHandle(string? moduleName);
 }

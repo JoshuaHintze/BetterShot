@@ -39,6 +39,8 @@ Drag from the image area to share the current edited capture. **Settings > Drag 
 
 The editor uses a single compact toolbar with vector tool icons and Copy, Save, and Done actions. Fit and zoom controls live in the footer. Workflow diagnostics verify the toolbar fits without overlapping at 780 and 1180 DIP window widths and save previews for each. The app and tray use the generated BetterShot icon in `BetterShot/Assets`.
 
+Hold Ctrl and roll the mouse wheel to zoom around the point under the pointer. Hold Space to show the hand cursor, then drag with the left mouse button to pan the canvas; releasing Space returns to the selected annotation tool. Spaces typed in the inline text editor remain normal text input.
+
 ## Inline text editing
 
 Choose Text (T), click the image, and type directly on the canvas. Enter inserts a new line; Ctrl+Enter finishes and Escape cancels. Clicking outside the text or leaving the editor commits the edit. Copy, Save, and Done also commit pending text. Double-click selected text to edit it again. In Select mode, drag text to move it; the four corner handles scale its font size. Each completed move, resize, or text edit is one undo step. Empty new text is discarded; clearing existing text removes it and can be undone. Selection handles and the editing box are excluded from exported images.
