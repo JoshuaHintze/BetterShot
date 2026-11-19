@@ -117,9 +117,27 @@ internal static class ShellDiagnostics
             try { transform = element.TransformToAncestor(shell); }
             catch (InvalidOperationException) { continue; }
             Rect bounds = transform.TransformBounds(new Rect(element.RenderSize));
-            if (bounds.Left < client.Left - 1 || bounds.Top < client.Top - 1 || bounds.Right > client.Right + 1 || bounds.Bottom > client.Bottom + 1)
+            // Content inside a vertically scrolling panel (e.g. the long Settings list) may extend below the
+            // fold; it must still fit horizontally within its scroller, and the scroller itself must fit the window.
+            Rect limit = client;
+            bool scrollsVertically = false;
+            if (VerticalScrollerAbove(element, shell) is { } scroller)
+            {
+                limit = scroller.TransformToAncestor(shell).TransformBounds(new Rect(scroller.RenderSize));
+                scrollsVertically = true;
+            }
+            bool horizontallyClipped = bounds.Left < limit.Left - 1 || bounds.Right > limit.Right + 1;
+            bool verticallyClipped = !scrollsVertically && (bounds.Top < limit.Top - 1 || bounds.Bottom > limit.Bottom + 1);
+            if (horizontallyClipped || verticallyClipped)
                 throw new InvalidOperationException($"{element.GetType().Name} is clipped in the {state}.");
         }
+    }
+
+    private static System.Windows.Controls.ScrollViewer? VerticalScrollerAbove(DependencyObject element, Window shell)
+    {
+        for (DependencyObject? parent = VisualTreeHelper.GetParent(element); parent is not null && !ReferenceEquals(parent, shell); parent = VisualTreeHelper.GetParent(parent))
+            if (parent is System.Windows.Controls.ScrollViewer { VerticalScrollBarVisibility: not System.Windows.Controls.ScrollBarVisibility.Disabled } scroller) return scroller;
+        return null;
     }
 
     private static IEnumerable<DependencyObject> Descendants(DependencyObject parent)

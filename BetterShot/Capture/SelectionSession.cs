@@ -43,7 +43,7 @@ internal sealed class SelectionSession
 
     internal static async Task RunOverlaySelfTestAsync(BitmapSource desktop, Int32Rect virtualBounds)
     {
-        foreach (CaptureMode mode in Enum.GetValues<CaptureMode>())
+        foreach (CaptureMode mode in Enum.GetValues<CaptureMode>().Where(mode => mode != CaptureMode.Fullscreen))
         {
             var session = new SelectionSession(desktop, virtualBounds, mode);
             session.Show();

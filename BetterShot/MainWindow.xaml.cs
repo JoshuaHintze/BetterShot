@@ -1,14 +1,16 @@
 using BetterShot.Capture;
+using BetterShot.Controls;
 using BetterShot.Editing;
+using BetterShot.Export;
 using BetterShot.Platform;
 using BetterShot.Persistence;
 using BetterShot.Presentation;
-using Microsoft.Win32;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Input;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -43,6 +45,14 @@ public partial class MainWindow : Window
     private bool _updatingShortcut;
     private bool _updatingStartup;
     private readonly WindowsStartupRegistration? _startupRegistration;
+    private readonly GlobalHotKeyRegistry _hotkeys = new();
+    private CaptureSettings _transientSettings = CaptureSettings.Default with { PlayCaptureSound = false };
+    private CancellationTokenSource? _countdownCancellation;
+    private bool _updatingSettings;
+    private bool _fallbackSuspended;
+
+    /// <summary>Saved settings, or in-memory defaults (silent) for transient diagnostic shells without history storage.</summary>
+    internal CaptureSettings CurrentSettings => _historyStore?.Settings ?? _transientSettings;
 
     internal CapturePresentationManager Presentation => _presentation;
     internal CaptureDocument? SelectedDocumentForTest => _latest;
@@ -86,6 +96,8 @@ public partial class MainWindow : Window
         else SelectRetentionChoice(7);
         _presentation.DragAsFile = _historyStore?.DragAsFile ?? false;
         DragModeComboBox.SelectedIndex = _presentation.DragAsFile ? 1 : 0;
+        ApplySettingsToPresentation();
+        LoadCaptureSettingsIntoControls();
         Version? version = Assembly.GetExecutingAssembly().GetName().Version;
         VersionText.Text = $"BetterShot {version?.ToString(3) ?? "1.0.0"}";
         _shortcutHook = new KeyboardShortcutHook(() => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Area)));
@@ -93,6 +105,7 @@ public partial class MainWindow : Window
         menu.Items.Add("Capture area", null, (_, _) => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Area)));
         menu.Items.Add("Capture window", null, (_, _) => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Window)));
         menu.Items.Add("Capture display", null, (_, _) => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Display)));
+        menu.Items.Add("Capture fullscreen", null, (_, _) => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Fullscreen)));
         menu.Items.Add("Open BetterShot", null, (_, _) => Dispatcher.BeginInvoke(ShowAndActivate));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => Dispatcher.BeginInvoke(ExitApplication));
@@ -117,6 +130,10 @@ public partial class MainWindow : Window
         double contentWidth = Math.Max(0, ActualWidth - 72);
         RecentCardWidth = Math.Clamp(Math.Floor((contentWidth - 72) / 4), 170, 300);
         RecentImageHeight = Math.Clamp(RecentCardWidth * 0.52, 100, 130);
+        bool fullLabels = ActualWidth >= 1180; // Below this the Settings overlay (430 DIP) would cover full-length buttons.
+        WindowButtonText.Text = fullLabels ? "Capture window" : "Window";
+        DisplayButtonText.Text = fullLabels ? "Capture display" : "Display";
+        FullscreenButtonText.Text = fullLabels ? "Capture fullscreen" : "Fullscreen";
     }
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
@@ -124,6 +141,8 @@ public partial class MainWindow : Window
         _source.AddHook(WndProc);
         FitInitialWindowToWorkArea();
         if (!GlobalHotKey.Register(_source.Handle)) SetStatus("Ctrl+Shift+F9 is unavailable; use Capture or the tray menu.", true);
+        _hotkeys.Attach(_source.Handle);
+        RegisterSavedHotkeys();
     }
 
     private void FitInitialWindowToWorkArea()
@@ -144,7 +163,10 @@ public partial class MainWindow : Window
     }
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == GlobalHotKey.WmHotKey && wParam.ToInt32() == GlobalHotKey.Id) { handled = true; _ = CaptureAsync(CaptureMode.Area); }
+        if (msg != GlobalHotKey.WmHotKey) return IntPtr.Zero;
+        int id = wParam.ToInt32();
+        if (id == GlobalHotKey.Id) { handled = true; _ = CaptureAsync(CaptureMode.Area); }
+        else if (_hotkeys.TryGetAction(id, out HotkeyAction action)) { handled = true; RunHotkeyAction(action); }
         return IntPtr.Zero;
     }
 
@@ -162,12 +184,14 @@ public partial class MainWindow : Window
     private void SettingsClose_Click(object sender, RoutedEventArgs e) => SetSettingsVisible(false);
     private void SetSettingsVisible(bool visible)
     {
+        if (!visible) CommitPendingSettingsEdits();
         SettingsPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        if (visible) ReplaceShortcutCheckBox.Focus(); else SettingsButton.Focus();
+        if (visible) { UpdateFileNamePreview(); ReplaceShortcutCheckBox.Focus(); } else SettingsButton.Focus();
     }
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && SettingsPanel.Visibility == Visibility.Visible) { SetSettingsVisible(false); e.Handled = true; }
+        if (e.Key == Key.Escape && SettingsPanel.Visibility == Visibility.Visible && Keyboard.FocusedElement is not HotkeyRecorderButton { IsRecording: true })
+        { SetSettingsVisible(false); e.Handled = true; }
     }
 
     private void Licenses_Click(object sender, RoutedEventArgs e)
@@ -185,6 +209,7 @@ public partial class MainWindow : Window
     private void Area_Click(object sender, RoutedEventArgs e) => _ = CaptureAsync(CaptureMode.Area);
     private void Window_Click(object sender, RoutedEventArgs e) => _ = CaptureAsync(CaptureMode.Window);
     private void Display_Click(object sender, RoutedEventArgs e) => _ = CaptureAsync(CaptureMode.Display);
+    private void Fullscreen_Click(object sender, RoutedEventArgs e) => _ = CaptureAsync(CaptureMode.Fullscreen);
     private void OpenRecent_Click(object sender, RoutedEventArgs e) { if (_latest is not null) _presentation.OpenEditor(_latest); }
     private void PreviewImage_MouseLeftButtonUp(object sender, MouseButtonEventArgs e) { if (_latest is not null) _presentation.OpenEditor(_latest); }
 
@@ -204,7 +229,7 @@ public partial class MainWindow : Window
         if (document is null) return;
         for (int attempt = 1; attempt <= 5; attempt++)
         {
-            try { Clipboard.SetImage(document.Render()); SetStatus("Copied rendered capture."); return; }
+            try { Clipboard.SetImage(ImageExporter.PrepareForClipboard(document.Render(), CurrentSettings.ToExportOptions())); SetStatus("Copied rendered capture."); return; }
             catch (COMException) when (attempt < 5) { await Task.Delay(attempt * 70); }
             catch (Exception ex) { SetStatus($"Could not copy: {FriendlyMessage(ex)}", true); return; }
         }
@@ -215,27 +240,22 @@ public partial class MainWindow : Window
     {
         CaptureDocument? document = _latest;
         if (document is null) return;
-        var dialog = new SaveFileDialog { Title = "Save capture", Filter = "PNG image (*.png)|*.png", DefaultExt = ".png", AddExtension = true, FileName = $"BetterShot-{DateTime.Now:yyyy-MM-dd-HHmmss}.png" };
-        if (dialog.ShowDialog(this) != true) return;
-        string path = Path.GetFullPath(dialog.FileName);
-        string temp = Path.Combine(Path.GetDirectoryName(path)!, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
         try
         {
-            var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(document.Render()));
-            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None)) encoder.Save(stream);
-            File.Move(temp, path, true); SetStatus($"Saved {Path.GetFileName(path)}.");
+            string? path = ImageExporter.SaveWithDialog(this, document.Render(), CurrentSettings.ToExportOptions(), document.CreatedUtc.ToLocalTime(), CurrentSettings.FileNameCounter);
+            if (path is not null) SetStatus($"Saved {Path.GetFileName(path)}.");
         }
         catch (Exception ex) { SetStatus($"Could not save: {FriendlyMessage(ex)}", true); }
-        finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
     }
 
     private async Task CaptureAsync(CaptureMode mode)
     {
-        if (_capturing) return;
+        if (_capturing) { _countdownCancellation?.Cancel(); return; }
         _capturing = true; SetCaptureControls(false); SetStatus($"Capturing {mode.ToString().ToLowerInvariant()}…", persistent: true);
         CaptureVisibilitySnapshot snapshot = _presentation.HideForCapture();
         try
         {
+            if (!await WaitForCaptureDelayAsync()) { _presentation.RestoreAfterCapture(snapshot); SetStatus("Capture canceled."); return; }
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             await Task.Delay(180);
             BitmapSource? image = await _captureService.CaptureAsync(mode);
@@ -250,20 +270,79 @@ public partial class MainWindow : Window
         finally { _capturing = false; SetCaptureControls(true); }
     }
 
-    internal async Task<CaptureThumbnailWindow> CompleteCaptureAsync(BitmapSource image, Action<BitmapSource>? writeClipboard = null)
+    /// <summary>Shows the countdown when a capture delay is configured. Returns false if the user canceled it.</summary>
+    private async Task<bool> WaitForCaptureDelayAsync()
     {
-        writeClipboard ??= Clipboard.SetImage;
-        string? copyError = null;
+        int delay = CurrentSettings.CaptureDelaySeconds;
+        if (delay <= 0) return true;
+        using var cancellation = new CancellationTokenSource();
+        _countdownCancellation = cancellation;
+        try { return await CaptureCountdownWindow.RunAsync(delay, cancellation.Token); }
+        finally { _countdownCancellation = null; }
+    }
+
+    /// <summary>
+    /// Applies the after-capture options in order: sound, clipboard (before presentation, so pasting works
+    /// immediately), library + optional thumbnail, optional save to folder, optional editor.
+    /// Returns the floating thumbnail, or null when thumbnails are turned off.
+    /// </summary>
+    internal async Task<CaptureThumbnailWindow?> CompleteCaptureAsync(BitmapSource image, Action<BitmapSource>? writeClipboard = null)
+    {
+        CaptureSettings settings = CurrentSettings;
+        if (settings.PlayCaptureSound) CaptureSound.Play();
+        string? copyError = settings.CopyToClipboard
+            ? await CopyToClipboardAsync(ImageExporter.PrepareForClipboard(image, settings.ToExportOptions()), writeClipboard ?? Clipboard.SetImage)
+            : null;
+        if (!image.IsFrozen && image.CanFreeze) image.Freeze();
+        var document = new CaptureDocument(image);
+        CaptureThumbnailWindow? thumbnail = PresentDocument(document, settings.ShowThumbnail);
+        string? savedPath = null, saveError = null;
+        if (settings.SavesEveryCapture)
+        {
+            try { savedPath = SaveToSaveFolder(document); }
+            catch (Exception ex) { saveError = FriendlyMessage(ex); }
+            if (savedPath is not null) saveError = AdvanceFileNameCounter(settings);
+        }
+        if (settings.OpenEditorAfterCapture) _presentation.OpenEditor(document);
+        ReportCaptureResult(image, settings, copyError, savedPath, saveError);
+        return thumbnail;
+    }
+
+    private static async Task<string?> CopyToClipboardAsync(BitmapSource image, Action<BitmapSource> writeClipboard)
+    {
         for (int attempt = 1; attempt <= 5; attempt++)
         {
-            try { writeClipboard(image); break; }
+            try { writeClipboard(image); return null; }
             catch (COMException) when (attempt < 5) { await Task.Delay(attempt * 60); }
-            catch (Exception ex) { copyError = FriendlyMessage(ex); break; }
+            catch (Exception ex) { return FriendlyMessage(ex); }
         }
-        CaptureThumbnailWindow thumbnail = PresentCapturedImage(image);
-        if (copyError is null) SetStatus($"Captured {image.PixelWidth:N0} × {image.PixelHeight:N0} and copied to clipboard.");
-        else SetStatus($"Captured, but could not copy to clipboard: {copyError}. Use Copy on the thumbnail to retry.", error: true, persistent: true);
-        return thumbnail;
+        return "the clipboard is busy";
+    }
+
+    private void ReportCaptureResult(BitmapSource image, CaptureSettings settings, string? copyError, string? savedPath, string? saveError)
+    {
+        string retryHint = settings.ShowThumbnail ? "Use Copy on the thumbnail to retry." : "Use Copy in BetterShot to retry.";
+        if (copyError is not null) { SetStatus($"Captured, but could not copy to clipboard: {copyError}. {retryHint}", error: true, persistent: true); return; }
+        if (saveError is not null && savedPath is not null) { SetStatus($"Saved {Path.GetFileName(savedPath)}, but the next %counter value could not be stored: {saveError}.", error: true, persistent: true); return; }
+        if (saveError is not null) { SetStatus($"Captured, but could not save to the save folder: {saveError}. The capture is in the library.", error: true, persistent: true); return; }
+        string copied = settings.CopyToClipboard ? " and copied to clipboard" : string.Empty;
+        string saved = savedPath is null ? string.Empty : $"; saved {Path.GetFileName(savedPath)}";
+        SetStatus($"Captured {image.PixelWidth:N0} × {image.PixelHeight:N0}{copied}{saved}.");
+    }
+
+    /// <summary>Saves the rendered capture into the configured folder using the configured name pattern.</summary>
+    private string SaveToSaveFolder(CaptureDocument document)
+    {
+        CaptureSettings settings = CurrentSettings;
+        return ImageExporter.SaveToFolder(document.Render(), settings.ToExportOptions(), document.CreatedUtc.ToLocalTime(), settings.FileNameCounter);
+    }
+
+    /// <summary>Advances %counter after a successful save. Returns a user-facing error if the new value could not be stored.</summary>
+    private string? AdvanceFileNameCounter(CaptureSettings usedSettings)
+    {
+        if (!FileNameTemplate.UsesCounter(usedSettings.FileNamePattern)) return null;
+        try { UpdateSettings(current => current with { FileNameCounter = current.FileNameCounter + 1 }); return null; }
+        catch (Exception ex) { return FriendlyMessage(ex); }
     }
 
     internal CaptureThumbnailWindow PresentCapturedImage(BitmapSource image)
@@ -272,10 +351,14 @@ public partial class MainWindow : Window
         return PresentDocument(new CaptureDocument(image));
     }
 
-    internal CaptureThumbnailWindow PresentDocument(CaptureDocument document)
+    internal CaptureThumbnailWindow PresentDocument(CaptureDocument document) => PresentDocument(document, showThumbnail: true)!;
+
+    private CaptureThumbnailWindow? PresentDocument(CaptureDocument document, bool showThumbnail)
     {
         AddRecentDocument(document, true);
-        CaptureThumbnailWindow thumbnail = _presentation.Present(document);
+        CaptureThumbnailWindow? thumbnail = null;
+        if (showThumbnail) thumbnail = _presentation.Present(document);
+        else _presentation.AddWithoutThumbnail(document);
         SelectRecent(_recentItems.First(item => ReferenceEquals(item.Document, document)));
         try { _historyStore?.Save(document); }
         catch (Exception ex) { SetStatus($"Capture is available, but could not be stored: {FriendlyMessage(ex)}", true); }
@@ -399,7 +482,8 @@ public partial class MainWindow : Window
         try
         {
             _historyStore.SetRetentionDays(days);
-            if (PurgeExpired()) SetStatus($"Capture history will be kept for {days} day{(days == 1 ? "" : "s")}.");
+            if (PurgeExpired())
+                SetStatus(days == CaptureSettings.NeverExpire ? "Captures stay in the library until you delete them." : $"Capture history will be kept for {days} day{(days == 1 ? "" : "s")}.");
         }
         catch (Exception ex)
         {
@@ -415,7 +499,7 @@ public partial class MainWindow : Window
 
     private bool PurgeExpired()
     {
-        if (_historyStore is null || _capturing) return true;
+        if (_historyStore is null || _capturing || _historyStore.KeepForever) return true;
         DateTime utcNow = DateTime.UtcNow;
         CaptureDocument[] candidates = _presentation.Recent
             .Where(document => utcNow - document.CreatedUtc >= TimeSpan.FromDays(_historyStore.RetentionDays)).ToArray();
@@ -528,6 +612,7 @@ public partial class MainWindow : Window
     private void Cleanup()
     {
         _retentionTimer.Stop();
+        _countdownCancellation?.Cancel();
         foreach (CaptureDocument document in _presentation.Recent.ToArray()) _presentation.CloseEditor(document);
         if (_historyStore is not null)
         {
@@ -541,12 +626,13 @@ public partial class MainWindow : Window
         _presentation.DeleteRequested -= Presentation_DeleteRequested;
         _presentation.Removed -= Presentation_Removed;
         _statusResetTimer.Stop(); _shortcutHook.Dispose();
+        _hotkeys.Dispose();
         if (_source is not null) { GlobalHotKey.Unregister(_source.Handle); _source.RemoveHook(WndProc); }
         _trayIcon.Visible = false; _trayIcon.Dispose(); _applicationIcon.Dispose(); _presentation.Dispose();
     }
 
     private void ShowAndActivate() { ShowActivated = true; Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); Focus(); }
-    private void SetCaptureControls(bool enabled) { AreaButton.IsEnabled = enabled; WindowButton.IsEnabled = enabled; DisplayButton.IsEnabled = enabled; }
+    private void SetCaptureControls(bool enabled) { AreaButton.IsEnabled = enabled; WindowButton.IsEnabled = enabled; DisplayButton.IsEnabled = enabled; FullscreenButton.IsEnabled = enabled; }
     private void SetStatus(string text, bool error = false, bool persistent = false)
     {
         SetStatusCore(text, error); _statusResetTimer.Stop(); if (!persistent) _statusResetTimer.Start();

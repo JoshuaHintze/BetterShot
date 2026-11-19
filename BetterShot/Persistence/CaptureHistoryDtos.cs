@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace BetterShot.Persistence;
@@ -78,4 +79,35 @@ internal sealed class HistorySettingsDto
     public bool ReplaceScreenshotShortcut { get; set; }
     public bool StartWithWindows { get; set; }
     public bool DragAsFile { get; set; }
+
+    // Phase 2 capture options. All optional: a missing value means "use the default", so
+    // older settings.json files load unchanged and older builds ignore these fields.
+    public bool? KeepCapturesForever { get; set; }
+    public int? CaptureDelaySeconds { get; set; }
+    public bool? CopyToClipboard { get; set; }
+    public bool? ShowThumbnail { get; set; }
+    public bool? OpenEditorAfterCapture { get; set; }
+    public bool? PlayCaptureSound { get; set; }
+    public int? ThumbnailAutoDismissSeconds { get; set; }
+    public string? SaveFolder { get; set; }
+    public bool? AutoSave { get; set; }
+    public string? FileNamePattern { get; set; }
+    public int? FileNameCounter { get; set; }
+    public string? ImageFormat { get; set; }
+    public int? JpegQuality { get; set; }
+    public int? ExportMaxDimension { get; set; }
+    public bool? ResizeClipboardCopies { get; set; }
+    public HotkeyDto? AreaHotkey { get; set; }
+    public HotkeyDto? WindowHotkey { get; set; }
+    public HotkeyDto? FullscreenHotkey { get; set; }
+    public HotkeyDto? LibraryHotkey { get; set; }
+
+    /// <summary>Fields written by newer builds or other features are carried through every rewrite.</summary>
+    [JsonExtensionData] public Dictionary<string, JsonElement>? AdditionalFields { get; set; }
+}
+
+internal sealed class HotkeyDto
+{
+    public uint Modifiers { get; set; }
+    public int Key { get; set; }
 }

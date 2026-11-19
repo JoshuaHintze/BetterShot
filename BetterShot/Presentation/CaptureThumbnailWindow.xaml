@@ -6,7 +6,7 @@
   <Border x:Name="ActionTray" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,9" Background="#F2282A30" BorderBrush="#4C4E56" BorderThickness="1" CornerRadius="10" Padding="3" Opacity="0"><Border.Effect><DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity=".55"/></Border.Effect><StackPanel Orientation="Horizontal">
    <Button Style="{StaticResource IconButton}" Click="Edit_Click" ToolTip="Edit capture"><controls:LucideIcon Icon="Pencil" Width="18" Height="18" Foreground="{Binding Foreground,RelativeSource={RelativeSource AncestorType=Button}}"/></Button>
    <Button Style="{StaticResource IconButton}" Click="Copy_Click" ToolTip="Copy rendered image"><controls:LucideIcon Icon="Copy" Width="18" Height="18" Foreground="{Binding Foreground,RelativeSource={RelativeSource AncestorType=Button}}"/></Button>
-   <Button Style="{StaticResource IconButton}" Click="Save_Click" ToolTip="Save rendered image as PNG"><controls:LucideIcon Icon="Save" Width="18" Height="18" Foreground="{Binding Foreground,RelativeSource={RelativeSource AncestorType=Button}}"/></Button>
+   <Button Style="{StaticResource IconButton}" Click="Save_Click" ToolTip="Save rendered image (format and size follow Settings)"><controls:LucideIcon Icon="Save" Width="18" Height="18" Foreground="{Binding Foreground,RelativeSource={RelativeSource AncestorType=Button}}"/></Button>
 
    <Button x:Name="DeleteButton" Style="{StaticResource IconButton}" Click="Delete_Click" ToolTip="Delete capture permanently"><controls:LucideIcon Icon="Trash2" Width="18" Height="18" Foreground="{Binding Foreground,RelativeSource={RelativeSource AncestorType=Button}}"/></Button>
   </StackPanel></Border>

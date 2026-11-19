@@ -1,4 +1,5 @@
 using BetterShot.Editing;
+using BetterShot.Export;
 using System.IO;
 using System.Windows;
 using System.Windows.Media.Imaging;
@@ -10,11 +11,15 @@ internal static class CaptureDragData
     private const string FilePrefix = "BetterShot-Drag-";
     private static readonly TimeSpan MaximumAge = TimeSpan.FromDays(7);
 
-    internal static DataObject CreateData(CaptureDocument document, bool asFile = false)
+    /// <summary>
+    /// Builds drag data. <paramref name="options"/> applies the export resize to every format and the
+    /// export file format to the dropped file only; the in-memory "PNG" format always stays PNG.
+    /// </summary>
+    internal static DataObject CreateData(CaptureDocument document, bool asFile = false, ExportOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        BitmapSource rendered = document.Render();
+        BitmapSource rendered = options is null ? document.Render() : ImageExporter.PrepareForExport(document.Render(), options);
         var pngStream = new MemoryStream();
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(rendered));
@@ -24,10 +29,12 @@ internal static class CaptureDragData
         CleanOldExports();
         string directory = GetExportDirectory();
         Directory.CreateDirectory(directory);
-        string path = Path.Combine(directory, $"{FilePrefix}{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.png");
+        bool jpegFile = options?.Format == CaptureImageFormat.Jpeg;
+        string path = Path.Combine(directory, $"{FilePrefix}{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}{(jpegFile ? ".jpg" : ".png")}");
         using (var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
         {
-            pngStream.CopyTo(file);
+            if (jpegFile) ImageExporter.Encode(rendered, CaptureImageFormat.Jpeg, options!.JpegQuality, file);
+            else pngStream.CopyTo(file);
         }
         pngStream.Position = 0;
 
@@ -56,7 +63,8 @@ internal static class CaptureDragData
             string directory = GetExportDirectory();
             if (!Directory.Exists(directory)) return;
             DateTime cutoff = DateTime.UtcNow - MaximumAge;
-            foreach (string path in Directory.EnumerateFiles(directory, $"{FilePrefix}*.png", SearchOption.TopDirectoryOnly))
+            foreach (string path in Directory.EnumerateFiles(directory, $"{FilePrefix}*.*", SearchOption.TopDirectoryOnly)
+                .Where(candidate => candidate.EndsWith(".png", StringComparison.OrdinalIgnoreCase) || candidate.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)))
             {
                 try
                 {
