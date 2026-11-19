@@ -4,7 +4,7 @@ using System.Windows.Input;
 
 namespace BetterShot.Editing;
 
-public sealed partial class EditorWindow
+public sealed partial class EditorSurface
 {
     private static readonly Vector DuplicateOffset = new(16, 16);
 

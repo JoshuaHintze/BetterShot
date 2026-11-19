@@ -24,10 +24,6 @@ namespace BetterShot;
 
 public partial class MainWindow : Window
 {
-    public static readonly DependencyProperty RecentCardWidthProperty = DependencyProperty.Register(nameof(RecentCardWidth), typeof(double), typeof(MainWindow), new PropertyMetadata(240d));
-    public static readonly DependencyProperty RecentImageHeightProperty = DependencyProperty.Register(nameof(RecentImageHeight), typeof(double), typeof(MainWindow), new PropertyMetadata(125d));
-    public double RecentCardWidth { get => (double)GetValue(RecentCardWidthProperty); private set => SetValue(RecentCardWidthProperty, value); }
-    public double RecentImageHeight { get => (double)GetValue(RecentImageHeightProperty); private set => SetValue(RecentImageHeightProperty, value); }
     private readonly CaptureService _captureService = new();
     private readonly KeyboardShortcutHook _shortcutHook;
     private readonly Forms.NotifyIcon _trayIcon;
@@ -56,7 +52,7 @@ public partial class MainWindow : Window
 
     internal CapturePresentationManager Presentation => _presentation;
     internal CaptureDocument? SelectedDocumentForTest => _latest;
-    internal BitmapSource? PreviewSourceForTest => PreviewImage.Source as BitmapSource;
+    internal BitmapSource? PreviewSourceForTest => (RecentList.SelectedItem as RecentCaptureItem)?.Thumbnail;
     internal bool SettingsVisibleForTest => SettingsPanel.Visibility == Visibility.Visible;
     internal bool TrayVisibleForTest => _trayIcon.Visible;
     internal bool ShortcutEnabledForTest => _shortcutHook.IsEnabled;
@@ -101,6 +97,7 @@ public partial class MainWindow : Window
         LoadCaptureSettingsIntoControls();
         InitializeAskClaude(enableHistory, historyRoot);
         InitializeTextSearch(historyRoot);
+        InitializeLibrary();
         Version? version = Assembly.GetExecutingAssembly().GetName().Version;
         VersionText.Text = $"BetterShot {version?.ToString(3) ?? "1.0.0"}";
         _shortcutHook = new KeyboardShortcutHook(() => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Area)));
@@ -130,17 +127,7 @@ public partial class MainWindow : Window
     }
 
 
-    private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        double contentWidth = Math.Max(0, ActualWidth - 72);
-        RecentCardWidth = Math.Clamp(Math.Floor((contentWidth - 72) / 4), 170, 300);
-        RecentImageHeight = Math.Clamp(RecentCardWidth * 0.52, 100, 130);
-        bool fullLabels = ActualWidth >= 1180; // Below this the Settings overlay (430 DIP) would cover full-length buttons.
-        WindowButtonText.Text = fullLabels ? "Capture window" : "Window";
-        DisplayButtonText.Text = fullLabels ? "Capture display" : "Display";
-        FullscreenButtonText.Text = fullLabels ? "Capture fullscreen" : "Fullscreen";
-        SetRecordButtonCompact(ActualWidth < 960);
-    }
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateLibraryLayout();
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         _source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
@@ -176,12 +163,6 @@ public partial class MainWindow : Window
         return IntPtr.Zero;
     }
 
-    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ClickCount == 2) { ToggleMaximize(); return; }
-        if (e.LeftButton == MouseButtonState.Pressed) DragMove();
-    }
-
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
     private void Maximize_Click(object sender, RoutedEventArgs e) => ToggleMaximize();
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
@@ -197,7 +178,8 @@ public partial class MainWindow : Window
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape && SettingsPanel.Visibility == Visibility.Visible && Keyboard.FocusedElement is not HotkeyRecorderButton { IsRecording: true })
-        { SetSettingsVisible(false); e.Handled = true; }
+        { SetSettingsVisible(false); e.Handled = true; return; }
+        if (ForwardKeyToEditor(e)) e.Handled = true;
     }
 
     private void Licenses_Click(object sender, RoutedEventArgs e)
@@ -215,17 +197,13 @@ public partial class MainWindow : Window
     private void Window_Click(object sender, RoutedEventArgs e) => _ = CaptureAsync(CaptureMode.Window);
     private void Display_Click(object sender, RoutedEventArgs e) => _ = CaptureAsync(CaptureMode.Display);
     private void Fullscreen_Click(object sender, RoutedEventArgs e) => _ = CaptureAsync(CaptureMode.Fullscreen);
-    private void OpenRecent_Click(object sender, RoutedEventArgs e) { if (_latest is not null) _presentation.OpenEditor(_latest); }
-    private void PreviewImage_MouseLeftButtonUp(object sender, MouseButtonEventArgs e) { if (_latest is not null) _presentation.OpenEditor(_latest); }
 
     private void RecentList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (RecentList.SelectedItem is not RecentCaptureItem item) return;
-        CaptureHeading.Text = RecentList.SelectedIndex == 0 ? "Latest capture" : "Selected capture";
         _latest = item.Document;
-        PreviewImage.Source = item.Thumbnail;
-        SelectedTimeText.Text = item.Timestamp.Date == DateTime.Today ? $"Today, {item.Timestamp:h:mm tt}" : item.Timestamp.ToString("MMM d, h:mm tt");
-        SelectedMetaText.Text = $"{item.Document.Original.PixelWidth:N0} × {item.Document.Original.PixelHeight:N0} · PNG";
+        // While the editor is open, picking another capture opens it there (edits in the previous one are committed).
+        if (_editor is not null && !_syncingSelection && !ReferenceEquals(_editor.Document, item.Document)) OpenInEditor(item.Document);
     }
 
     private async void CopyRecent_Click(object sender, RoutedEventArgs e)
@@ -310,7 +288,7 @@ public partial class MainWindow : Window
             catch (Exception ex) { saveError = FriendlyMessage(ex); }
             if (savedPath is not null) saveError = AdvanceFileNameCounter(settings);
         }
-        if (settings.OpenEditorAfterCapture) _presentation.OpenEditor(document);
+        if (settings.OpenEditorAfterCapture) _presentation.Edit(document);
         ReportCaptureResult(image, settings, copyError, savedPath, saveError);
         return thumbnail;
     }
@@ -381,7 +359,6 @@ public partial class MainWindow : Window
         {
             if (!_documentHandlers.ContainsKey(document)) return;
             item.Refresh();
-            if (ReferenceEquals(_latest, document)) PreviewImage.Source = item.Thumbnail;
             try { _historyStore?.Save(document); }
             catch (Exception ex) { SetStatus($"Changes are available, but could not be stored: {FriendlyMessage(ex)}", true); }
             QueueTextIndex(document);
@@ -390,8 +367,7 @@ public partial class MainWindow : Window
         document.Changed += handler;
         QueueTextIndex(document, priority: insertFirst);
         if (!insertFirst) _presentation.Retain(document);
-        EmptyState.Visibility = Visibility.Collapsed;
-        RecentState.Visibility = Visibility.Visible;
+        UpdateLibraryEmptyState();
     }
 
     private void SelectRecent(RecentCaptureItem item)
@@ -410,6 +386,7 @@ public partial class MainWindow : Window
 
     private void DeleteDocument(CaptureDocument document)
     {
+        DiscardEmbeddedEditor(document);
         _presentation.CloseEditor(document);
         DetachDocument(document);
         try { _historyStore?.Delete(document.Id); }
@@ -431,7 +408,6 @@ public partial class MainWindow : Window
         {
             if (!_documentHandlers.ContainsKey(document)) return;
             item.Refresh();
-            if (ReferenceEquals(_latest, document)) PreviewImage.Source = item.Thumbnail;
             try { _historyStore?.Save(document); }
             catch (Exception ex) { SetStatus($"Changes are available, but could not be stored: {FriendlyMessage(ex)}", true); }
             QueueTextIndex(document);
@@ -442,17 +418,13 @@ public partial class MainWindow : Window
 
     private void Presentation_Removed(object? sender, CaptureDocumentEventArgs e)
     {
+        DiscardEmbeddedEditor(e.Document);
         DetachDocument(e.Document);
         RecentCaptureItem? item = _recentItems.FirstOrDefault(candidate => ReferenceEquals(candidate.Document, e.Document));
         if (item is not null) _recentItems.Remove(item);
         RemoveFromTextIndex(e.Document);
-        if (_recentItems.Count == 0)
-        {
-            _latest = null;
-            PreviewImage.Source = null;
-            RecentState.Visibility = Visibility.Collapsed;
-            EmptyState.Visibility = Visibility.Visible;
-        }
+        UpdateLibraryEmptyState();
+        if (_recentItems.Count == 0) _latest = null;
         else SelectRecent(_recentItems[0]);
     }
 
@@ -464,7 +436,9 @@ public partial class MainWindow : Window
 
     private void RecentList_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Delete || RecentList.SelectedItem is not RecentCaptureItem item) return;
+        if (RecentList.SelectedItem is not RecentCaptureItem item) return;
+        if (e.Key == Key.Enter) { e.Handled = true; OpenInEditor(item.Document); return; }
+        if (e.Key != Key.Delete) return;
         e.Handled = true;
         DeleteDocument(item.Document);
     }
@@ -623,6 +597,8 @@ public partial class MainWindow : Window
     private void Cleanup()
     {
         _retentionTimer.Stop();
+        _libraryClock.Stop();
+        CloseEmbeddedEditor(commit: true, updateLayout: false);
         _countdownCancellation?.Cancel();
         ShutdownTextSearch();
         CleanupRecording();
@@ -653,6 +629,11 @@ public partial class MainWindow : Window
     private void SetStatusCore(string text, bool error = false)
     {
         StatusText.Text = text; StatusText.Foreground = error ? new SolidColorBrush(Color.FromRgb(255, 135, 135)) : (Brush)FindResource("MutedBrush");
+        // Messages briefly replace the "Saving to" line under the library header.
+        bool showing = !string.IsNullOrEmpty(text);
+        StatusText.Visibility = showing ? Visibility.Visible : Visibility.Collapsed;
+        SaveLocationRow.Visibility = showing ? Visibility.Hidden : Visibility.Visible;
+        StatusText.ToolTip = showing ? text : null;
     }
     private static string FriendlyMessage(Exception ex) => ex switch { UnauthorizedAccessException => "access was denied", IOException => "the file is in use or unavailable", _ => string.IsNullOrWhiteSpace(ex.Message) ? "an unexpected error occurred" : ex.Message };
 
@@ -661,18 +642,3 @@ public partial class MainWindow : Window
     internal void ShowAndActivateForTest() => ShowAndActivate();
     internal void CloseToTrayForTest() => Close();
 }
-
-internal sealed class RecentCaptureItem : INotifyPropertyChanged
-{
-    internal RecentCaptureItem(CaptureDocument document) { Document = document; Timestamp = document.CreatedUtc.ToLocalTime(); Thumbnail = document.Render(); }
-    public CaptureDocument Document { get; }
-    internal DateTime Timestamp { get; }
-    public BitmapSource Thumbnail { get; private set; }
-    public string Details => $"{Timestamp:h:mm:ss tt} · {Document.Original.PixelWidth:N0} × {Document.Original.PixelHeight:N0} pixels";
-    public string ShortLabel => Timestamp.ToString("h:mm tt");
-    public event PropertyChangedEventHandler? PropertyChanged;
-    internal void Refresh() { Thumbnail = Document.Render(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Thumbnail))); }
-}
-
-
-

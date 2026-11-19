@@ -7,9 +7,10 @@ using System.Windows.Shapes;
 
 namespace BetterShot.Editing;
 
-public sealed partial class EditorWindow
+public sealed partial class EditorSurface
 {
     private TextBox? _textEditor;
+    private Border? _textChrome;
     private TextAnnotation? _editingText;
     private TextAnnotation? _textTemplate;
     private Point _textPosition;
@@ -24,7 +25,7 @@ public sealed partial class EditorWindow
     internal TextBox? TextEditorForTest => _textEditor;
     internal Canvas TextOverlayForTest => _imageOverlay;
     internal void BeginTextForTest(Point p, TextAnnotation? existing = null) => BeginTextEdit(p, existing);
-    internal void BeginCalloutForTest(Point target, Point bubble) => BeginCallout(target, bubble);
+    internal void BeginCalloutForTest(Point dragStart, Point dragEnd) => BeginCallout(dragStart, dragEnd);
     internal void SetTextForTest(string value) { if (_textEditor is not null) _textEditor.Text = value; }
     internal void CommitTextForTest() => CommitTextEdit();
     internal void CancelTextForTest() => CancelTextEdit();
@@ -36,17 +37,42 @@ public sealed partial class EditorWindow
         return (TextAnnotation)new TextAnnotation(position, "", style.Stroke, style.FontSize).WithStyle(style);
     }
 
-    private TextAnnotation CalloutTemplate(Point position, Point tail, ToolStyle style) =>
-        (TextAnnotation)new TextAnnotation(position, "", style.Stroke, style.FontSize).WithStyle(style) with { Tail = tail, Background = false };
-
-    /// <summary>Press on the target and release where the bubble goes; a click places the bubble with a default tail.</summary>
-    private void BeginCallout(Point target, Point bubble)
+    /// <summary>
+    /// A drag defines the bubble (its width wraps the text; the height follows what is typed) and the tail points out from
+    /// the corner where the drag started. A click places a default-width bubble above and to the right, pointing at the click.
+    /// </summary>
+    private TextAnnotation CalloutFromDrag(Point start, Point end, ToolStyle style)
     {
-        ToolStyle style = _styles.Get(EditorTool.Callout);
-        bool dragged = (bubble - target).Length >= 12;
-        Point position = dragged ? bubble : target;
-        Point tail = dragged ? target : target + new Vector(-style.FontSize * 1.1, style.FontSize * 2.6);
-        BeginTextEdit(position, null, CalloutTemplate(position, tail, style));
+        var template = (TextAnnotation)new TextAnnotation(start, "", style.Stroke, style.FontSize).WithStyle(style) with { Tail = start, Background = false };
+        Vector padding = template.BubblePadding;
+        Rect content = _layout.Content;
+        Vector drag = end - start;
+        if (Math.Abs(drag.X) < 12 && Math.Abs(drag.Y) < 12)
+        {
+            double width = Math.Max(TextAnnotation.MinimumWrapWidth, style.FontSize * 9);
+            double left = start.X + style.FontSize * 1.4;
+            if (left + width + padding.X > content.Right) left = Math.Max(content.Left + padding.X, start.X - style.FontSize * 1.4 - width);
+            double top = start.Y - style.FontSize * 4.2;
+            if (top - padding.Y < content.Top) top = start.Y + style.FontSize * 2.6;
+            return template with { Position = new Point(left, top), WrapWidth = width, Tail = start };
+        }
+        var box = new Rect(start, end);
+        double wrap = Math.Max(TextAnnotation.MinimumWrapWidth, box.Width - padding.X * 2);
+        Point position = new(box.Left + padding.X, box.Top + padding.Y);
+        Point center = new(box.Left + box.Width / 2, box.Top + box.Height / 2);
+        Vector outward = start - center;
+        if (outward.Length < 1) outward = new Vector(-1, 1);
+        outward.Normalize();
+        double reach = Math.Max(36, style.FontSize * 2.4);
+        Point tail = start + outward * reach;
+        tail = new Point(Math.Clamp(tail.X, content.Left, content.Right), Math.Clamp(tail.Y, content.Top, content.Bottom));
+        return template with { Position = position, WrapWidth = wrap, Tail = tail };
+    }
+
+    private void BeginCallout(Point start, Point end)
+    {
+        TextAnnotation template = CalloutFromDrag(start, end, _styles.Get(EditorTool.Callout));
+        BeginTextEdit(template.Position, null, template);
     }
 
     private void BeginTextEdit(Point position, TextAnnotation? existing, TextAnnotation? template = null)
@@ -56,36 +82,52 @@ public sealed partial class EditorWindow
         _selected = existing;
         _textPosition = position;
         _textTemplate = existing ?? template ?? NewTextTemplate(position);
-        bool bubble = _textTemplate.IsCallout || _textTemplate.Background;
+        bool callout = _textTemplate.IsCallout;
+        bool bubble = callout || _textTemplate.Background;
         var textBrush = new SolidColorBrush(_textTemplate.TextColor);
         var box = new TextBox
         {
             Text = existing?.Text ?? "",
             AcceptsReturn = true,
             AcceptsTab = false,
-            TextWrapping = TextWrapping.NoWrap,
+            TextWrapping = _textTemplate.EffectiveWrapWidth is null ? TextWrapping.NoWrap : TextWrapping.Wrap,
             FontFamily = new FontFamily("Segoe UI"),
+            FontWeight = callout ? FontWeights.Bold : FontWeights.Normal,
             FontSize = _textTemplate.FontSize * _zoom,
             Foreground = textBrush,
             CaretBrush = bubble ? textBrush : Brushes.White,
-            Background = bubble ? new SolidColorBrush(_textTemplate.BubbleColor) : Brush("#D9171819"),
+            Background = callout ? Brushes.Transparent : bubble ? new SolidColorBrush(_textTemplate.BubbleColor) : Brush("#D9171819"),
             BorderBrush = Brush("#FFD400"),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(4, 2, 4, 3),
+            BorderThickness = new Thickness(callout ? 0 : 1),
+            Padding = callout ? new Thickness(0) : new Thickness(4, 2, 4, 3),
             MinWidth = 48,
             MinHeight = 28,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
+        System.Windows.Automation.AutomationProperties.SetName(box, callout ? "Callout text" : "Text");
         _textEditor = box;
         box.PreviewKeyDown += TextEditor_KeyDown;
-        box.TextChanged += (_, _) => SizeTextEditor();
+        box.TextChanged += (_, _) => { SizeTextEditor(); if (callout) _previewLayer.Show(TextEditingPreview(), false); };
         _imageOverlay.Children.Clear();
-        _imageOverlay.Children.Add(box);
+        if (callout)
+        {
+            // The bubble is drawn around the text box so typing looks like the finished callout; the tail is on the preview layer.
+            _textChrome = new Border { Child = box, Background = new SolidColorBrush(_textTemplate.BubbleColor), BorderBrush = Brush("#FFD400"), BorderThickness = new Thickness(1.5) };
+            _imageOverlay.Children.Add(_textChrome);
+        }
+        else _imageOverlay.Children.Add(box);
         PositionTextEditor();
         SizeTextEditor();
         Refresh();
         Dispatcher.BeginInvoke(() => { box.Focus(); box.CaretIndex = box.Text.Length; });
+    }
+
+    /// <summary>While a callout is typed, its bubble and tail preview follow the text so the tail meets the growing bubble.</summary>
+    private Annotation? TextEditingPreview()
+    {
+        if (_textEditor is null || _textTemplate is not { IsCallout: true } template) return null;
+        return template with { Position = _textPosition, Text = _textEditor.Text.Length == 0 ? " " : _textEditor.Text };
     }
 
     private void TextEditor_KeyDown(object sender, KeyEventArgs e)
@@ -97,9 +139,23 @@ public sealed partial class EditorWindow
     private void SizeTextEditor()
     {
         if (_textEditor is null) return;
+        if (_textTemplate?.EffectiveWrapWidth is double wrap)
+        {
+            // Wrapped (callout) text keeps the bubble width; the height grows with the text like the finished bubble.
+            _textEditor.Width = wrap * _zoom + 4;
+            _textEditor.ClearValue(HeightProperty);
+            _textEditor.MinHeight = Math.Max(16, _textTemplate.FontSize * _zoom * 1.3);
+            if (_textChrome is not null)
+            {
+                Vector padding = _textTemplate.BubblePadding * _zoom;
+                _textChrome.Padding = new Thickness(Math.Max(0, padding.X - 3), Math.Max(0, padding.Y - 1.5), Math.Max(0, padding.X - 3), Math.Max(0, padding.Y - 1.5));
+                _textChrome.CornerRadius = new CornerRadius(Math.Max(2, _textTemplate.FontSize * .55 * _zoom));
+            }
+            return;
+        }
         string value = _textEditor.Text.Length == 0 ? " " : _textEditor.Text;
         var formatted = new FormattedText(value, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
-            new Typeface(_textEditor.FontFamily, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
+            new Typeface(_textEditor.FontFamily, FontStyles.Normal, _textEditor.FontWeight, FontStretches.Normal),
             _textEditor.FontSize, _textEditor.Foreground, 1);
         // Explicit dimensions include border/padding and a small caret allowance. This keeps
         // the final line and descenders visible at every zoom instead of clipping to one line.
@@ -110,6 +166,13 @@ public sealed partial class EditorWindow
     private void PositionTextEditor()
     {
         if (_textEditor is null) return;
+        if (_textChrome is not null && _textTemplate is not null)
+        {
+            Vector padding = _textTemplate.BubblePadding;
+            Canvas.SetLeft(_textChrome, (_textPosition.X - padding.X + ViewOffset.X) * _zoom);
+            Canvas.SetTop(_textChrome, (_textPosition.Y - padding.Y + ViewOffset.Y) * _zoom);
+            return;
+        }
         Canvas.SetLeft(_textEditor, (_textPosition.X + ViewOffset.X) * _zoom - 5);
         Canvas.SetTop(_textEditor, (_textPosition.Y + ViewOffset.Y) * _zoom - 3);
     }
@@ -149,15 +212,17 @@ public sealed partial class EditorWindow
     private void EndTextEditor()
     {
         _textEditor = null;
+        _textChrome = null;
         _editingText = null;
         _textTemplate = null;
         _imageOverlay.Children.Clear();
+        _previewLayer.Show(_preview, false);
         _image.Focus();
     }
 
     private void Scroller_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (_textEditor is null || IsInside(e.OriginalSource as DependencyObject, _textEditor)) return;
+        if (_textEditor is null || IsInside(e.OriginalSource as DependencyObject, (DependencyObject?)_textChrome ?? _textEditor)) return;
         CommitTextEdit();
     }
 
@@ -293,7 +358,9 @@ internal static class TextTransform
         double sx = corner is TextCorner.TopLeft or TextCorner.BottomLeft ? -delta.X : delta.X;
         double sy = corner is TextCorner.TopLeft or TextCorner.TopRight ? -delta.Y : delta.Y;
         double scale = Math.Max(6 / source.FontSize, Math.Max(.1, Math.Max((b.Width + sx) / Math.Max(1, b.Width), (b.Height + sy) / Math.Max(1, b.Height))));
-        var resized = source with { FontSize = Math.Clamp(source.FontSize * scale, 6, 512) };
+        double fontSize = Math.Clamp(source.FontSize * scale, 6, 512);
+        // A callout's bubble width scales with its text so a corner drag resizes the whole bubble.
+        var resized = source with { FontSize = fontSize, WrapWidth = source.WrapWidth is double wrap ? wrap * fontSize / source.FontSize : null };
         Rect rb = resized.Bounds;
         Point anchor = corner switch { TextCorner.TopLeft => b.BottomRight, TextCorner.TopRight => b.BottomLeft, TextCorner.BottomLeft => b.TopRight, _ => b.TopLeft };
         Point position = corner switch

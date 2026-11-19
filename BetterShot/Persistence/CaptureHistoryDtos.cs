@@ -65,6 +65,8 @@ internal sealed class AnnotationDto
     public double? Zoom { get; set; }
     public PointDto? Tail { get; set; }
     public bool? TextBackground { get; set; }
+    // Optional since the callout redesign: bubble text width. Older packages omit it and keep size-to-text callouts.
+    public double? WrapWidth { get; set; }
 }
 
 internal sealed class PointDto

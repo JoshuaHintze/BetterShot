@@ -87,6 +87,17 @@ public sealed class CapturePresentationManager : IDisposable
         Reflow();
         Removed?.Invoke(this, new CaptureDocumentEventArgs(document));
     }
+    /// <summary>Set by the library window: opens a capture in its embedded editor. Without it, <see cref="Edit"/> uses a separate window.</summary>
+    internal Action<CaptureDocument>? EditInLibrary { get; set; }
+
+    /// <summary>Thumbnail click, thumbnail Edit, and "open editor after capture": the library window when available.</summary>
+    public void Edit(CaptureDocument document)
+    {
+        if (EditInLibrary is { } edit) edit(document);
+        else OpenEditor(document);
+    }
+
+    /// <summary>Opens (or brings forward) the standalone editor window for a capture.</summary>
     public void OpenEditor(CaptureDocument document)
     {
         if (_editors.TryGetValue(document, out EditorWindow? existing))

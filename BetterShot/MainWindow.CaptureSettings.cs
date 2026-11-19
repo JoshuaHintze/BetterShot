@@ -42,6 +42,7 @@ public partial class MainWindow
     {
         if (_historyStore is not null) _historyStore.UpdateSettings(change);
         else _transientSettings = change(_transientSettings).Normalize();
+        RefreshSaveLocation();
     }
 
     /// <summary>Saves a change and applies it; on failure restores the controls to the saved values and reports why.</summary>

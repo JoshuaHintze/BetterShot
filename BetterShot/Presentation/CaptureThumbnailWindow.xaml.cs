@@ -164,7 +164,7 @@ public partial class CaptureThumbnailWindow : Window
         if (Math.Abs(released.X - _pointerDown.X) < SystemParameters.MinimumHorizontalDragDistance &&
             Math.Abs(released.Y - _pointerDown.Y) < SystemParameters.MinimumVerticalDragDistance &&
             released.X >= 0 && released.Y >= 0 && released.X <= Card.ActualWidth && released.Y <= Card.ActualHeight)
-            _manager.OpenEditor(Document);
+            _manager.Edit(Document);
     }
 
     private void Card_LostMouseCapture(object sender, MouseEventArgs e)
@@ -172,7 +172,7 @@ public partial class CaptureThumbnailWindow : Window
         if (!_dragInProgress) _clickArmed = false;
     }
 
-    private void Edit_Click(object sender, RoutedEventArgs e) { e.Handled = true; _manager.OpenEditor(Document); }
+    private void Edit_Click(object sender, RoutedEventArgs e) { e.Handled = true; _manager.Edit(Document); }
     private async void Copy_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;

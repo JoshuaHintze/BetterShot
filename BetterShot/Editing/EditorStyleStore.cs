@@ -14,13 +14,18 @@ namespace BetterShot.Editing;
 internal sealed class EditorStyleStore
 {
     internal const int MaximumPresetsPerTool = 8;
+    internal const int QuickColorCount = 3;
+    internal static readonly Color[] DefaultQuickColors = [ToolStyle.DefaultStroke, Color.FromRgb(0xFF, 0xD6, 0x0A), Color.FromRgb(0x34, 0xC7, 0x59)];
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private static EditorStyleStore? _shared;
     private readonly string _path;
     private readonly Dictionary<EditorTool, ToolStyle> _defaults = [];
     private readonly Dictionary<EditorTool, List<ToolStyle>> _presets = [];
+    private readonly Color[] _quickColors = (Color[])DefaultQuickColors.Clone();
     private DispatcherTimer? _saveTimer;
     private bool _dirty;
+    private bool _showsInspector = true;
+    private bool _inspectorDocked = true;
 
     internal EditorStyleStore(string path)
     {
@@ -45,6 +50,32 @@ internal sealed class EditorStyleStore
         if (Get(tool) == normalized) return;
         _defaults[tool] = normalized;
         ScheduleSave();
+    }
+
+    /// <summary>The three swatches in the inspector's QUICK row and the toolbar; the user can replace each one.</summary>
+    internal IReadOnlyList<Color> QuickColors => _quickColors;
+
+    internal void SetQuickColor(int index, Color color)
+    {
+        if (index < 0 || index >= QuickColorCount) return;
+        Color opaque = Color.FromRgb(color.R, color.G, color.B);
+        if (_quickColors[index] == opaque) return;
+        _quickColors[index] = opaque;
+        ScheduleSave();
+    }
+
+    /// <summary>Whether the editor shows its tool inspector card.</summary>
+    internal bool ShowsInspector
+    {
+        get => _showsInspector;
+        set { if (_showsInspector == value) return; _showsInspector = value; ScheduleSave(); }
+    }
+
+    /// <summary>Docked beside the canvas (true) or floating over its left edge (false).</summary>
+    internal bool InspectorDocked
+    {
+        get => _inspectorDocked;
+        set { if (_inspectorDocked == value) return; _inspectorDocked = value; ScheduleSave(); }
     }
 
     internal IReadOnlyList<ToolStyle> Presets(EditorTool tool) => _presets.TryGetValue(tool, out List<ToolStyle>? presets) ? presets : [];
@@ -109,16 +140,34 @@ internal sealed class EditorStyleStore
                         if (list.Count < MaximumPresetsPerTool && TryReadStyle(item, tool, out ToolStyle style) && !list.Contains(style)) list.Add(style);
                     if (list.Count > 0) _presets[tool] = list;
                 }
+            if (json.RootElement.TryGetProperty("Editor", out JsonElement editor) && editor.ValueKind == JsonValueKind.Object) LoadEditorPreferences(editor);
         }
         catch (JsonException) { ResetLoaded(); }
         catch (IOException) { ResetLoaded(); }
         catch (UnauthorizedAccessException) { ResetLoaded(); }
     }
 
+    private void LoadEditorPreferences(JsonElement editor)
+    {
+        _showsInspector = ReadBool(editor, "ShowsInspector") ?? true;
+        _inspectorDocked = ReadBool(editor, "InspectorDocked") ?? true;
+        if (!editor.TryGetProperty("QuickColors", out JsonElement colors) || colors.ValueKind != JsonValueKind.Array) return;
+        int index = 0;
+        foreach (JsonElement item in colors.EnumerateArray())
+        {
+            if (index >= QuickColorCount) break;
+            if (item.ValueKind == JsonValueKind.String && ParseColor(item.GetString()) is Color color) _quickColors[index] = Color.FromRgb(color.R, color.G, color.B);
+            index++;
+        }
+    }
+
     private void ResetLoaded()
     {
         _defaults.Clear();
         _presets.Clear();
+        DefaultQuickColors.CopyTo(_quickColors, 0);
+        _showsInspector = true;
+        _inspectorDocked = true;
     }
 
     private static bool TryParseTool(string name, out EditorTool tool) =>
@@ -171,7 +220,13 @@ internal sealed class EditorStyleStore
         {
             ["Version"] = 1,
             ["Defaults"] = _defaults.ToDictionary(pair => pair.Key.ToString(), pair => ToJson(pair.Value)),
-            ["Presets"] = _presets.Where(pair => pair.Value.Count > 0).ToDictionary(pair => pair.Key.ToString(), pair => pair.Value.Select(ToJson).ToList())
+            ["Presets"] = _presets.Where(pair => pair.Value.Count > 0).ToDictionary(pair => pair.Key.ToString(), pair => pair.Value.Select(ToJson).ToList()),
+            ["Editor"] = new Dictionary<string, object>
+            {
+                ["ShowsInspector"] = _showsInspector,
+                ["InspectorDocked"] = _inspectorDocked,
+                ["QuickColors"] = _quickColors.Select(FormatColor).ToList()
+            }
         };
         string directory = Path.GetDirectoryName(_path)!;
         Directory.CreateDirectory(directory);

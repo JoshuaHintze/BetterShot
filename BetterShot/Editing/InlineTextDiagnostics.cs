@@ -5,7 +5,7 @@ namespace BetterShot.Editing;
 
 internal static class InlineTextDiagnostics
 {
-    internal static void Verify(EditorWindow editor, CaptureDocument document)
+    internal static void Verify(EditorSurface editor, CaptureDocument document)
     {
         int originalCount = document.Items.Count;
         var originalText = document.Items.OfType<TextAnnotation>().First();
@@ -47,7 +47,7 @@ internal static class InlineTextDiagnostics
         EditorFeatureDiagnostics.Verify(editor, document);
     }
 
-    private static void VerifyNavigation(EditorWindow editor, CaptureDocument document)
+    private static void VerifyNavigation(EditorSurface editor, CaptureDocument document)
     {
         int itemCount = document.Items.Count;
         Annotation[] items = document.Items.ToArray();
@@ -107,7 +107,7 @@ internal static class InlineTextDiagnostics
             throw new InvalidOperationException("Releasing Space did not restore the selected tool cursor.");
     }
 
-    private static void VerifyHandles(EditorWindow editor, CaptureDocument document)
+    private static void VerifyHandles(EditorSurface editor, CaptureDocument document)
     {
         var text = document.Items.OfType<TextAnnotation>().Last();
         editor.SetZoomForTest(0.5);
