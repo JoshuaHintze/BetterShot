@@ -107,6 +107,20 @@ internal sealed class HistorySettingsDto
     // Phase 4 Ask Claude. Optional like the Phase 2 fields; the API key is stored separately with DPAPI, never here.
     public string? AiModel { get; set; }
 
+    // Phase 6 screen recording options. Optional for the same reason as above.
+    public bool? RecordMicrophone { get; set; }
+    public string? MicrophoneDeviceId { get; set; }
+    public bool? RecordSystemAudio { get; set; }
+    public bool? RecordCamera { get; set; }
+    public string? CameraDeviceId { get; set; }
+    public bool? HighlightClicks { get; set; }
+    public bool? ShowKeystrokes { get; set; }
+    public int? RecordingCountdownSeconds { get; set; }
+    public bool? ReviewAfterRecording { get; set; }
+    public string? RecordingFileNamePattern { get; set; }
+    public int? RecordingFrameRate { get; set; }
+    public HotkeyDto? RecordHotkey { get; set; }
+
     /// <summary>Fields written by newer builds or other features are carried through every rewrite.</summary>
     [JsonExtensionData] public Dictionary<string, JsonElement>? AdditionalFields { get; set; }
 }

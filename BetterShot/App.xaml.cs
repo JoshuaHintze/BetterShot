@@ -87,6 +87,12 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (e.Args.Contains("--recording-test", StringComparer.OrdinalIgnoreCase))
+        {
+            _ = RunRecordingTestAsync(testOutput);
+            return;
+        }
+
         if (e.Args.Contains("--ai-test", StringComparer.OrdinalIgnoreCase))
         {
             _ = RunAiTestAsync(testOutput);
@@ -332,6 +338,11 @@ public partial class App : System.Windows.Application
     {
         try { await Ocr.OcrDiagnostics.RunAsync(output); Shutdown(0); }
         catch (Exception ex) { WriteTestResult(output, $"FAIL: OCR test: {ex}", "ocr-test.txt"); Shutdown(1); }
+    }
+    private async Task RunRecordingTestAsync(string? output)
+    {
+        try { await RecordingDiagnostics.RunAsync(output); Shutdown(0); }
+        catch (Exception ex) { WriteTestResult(output, $"FAIL: recording test: {ex}", "recording-test.txt"); Shutdown(1); }
     }
     private async Task RunShellTestAsync(string? output)
     {

@@ -22,6 +22,7 @@ public partial class MainWindow
         HotkeyAction.Area => AreaHotkeyRecorder,
         HotkeyAction.Window => WindowHotkeyRecorder,
         HotkeyAction.Fullscreen => FullscreenHotkeyRecorder,
+        HotkeyAction.Record => RecordHotkeyRecorder,
         _ => LibraryHotkeyRecorder
     };
 
@@ -30,6 +31,7 @@ public partial class MainWindow
         HotkeyAction.Area => "Area capture",
         HotkeyAction.Window => "Window capture",
         HotkeyAction.Fullscreen => "Fullscreen capture",
+        HotkeyAction.Record => "Record screen",
         _ => "Open library"
     };
 
@@ -87,6 +89,7 @@ public partial class MainWindow
             ResizeClipboardCheckBox.IsChecked = settings.ResizeClipboardCopies;
         }
         finally { _updatingSettings = false; }
+        LoadRecordingSettingsIntoControls();
         UpdateSettingsDependentUi();
         RefreshHotkeyIndicators();
     }
@@ -113,6 +116,7 @@ public partial class MainWindow
     {
         CommitFileNamePattern();
         CommitJpegQuality();
+        CommitRecordingFileNamePattern();
     }
 
     private void AfterCaptureToggle_Changed(object sender, RoutedEventArgs e)
@@ -237,6 +241,7 @@ public partial class MainWindow
             case HotkeyAction.Window: _ = CaptureAsync(CaptureMode.Window); break;
             case HotkeyAction.Fullscreen: _ = CaptureAsync(CaptureMode.Fullscreen); break;
             case HotkeyAction.Library: ShowAndActivate(); break;
+            case HotkeyAction.Record: ToggleRecordingFromShortcut(); break;
         }
     }
 
@@ -308,6 +313,7 @@ public partial class MainWindow
         WindowButton.ToolTip = WithShortcut("Click a window to capture it", CurrentSettings.WindowHotkey);
         DisplayButton.ToolTip = "Click a display to capture it";
         FullscreenButton.ToolTip = WithShortcut("Capture the whole display under the pointer immediately", CurrentSettings.FullscreenHotkey);
+        RefreshRecordButtonToolTip();
     }
 
     private static string WithShortcut(string text, HotkeyBinding binding) => binding.IsEmpty ? text : $"{text} ({binding})";

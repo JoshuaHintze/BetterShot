@@ -94,6 +94,7 @@ public partial class MainWindow : Window
             _retentionTimer.Start();
         }
         else SelectRetentionChoice(7);
+        InitializeRecording(_historyStore is null ? null : historyRoot ?? CaptureHistoryStore.DefaultRoot);
         _presentation.DragAsFile = _historyStore?.DragAsFile ?? false;
         DragModeComboBox.SelectedIndex = _presentation.DragAsFile ? 1 : 0;
         ApplySettingsToPresentation();
@@ -108,6 +109,7 @@ public partial class MainWindow : Window
         menu.Items.Add("Capture window", null, (_, _) => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Window)));
         menu.Items.Add("Capture display", null, (_, _) => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Display)));
         menu.Items.Add("Capture fullscreen", null, (_, _) => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Fullscreen)));
+        menu.Items.Add(CreateRecordingTrayMenu());
         menu.Items.Add("Open BetterShot", null, (_, _) => Dispatcher.BeginInvoke(ShowAndActivate));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => Dispatcher.BeginInvoke(ExitApplication));
@@ -136,6 +138,7 @@ public partial class MainWindow : Window
         WindowButtonText.Text = fullLabels ? "Capture window" : "Window";
         DisplayButtonText.Text = fullLabels ? "Capture display" : "Display";
         FullscreenButtonText.Text = fullLabels ? "Capture fullscreen" : "Fullscreen";
+        SetRecordButtonCompact(ActualWidth < 960);
     }
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
@@ -188,7 +191,7 @@ public partial class MainWindow : Window
     {
         if (!visible) CommitPendingSettingsEdits();
         SettingsPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        if (visible) { UpdateFileNamePreview(); ReplaceShortcutCheckBox.Focus(); } else SettingsButton.Focus();
+        if (visible) { UpdateFileNamePreview(); EnsureRecordingDevicesLoaded(); ReplaceShortcutCheckBox.Focus(); } else SettingsButton.Focus();
     }
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -201,8 +204,8 @@ public partial class MainWindow : Window
         if (LicensePanel.Visibility == Visibility.Visible) { LicensePanel.Visibility = Visibility.Collapsed; return; }
         if (string.IsNullOrWhiteSpace(LicenseText.Text))
         {
-            string path = Path.Combine(AppContext.BaseDirectory, "ThirdPartyNotices", "Lucide-LICENSE.txt");
-            try { LicenseText.Text = File.ReadAllText(path); }
+            string folder = Path.Combine(AppContext.BaseDirectory, "ThirdPartyNotices");
+            try { LicenseText.Text = ReadLicenseNotices(folder); }
             catch { LicenseText.Text = "Lucide icons · ISC License\n\nThe license file is included with distributed BetterShot builds."; }
         }
         LicensePanel.Visibility = Visibility.Visible;
@@ -622,6 +625,7 @@ public partial class MainWindow : Window
         _retentionTimer.Stop();
         _countdownCancellation?.Cancel();
         ShutdownTextSearch();
+        CleanupRecording();
         foreach (CaptureDocument document in _presentation.Recent.ToArray()) _presentation.CloseEditor(document);
         if (_historyStore is not null)
         {

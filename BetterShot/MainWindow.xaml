@@ -198,6 +198,7 @@
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
         <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
       <Grid>
         <Grid.ColumnDefinitions>
@@ -231,6 +232,36 @@
               <TextBlock x:Name="FullscreenButtonText" Text="Fullscreen" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
+        </StackPanel>
+        <!-- Phase 6: screen recording. Record opens the region picker; the chevron offers window and display. -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="10,0,0,0">
+          <Button x:Name="RecordButton" Style="{StaticResource QuietButton}" Height="40" MinWidth="104" Padding="14,6" FontSize="14" Click="Record_Click" AutomationProperties.Name="Record screen">
+            <StackPanel Orientation="Horizontal">
+              <Grid Width="16" Height="16" Margin="0,0,8,0">
+                <controls:LucideIcon x:Name="RecordButtonIcon" Icon="Video" Width="16" Height="16" Foreground="#FF6B6B" />
+                <Border x:Name="RecordStopSquare" Width="11" Height="11" CornerRadius="2" Background="#FF4D4D" Visibility="Collapsed" />
+              </Grid>
+              <TextBlock x:Name="RecordButtonText" Text="Record" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button x:Name="RecordModeButton" Style="{StaticResource QuietButton}" Height="40" Width="34" Padding="0" Margin="4,0,0,0" Click="RecordMode_Click" ToolTip="Record a window or a whole display" AutomationProperties.Name="More recording options">
+            <controls:LucideIcon Icon="ChevronDown" Width="15" Height="15" />
+          </Button>
+          <Popup x:Name="RecordModePopup" PlacementTarget="{Binding ElementName=RecordButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+            <Border Background="#202226" BorderBrush="#50535B" BorderThickness="1" CornerRadius="8" Padding="4" Margin="0,6,0,0" MinWidth="200">
+              <StackPanel>
+                <Button Style="{StaticResource QuietButton}" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Left" Click="RecordRegion_Click" AutomationProperties.Name="Record a region">
+                  <StackPanel Orientation="Horizontal"><controls:LucideIcon Icon="Maximize" Width="15" Height="15" Margin="0,0,9,0" /><TextBlock Text="Record a region…" /></StackPanel>
+                </Button>
+                <Button Style="{StaticResource QuietButton}" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Left" Click="RecordWindow_Click" AutomationProperties.Name="Record a window">
+                  <StackPanel Orientation="Horizontal"><controls:LucideIcon Icon="AppWindow" Width="15" Height="15" Margin="0,0,9,0" /><TextBlock Text="Record a window…" /></StackPanel>
+                </Button>
+                <Button Style="{StaticResource QuietButton}" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Left" Click="RecordDisplay_Click" AutomationProperties.Name="Record a display">
+                  <StackPanel Orientation="Horizontal"><controls:LucideIcon Icon="Monitor" Width="15" Height="15" Margin="0,0,9,0" /><TextBlock Text="Record a display…" /></StackPanel>
+                </Button>
+              </StackPanel>
+            </Border>
+          </Popup>
         </StackPanel>
         <TextBlock x:Name="CaptureShortcutText" Grid.Column="3" Text="Ctrl + Shift + F9" Foreground="#8F9299" FontSize="12" Margin="16,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
       </Grid>
@@ -407,6 +438,70 @@
           </Grid>
         </Grid>
       </Border>
+      <!-- Phase 6: recordings library strip (hidden until there is a recording). -->
+      <Grid x:Name="RecordingsPanel" Grid.Row="2" Margin="0,12,0,0" Visibility="Collapsed">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid Margin="0,0,0,8">
+          <TextBlock Text="Recent recordings" Foreground="#F0F1F3" FontSize="17" FontWeight="SemiBold" />
+          <TextBlock Text="Saved in your save folder" HorizontalAlignment="Right" Foreground="#92959C" FontSize="13" />
+        </Grid>
+        <ListBox x:Name="RecordingsList" Grid.Row="1" Background="Transparent" BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="False" PreviewKeyDown="RecordingsList_PreviewKeyDown" MouseDoubleClick="RecordingsList_MouseDoubleClick">
+          <ListBox.ItemContainerStyle>
+            <Style TargetType="ListBoxItem">
+              <Setter Property="ToolTip" Value="{Binding Details}" />
+              <Setter Property="AutomationProperties.Name" Value="{Binding Details}" />
+              <Setter Property="Width" Value="200" />
+              <Setter Property="Margin" Value="0,0,14,0" />
+              <Setter Property="Template">
+                <Setter.Value>
+                  <ControlTemplate TargetType="ListBoxItem"><ContentPresenter /></ControlTemplate>
+                </Setter.Value>
+              </Setter>
+            </Style>
+          </ListBox.ItemContainerStyle>
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Grid>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="104" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border x:Name="RecordingFrame" Background="#191B1F" CornerRadius="7" BorderBrush="#34363B" BorderThickness="1" Padding="3" ClipToBounds="True" Cursor="Hand" PreviewMouseLeftButtonDown="RecordingCard_MouseDown" PreviewMouseMove="RecordingCard_MouseMove">
+                  <Grid>
+                    <controls:LucideIcon Icon="Video" Width="30" Height="30" Foreground="#5E616A" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                    <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="6" Background="#D8141518" CornerRadius="5" Padding="6,1,6,2">
+                      <TextBlock Text="{Binding DurationText}" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                    </Border>
+                  </Grid>
+                </Border>
+                <StackPanel x:Name="RecordingActions" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="5" Visibility="Hidden">
+                  <Button Tag="{Binding}" Width="30" Height="30" Padding="7" Margin="0,0,4,0" Background="#E6282A30" BorderBrush="#555861" Click="PlayRecording_Click" ToolTip="Play recording" AutomationProperties.Name="Play recording"><controls:LucideIcon Icon="Play" Width="15" Height="15" /></Button>
+                  <Button Tag="{Binding}" Width="30" Height="30" Padding="7" Margin="0,0,4,0" Background="#E6282A30" BorderBrush="#555861" Click="ShowRecordingInFolder_Click" ToolTip="Show in folder" AutomationProperties.Name="Show recording in folder"><controls:LucideIcon Icon="FolderOpen" Width="15" Height="15" /></Button>
+                  <Button Tag="{Binding}" Width="30" Height="30" Padding="7" Background="#E6282A30" BorderBrush="#555861" Click="DeleteRecording_Click" ToolTip="Move recording to the Recycle Bin" AutomationProperties.Name="Delete recording"><controls:LucideIcon Icon="Trash2" Width="15" Height="15" /></Button>
+                </StackPanel>
+                <TextBlock Grid.Row="1" Text="{Binding Label}" Foreground="#B4B6BC" FontSize="13" Margin="3,7,3,0" TextTrimming="CharacterEllipsis" />
+              </Grid>
+              <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                  <Setter TargetName="RecordingFrame" Property="BorderBrush" Value="#747984" />
+                  <Setter TargetName="RecordingActions" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                  <Setter TargetName="RecordingFrame" Property="BorderBrush" Value="#D7DADF" />
+                  <Setter TargetName="RecordingActions" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+              </DataTemplate.Triggers>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
     </Grid>
     <Border Grid.Row="2" Background="#151619" BorderBrush="#292B30" BorderThickness="0,1,0,0" Padding="36,0">
       <Grid>
@@ -643,6 +738,47 @@
           </Grid>
           <CheckBox x:Name="ResizeClipboardCheckBox" Style="{StaticResource SettingToggle}" Content="Also resize clipboard copies" Checked="AfterCaptureToggle_Changed" Unchecked="AfterCaptureToggle_Changed" />
           <TextBlock Text="Format and size apply to saved files and dragged images. Clipboard copies stay full size unless the option above is on; the library always keeps the original." Style="{StaticResource SettingHint}" Margin="0,8,0,0" />
+
+          <!-- Phase 6: screen recording options (MainWindow.Recording.cs). -->
+          <StackPanel x:Name="RecordingSettingsSection" Margin="0,30,0,0">
+            <TextBlock Text="Recording" Style="{StaticResource SectionHeader}" />
+            <Grid Margin="0,10,0,0">
+              <TextBlock Text="Record screen" Style="{StaticResource SettingLabel}" />
+              <controls:HotkeyRecorderButton x:Name="RecordHotkeyRecorder" Style="{StaticResource RecorderButton}" Tag="Record" AutomationProperties.Name="Record screen shortcut" RecordingStarted="HotkeyRecorder_RecordingStarted" RecordingEnded="HotkeyRecorder_RecordingEnded" Recorded="HotkeyRecorder_Recorded" />
+            </Grid>
+            <TextBlock Text="Starts a region recording; press it again to stop." Style="{StaticResource SettingHint}" Margin="0,4,0,0" />
+            <Grid Margin="0,14,0,0">
+              <TextBlock Text="Countdown" Style="{StaticResource SettingLabel}" />
+              <ComboBox x:Name="RecordingCountdownComboBox" Style="{StaticResource DarkComboBox}" Width="130" Height="34" HorizontalAlignment="Right" SelectionChanged="RecordingCombo_SelectionChanged" AutomationProperties.Name="Recording countdown">
+                <ComboBoxItem Content="Off" Tag="0" />
+                <ComboBoxItem Content="3 seconds" Tag="3" />
+                <ComboBoxItem Content="5 seconds" Tag="5" />
+              </ComboBox>
+            </Grid>
+            <Grid Margin="0,12,0,0">
+              <TextBlock Text="Frame rate" Style="{StaticResource SettingLabel}" />
+              <ComboBox x:Name="RecordingFrameRateComboBox" Style="{StaticResource DarkComboBox}" Width="130" Height="34" HorizontalAlignment="Right" SelectionChanged="RecordingCombo_SelectionChanged" AutomationProperties.Name="Recording frame rate">
+                <ComboBoxItem Content="30 fps" Tag="30" />
+                <ComboBoxItem Content="60 fps" Tag="60" />
+              </ComboBox>
+            </Grid>
+            <CheckBox x:Name="RecordMicrophoneCheckBox" Style="{StaticResource SettingToggle}" Content="Record microphone" Margin="0,16,0,0" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <ComboBox x:Name="MicrophoneComboBox" Style="{StaticResource DarkComboBox}" Height="34" Margin="42,10,0,0" SelectionChanged="RecordingDevice_SelectionChanged" AutomationProperties.Name="Microphone" />
+            <CheckBox x:Name="RecordSystemAudioCheckBox" Style="{StaticResource SettingToggle}" Content="Record system audio" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <TextBlock Text="Sound playing on your default output device, mixed with the microphone into one track." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <CheckBox x:Name="RecordCameraCheckBox" Style="{StaticResource SettingToggle}" Content="Record webcam" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <ComboBox x:Name="CameraComboBox" Style="{StaticResource DarkComboBox}" Height="34" Margin="42,10,0,0" SelectionChanged="RecordingDevice_SelectionChanged" AutomationProperties.Name="Camera" />
+            <TextBlock Text="Saved beside the screen recording with a &quot;-camera&quot; suffix." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <CheckBox x:Name="HighlightClicksCheckBox" Style="{StaticResource SettingToggle}" Content="Highlight mouse clicks" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <CheckBox x:Name="ShowKeystrokesCheckBox" Style="{StaticResource SettingToggle}" Content="Show keystrokes" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <TextBlock Text="Shows shortcuts such as Ctrl+Shift+K. Ordinary typing is never shown or saved." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <CheckBox x:Name="ReviewAfterRecordingCheckBox" Style="{StaticResource SettingToggle}" Content="Review after recording" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <TextBlock Text="Opens the finished recording. Trimming is coming in a later update." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <TextBlock Text="Recording file name" Style="{StaticResource SettingLabel}" Margin="0,16,0,0" />
+            <TextBox x:Name="RecordingFileNamePatternBox" Style="{StaticResource DarkTextBox}" Height="34" Margin="0,8,0,0" TextChanged="RecordingFileNamePattern_TextChanged" LostKeyboardFocus="RecordingFileNamePattern_LostKeyboardFocus" KeyDown="RecordingFileNamePattern_KeyDown" AutomationProperties.Name="Recording file name pattern" />
+            <TextBlock x:Name="RecordingFileNamePreviewText" Foreground="#FFE477" FontSize="12" Margin="0,7,0,0" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="Recordings are saved as MP4 (H.264 video, AAC audio) in the save folder above and use the same tokens." Style="{StaticResource SettingHint}" Margin="0,6,0,0" />
+          </StackPanel>
         </StackPanel>
         <StackPanel Grid.Row="2" Margin="0,30,0,0">
           <TextBlock Text="Library" Style="{StaticResource SectionHeader}" />

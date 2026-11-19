@@ -1,5 +1,5 @@
 param(
-    [string] $AppPath = (Join-Path $PSScriptRoot 'BetterShot\bin\Release\net10.0-windows\BetterShot.exe'),
+    [string] $AppPath = (Join-Path $PSScriptRoot 'BetterShot\bin\Release\net10.0-windows10.0.19041.0\BetterShot.exe'),
     [string] $OutputDirectory = (Join-Path $PSScriptRoot 'artifacts\ai-test')
 )
 $ErrorActionPreference = 'Stop'

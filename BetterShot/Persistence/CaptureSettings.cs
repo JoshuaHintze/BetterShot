@@ -14,6 +14,9 @@ internal sealed record CaptureSettings
     internal static readonly int[] RetentionChoices = [1, 7, 14, 30, 90, 180, NeverExpire];
     internal static readonly int[] DelayChoices = [0, 3, 5, 10];
     internal static readonly int[] AutoDismissChoices = [0, 10, 30, 60];
+    internal static readonly int[] RecordingCountdownChoices = [0, 3, 5];
+    internal static readonly int[] RecordingFrameRateChoices = [30, 60];
+    internal const string DefaultRecordingFileNamePattern = "Recording %date at %time";
 
     internal static CaptureSettings Default { get; } = new();
 
@@ -45,6 +48,21 @@ internal sealed record CaptureSettings
     public string AiModel { get; init; } = ClaudeModels.DefaultId;
     /// <summary>Reads text in library captures on this PC so the library search can find it.</summary>
     public bool SearchTextInImages { get; init; } = true;
+    public HotkeyBinding RecordHotkey { get; init; }
+
+    public bool RecordMicrophone { get; init; }
+    /// <summary>Empty means the Windows default communications/recording device.</summary>
+    public string MicrophoneDeviceId { get; init; } = string.Empty;
+    public bool RecordSystemAudio { get; init; }
+    public bool RecordCamera { get; init; }
+    /// <summary>Empty means the first available camera.</summary>
+    public string CameraDeviceId { get; init; } = string.Empty;
+    public bool HighlightClicks { get; init; }
+    public bool ShowKeystrokes { get; init; }
+    public int RecordingCountdownSeconds { get; init; } = 3;
+    public bool ReviewAfterRecording { get; init; }
+    public string RecordingFileNamePattern { get; init; } = DefaultRecordingFileNamePattern;
+    public int RecordingFrameRate { get; init; } = 30;
 
     internal bool KeepForever => RetentionDays == NeverExpire;
     internal bool SavesEveryCapture => AutoSave || !ShowThumbnail;
@@ -59,6 +77,7 @@ internal sealed record CaptureSettings
         HotkeyAction.Window => WindowHotkey,
         HotkeyAction.Fullscreen => FullscreenHotkey,
         HotkeyAction.Library => LibraryHotkey,
+        HotkeyAction.Record => RecordHotkey,
         _ => HotkeyBinding.None
     };
 
@@ -68,6 +87,7 @@ internal sealed record CaptureSettings
         HotkeyAction.Window => this with { WindowHotkey = binding },
         HotkeyAction.Fullscreen => this with { FullscreenHotkey = binding },
         HotkeyAction.Library => this with { LibraryHotkey = binding },
+        HotkeyAction.Record => this with { RecordHotkey = binding },
         _ => this
     };
 
@@ -87,7 +107,13 @@ internal sealed record CaptureSettings
         WindowHotkey = SafeHotkey(WindowHotkey),
         FullscreenHotkey = SafeHotkey(FullscreenHotkey),
         LibraryHotkey = SafeHotkey(LibraryHotkey),
-        AiModel = ClaudeModels.Normalize(AiModel)
+        AiModel = ClaudeModels.Normalize(AiModel),
+        RecordHotkey = SafeHotkey(RecordHotkey),
+        MicrophoneDeviceId = MicrophoneDeviceId?.Trim() ?? string.Empty,
+        CameraDeviceId = CameraDeviceId?.Trim() ?? string.Empty,
+        RecordingCountdownSeconds = RecordingCountdownChoices.Contains(RecordingCountdownSeconds) ? RecordingCountdownSeconds : 3,
+        RecordingFileNamePattern = string.IsNullOrWhiteSpace(RecordingFileNamePattern) ? DefaultRecordingFileNamePattern : RecordingFileNamePattern,
+        RecordingFrameRate = RecordingFrameRateChoices.Contains(RecordingFrameRate) ? RecordingFrameRate : 30
     };
 
     private static HotkeyBinding SafeHotkey(HotkeyBinding binding) =>
@@ -126,7 +152,19 @@ internal static class CaptureSettingsMapper
             FullscreenHotkey = FromDto(dto.FullscreenHotkey),
             LibraryHotkey = FromDto(dto.LibraryHotkey),
             AiModel = dto.AiModel ?? defaults.AiModel,
-            SearchTextInImages = dto.SearchTextInImages ?? defaults.SearchTextInImages
+            SearchTextInImages = dto.SearchTextInImages ?? defaults.SearchTextInImages,
+            RecordHotkey = FromDto(dto.RecordHotkey),
+            RecordMicrophone = dto.RecordMicrophone ?? defaults.RecordMicrophone,
+            MicrophoneDeviceId = dto.MicrophoneDeviceId ?? defaults.MicrophoneDeviceId,
+            RecordSystemAudio = dto.RecordSystemAudio ?? defaults.RecordSystemAudio,
+            RecordCamera = dto.RecordCamera ?? defaults.RecordCamera,
+            CameraDeviceId = dto.CameraDeviceId ?? defaults.CameraDeviceId,
+            HighlightClicks = dto.HighlightClicks ?? defaults.HighlightClicks,
+            ShowKeystrokes = dto.ShowKeystrokes ?? defaults.ShowKeystrokes,
+            RecordingCountdownSeconds = dto.RecordingCountdownSeconds ?? defaults.RecordingCountdownSeconds,
+            ReviewAfterRecording = dto.ReviewAfterRecording ?? defaults.ReviewAfterRecording,
+            RecordingFileNamePattern = dto.RecordingFileNamePattern ?? defaults.RecordingFileNamePattern,
+            RecordingFrameRate = dto.RecordingFrameRate ?? defaults.RecordingFrameRate
         }.Normalize();
     }
 
@@ -160,6 +198,18 @@ internal static class CaptureSettingsMapper
             LibraryHotkey = ToDto(settings.LibraryHotkey),
             AiModel = settings.AiModel,
             SearchTextInImages = settings.SearchTextInImages,
+            RecordHotkey = ToDto(settings.RecordHotkey),
+            RecordMicrophone = settings.RecordMicrophone,
+            MicrophoneDeviceId = settings.MicrophoneDeviceId,
+            RecordSystemAudio = settings.RecordSystemAudio,
+            RecordCamera = settings.RecordCamera,
+            CameraDeviceId = settings.CameraDeviceId,
+            HighlightClicks = settings.HighlightClicks,
+            ShowKeystrokes = settings.ShowKeystrokes,
+            RecordingCountdownSeconds = settings.RecordingCountdownSeconds,
+            ReviewAfterRecording = settings.ReviewAfterRecording,
+            RecordingFileNamePattern = settings.RecordingFileNamePattern,
+            RecordingFrameRate = settings.RecordingFrameRate,
             AdditionalFields = additionalFields
         };
     }

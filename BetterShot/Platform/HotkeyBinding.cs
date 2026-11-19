@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace BetterShot.Platform;
 
-public enum HotkeyAction { Area, Window, Fullscreen, Library }
+public enum HotkeyAction { Area, Window, Fullscreen, Library, Record }
 
 /// <summary>Values match the RegisterHotKey MOD_* flags and WPF ModifierKeys.</summary>
 [Flags]
