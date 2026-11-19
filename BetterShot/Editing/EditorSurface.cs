@@ -156,9 +156,25 @@ public sealed partial class EditorSurface : UserControl
         if (key == Key.Space && _spaceHeld) EndSpaceNavigation();
     }
 
+    private Grid? _root;
+
+    /// <summary>The editor's charcoal backdrop, for a host that paints it across a wider area (e.g. behind the library).</summary>
+    internal static Brush Backdrop { get; } = CanvasBackdrop();
+
+    /// <summary>False when the host window paints <see cref="Backdrop"/> itself, so the editor shows no seam at its left edge.</summary>
+    internal bool PaintsBackdrop
+    {
+        set
+        {
+            Background = value ? Brush("#141517") : Brushes.Transparent;
+            if (_root is not null) _root.Background = value ? Backdrop : Brushes.Transparent;
+        }
+    }
+
     private UIElement BuildLayout()
     {
-        var root = new Grid { Background = CanvasBackdrop() };
+        var root = new Grid { Background = Backdrop };
+        _root = root;
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderHeight) });
         root.RowDefinitions.Add(new RowDefinition());
         root.Children.Add(BuildHeader());

@@ -81,7 +81,7 @@ public partial class MainWindow
         SelectDocumentRow(document);
         if (_editor is not null && ReferenceEquals(_editor.Document, document)) { UpdateLibraryLayout(); return; }
         CloseEmbeddedEditor(commit: true, updateLayout: false);
-        var editor = new EditorSurface(document, libraryControls: true);
+        var editor = new EditorSurface(document, libraryControls: true) { PaintsBackdrop = false };
         editor.HeaderRightInset = CaptionInset;
         editor.DoneRequested += (_, _) => CloseEmbeddedEditor(commit: false);
         editor.BackRequested += (_, _) => CloseEmbeddedEditor(commit: false);
@@ -142,6 +142,8 @@ public partial class MainWindow
         LibraryColumn.Width = !editing ? new GridLength(1, GridUnitType.Star) : showLibrary ? new GridLength(LibraryWidth) : new GridLength(0);
         EditorColumn.Width = editing ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         LibraryPanel.Margin = editing ? new Thickness(10, 10, 0, 10) : new Thickness(10);
+        // While editing, the editor's backdrop runs the full width so the library card floats on it with no seam.
+        RootGrid.Background = editing ? EditorSurface.Backdrop : null;
         // The caption buttons overlap the library header only while the library reaches the right edge.
         LibraryHeaderButtons.Margin = editing ? new Thickness(0) : new Thickness(0, 0, CaptionInset - 16, 0);
         if (_compactLibraryHeader != editing)
