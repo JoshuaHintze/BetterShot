@@ -29,7 +29,19 @@ public enum LucideIconKind
     Plus,
     Pencil,
     Pin,
-    X
+    X,
+    Circle,
+    Slash,
+    Highlighter,
+    MessageSquare,
+    Flashlight,
+    ZoomIn,
+    Crop,
+    Image,
+    ChevronDown,
+    ArrowUpToLine,
+    ArrowDownToLine,
+    Ban
 }
 
 public partial class LucideIcon : UserControl
@@ -84,6 +96,18 @@ public partial class LucideIcon : UserControl
             case LucideIconKind.Pencil: Path("M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"); Path("m15 5 4 4"); break;
             case LucideIconKind.Pin: Path("M12 17v5"); Path("M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"); break;
             case LucideIconKind.X: Path("M18 6 6 18"); Path("m6 6 12 12"); break;
+            case LucideIconKind.Circle: Circle(12, 12, 10); break;
+            case LucideIconKind.Slash: Path("M22 2 2 22"); break;
+            case LucideIconKind.Highlighter: Path("m9 11-6 6v3h9l3-3"); Path("m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"); break;
+            case LucideIconKind.MessageSquare: Path("M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"); break;
+            case LucideIconKind.Flashlight: Path("M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z"); Path("M6 6h12"); Path("M12 12h.01"); break;
+            case LucideIconKind.ZoomIn: Circle(11, 11, 8); Path("M21 21 16.65 16.65"); Path("M11 8v6"); Path("M8 11h6"); break;
+            case LucideIconKind.Crop: Path("M6 2v14a2 2 0 0 0 2 2h14"); Path("M18 22V8a2 2 0 0 0-2-2H2"); break;
+            case LucideIconKind.Image: Rectangle(3, 3, 18, 18, 2); Circle(9, 9, 2); Path("m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"); break;
+            case LucideIconKind.ChevronDown: Path("m6 9 6 6 6-6"); break;
+            case LucideIconKind.ArrowUpToLine: Path("M5 3h14"); Path("m18 13-6-6-6 6"); Path("M12 7v14"); break;
+            case LucideIconKind.ArrowDownToLine: Path("M12 17V3"); Path("m6 11 6 6 6-6"); Path("M19 21H5"); break;
+            case LucideIconKind.Ban: Circle(12, 12, 10); Path("m4.9 4.9 14.2 14.2"); break;
         }
     }
 
@@ -113,6 +137,18 @@ public partial class LucideIcon : UserControl
         };
         BindStroke(rectangle);
         IconCanvas.Children.Add(rectangle);
+    }
+
+    private void Circle(double centerX, double centerY, double radius)
+    {
+        var circle = new System.Windows.Shapes.Path
+        {
+            Data = new EllipseGeometry(new Point(centerX, centerY), radius, radius),
+            Fill = Brushes.Transparent,
+            StrokeThickness = 2
+        };
+        BindStroke(circle);
+        IconCanvas.Children.Add(circle);
     }
 
     private void BindStroke(Shape shape) => shape.SetBinding(

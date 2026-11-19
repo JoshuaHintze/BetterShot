@@ -44,6 +44,7 @@ internal static class InlineTextDiagnostics
         if (document.Items.Count != originalCount + 1) throw new InvalidOperationException("Empty text created an annotation.");
         VerifyNavigation(editor, document);
         VerifyHandles(editor, document);
+        EditorFeatureDiagnostics.Verify(editor, document);
     }
 
     private static void VerifyNavigation(EditorWindow editor, CaptureDocument document)

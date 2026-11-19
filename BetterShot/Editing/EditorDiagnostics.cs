@@ -25,6 +25,7 @@ public static class EditorDiagnostics
         document.Undo(); if (document.Items.Count != 2) throw new InvalidOperationException("Undo failed.");
         document.Redo(); if (document.Items.Count != 3 || document.Items.OfType<PenAnnotation>().Single().Points.Count != 3) throw new InvalidOperationException("Redo/deep copy failed.");
         VerifyDragExport(document);
+        AnnotationDiagnostics.Verify();
     }
 
     private static void VerifyDragExport(CaptureDocument document)
@@ -118,7 +119,7 @@ public static class EditorDiagnostics
         return document;
     }
 
-    private static BitmapSource MakeSource(int width, int height, double dpi)
+    internal static BitmapSource MakeSource(int width, int height, double dpi)
     {
         int stride = width * 4; byte[] pixels = new byte[stride * height];
         for (int y=0;y<height;y++) for(int x=0;x<width;x++) { int i=y*stride+x*4; byte shade=(byte)(30 + 42.0*x/width + 24.0*y/height); pixels[i]=shade;pixels[i+1]=shade;pixels[i+2]=shade;pixels[i+3]=255; }
@@ -126,7 +127,7 @@ public static class EditorDiagnostics
         var bitmap=BitmapSource.Create(width,height,dpi,dpi,PixelFormats.Bgra32,null,pixels,stride); bitmap.Freeze(); return bitmap;
     }
 
-    private static Color Pixel(BitmapSource image, int x, int y)
+    internal static Color Pixel(BitmapSource image, int x, int y)
     {
         var converted = new FormatConvertedBitmap(image, PixelFormats.Bgra32, null, 0); byte[] p=new byte[4]; converted.CopyPixels(new Int32Rect(x,y,1,1),p,4,0); return Color.FromArgb(p[3],p[2],p[1],p[0]);
     }

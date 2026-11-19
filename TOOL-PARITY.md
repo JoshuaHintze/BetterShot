@@ -64,3 +64,18 @@ Suggested Windows interaction rules: scope Enter/Escape to the active crop opera
 All exports must use the same composition as the preview, with intentional output dimensions after crop/background padding. Existing editable annotations must survive reopening within the session. Avoid offering inactive placeholder controls.
 
 This document records the newly supplied references; it does not claim these additional features have been implemented.
+
+## Full KhingShot 0.17.0 feature map and Windows roadmap (November 19, 2026)
+
+Source: the installed Mac app (/Applications/KhingShot.app 0.17.0, build 33), its preferences and sidecar files, and UI strings in its binary. The user asked to bring **all** of these features to BetterShot, designed natively for Windows (C#/.NET 10 WPF + Win32/WinRT APIs). Never port Mac-specific behavior literally; use the Windows equivalent.
+
+| Phase | KhingShot feature | Windows approach | Status |
+| --- | --- | --- | --- |
+| 1 Editor | Grouped tools, ellipse, line, highlighter, callout, spotlight, magnify, redact (solid/pixelate/blur, always burned in), per-tool styles, saved presets, crop, background presets/padding/radius/shadow, 100% zoom, Ctrl+Enter Done, z-order, duplicate | WPF editor in Editing/ | In progress |
+| 2 Capture | Fullscreen capture, configurable hotkeys, capture delay (3/5/10 s), after-capture options (clipboard, thumbnail overlay, open editor, sound, auto-dismiss), save folder, filename tokens (%date %time %counter ...), PNG/JPEG + quality, export resize (full/1920/1280), retention up to 180 days/never | RegisterHotKey, settings.json | In progress |
+| 3 Text | Copy all text, copy text from selection, OCR index + "search text inside images", redact detected info (emails, numbers, keys) | Windows.Media.Ocr (on-device; requires TFM net10.0-windows10.0.19041.0 or later) | Planned |
+| 4 Ask Claude | Sparkles button; presets: describe, explain error, draft bug report, find UI issues, extract as Markdown, write alt text; follow-ups; model choice | HttpClient to api.anthropic.com; key protected with DPAPI/Windows Credential Manager, sent only to Anthropic; image never sent without user action | Planned |
+| 5 Library | All Captures window, search by name and OCR text, keep-markup-editable option, scrolling capture (auto-scroll + stitch) | UI Automation / SendInput scrolling + image stitching | Planned |
+| 6 Recording | Region/window/screen recording, countdown, microphone, system audio, webcam sidecar file, click highlights, keystroke display, recording controls | Windows.Graphics.Capture + Media Foundation; WASAPI loopback; low-level mouse/keyboard hooks | Planned |
+| 7 Recording editor | Trim/split/cut timeline (CapCut-style keys), markup on video, redaction that tracks content, marked copy for sharing, MP4/GIF/timelapse export | Media Foundation transcode, GIF encoder | Planned |
+| 8 Extras | Remove background, first-run setup, auto-updates, launch at login (exists) | Background removal needs an on-device segmentation model (license review needed); update feed + installer download | Planned |
