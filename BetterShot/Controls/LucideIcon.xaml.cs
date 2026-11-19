@@ -98,7 +98,15 @@ public enum LucideIconKind
     ArrowBigUp,
     PanelLeftClose,
     PictureInPicture2,
-    ZoomOut
+    ZoomOut,
+    VolumeX,
+    Share,
+    Film,
+    FoldHorizontal,
+    Columns2,
+    Clock,
+    Signature,
+    Images
 }
 
 public partial class LucideIcon : UserControl
@@ -227,6 +235,14 @@ public partial class LucideIcon : UserControl
             case LucideIconKind.PictureInPicture2: Path("M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h4"); Rectangle(12, 13, 10, 7, 2); break;
             // Official Lucide zoom-out (zoom-in above uses the same lens).
             case LucideIconKind.ZoomOut: Circle(11, 11, 8); Path("M21 21L16.65 16.65"); Path("M8 11L14 11"); break;
+            case LucideIconKind.VolumeX: Path("M11 4.702a.7.7 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.7.7 0 0 0 11 19.298z"); Path("m16.5 14.5 5-5"); Path("m16.5 9.5 5 5"); break;
+            case LucideIconKind.Share: Path("M12 2v13"); Path("m16 6-4-4-4 4"); Path("M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"); break;
+            case LucideIconKind.Film: Rectangle(3, 3, 18, 18, 2); Path("M7 3v18"); Path("M3 7.5h4"); Path("M3 12h18"); Path("M3 16.5h4"); Path("M17 3v18"); Path("M17 7.5h4"); Path("M17 16.5h4"); break;
+            case LucideIconKind.FoldHorizontal: Path("M12 10V8"); Path("M12 16v-2"); Path("M12 22v-2"); Path("M12 4V2"); Path("M16 12h6"); Path("m19 15-3-3 3-3"); Path("M2 12h6"); Path("m5 15 3-3-3-3"); break;
+            case LucideIconKind.Columns2: Rectangle(3, 3, 18, 18, 2); Path("M12 3v18"); break;
+            case LucideIconKind.Clock: Circle(12, 12, 10); Path("M12 6v6l4 2"); break;
+            case LucideIconKind.Signature: Path("m21 17-2.156-1.868A.5.5 0 0 0 18 15.5v.5a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1c0-2.545-3.991-3.97-8.5-4a1 1 0 0 0 0 5c4.153 0 4.745-11.295 5.708-13.5a2.5 2.5 0 1 1 3.31 3.284"); Path("M3 21h18"); break;
+            case LucideIconKind.Images: Path("m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"); Path("M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"); Circle(13, 7, 1); Rectangle(8, 2, 14, 14, 2); break;
         }
     }
 

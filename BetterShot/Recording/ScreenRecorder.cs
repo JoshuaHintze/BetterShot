@@ -89,7 +89,7 @@ internal sealed class ScreenRecorder
             (int width, int height, Int32Rect? crop) = OutputFormat(target, item);
             video = new ScreenCaptureSource(item, crop, width, height);
             var clock = new RecordingClock();
-            audio = OpenAudio(options, clock);
+            audio = OpenAudio(options, clock, moviePath);
             audio?.StartInputs();
             video.Start();
             if (options.Camera && cameraPath is not null) camera = await CameraRecorder.StartAsync(options.CameraId, cameraPath);
@@ -176,6 +176,7 @@ internal sealed class ScreenRecorder
             throw new RecordingException(RecordingProblem.CouldNotFinish, $"{RecordingException.CouldNotFinishTitle}: no video frames were captured.{kept}");
         // The encoder ended early but the MP4 was finalized: keep what was recorded and say why it is short.
         if (_encoder.Failure is Exception encoderError) warning ??= $"Recording stopped early: {encoderError.Message}";
+        warning ??= _audio?.TrackWarning;
         return new RecordingOutcome(_moviePath, cameraPath, Clock.Elapsed, Width, Height, _encoder.FramesWritten, warning);
     }
 
@@ -217,9 +218,10 @@ internal sealed class ScreenRecorder
         return (width, height, crop);
     }
 
-    private static AudioMixer? OpenAudio(RecordingSessionOptions options, RecordingClock clock)
+    /// <summary>Opens the chosen inputs; the mixer also keeps each one as a hidden WAV track beside <paramref name="moviePath"/>.</summary>
+    private static AudioMixer? OpenAudio(RecordingSessionOptions options, RecordingClock clock, string moviePath)
     {
-        var inputs = new List<AudioInput>();
+        var inputs = new List<IAudioSource>();
         try
         {
             if (options.Microphone) inputs.Add(AudioInput.OpenMicrophone(options.MicrophoneId));
@@ -227,10 +229,10 @@ internal sealed class ScreenRecorder
         }
         catch
         {
-            foreach (AudioInput input in inputs) input.Dispose();
+            foreach (IAudioSource input in inputs) input.Dispose();
             throw;
         }
-        return inputs.Count == 0 ? null : new AudioMixer(inputs, clock);
+        return inputs.Count == 0 ? null : new AudioMixer(inputs, clock, moviePath);
     }
 
     private static string FriendlyStartError(Exception error) => error switch

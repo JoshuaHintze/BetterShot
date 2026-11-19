@@ -55,11 +55,15 @@ internal static class RecordingFiles
         return data;
     }
 
-    /// <summary>Sends the movie, its camera sidecar, its event log, and its edit project to the Recycle Bin; drops its cached marked copy.</summary>
+    /// <summary>
+    /// Sends the movie, its camera sidecar, its event log, its edit project, and its separate audio tracks to the
+    /// Recycle Bin; drops its cached marked copy.
+    /// </summary>
     internal static void DeleteToRecycleBin(RecordingEntry entry)
     {
         RecordingSharing.DeleteMarkedCopy(entry.MoviePath);
-        foreach (string? path in new[] { entry.MoviePath, entry.CameraPath, RecordingEventLog.SidecarPath(entry.MoviePath), RecordingEditProject.SidecarPath(entry.MoviePath) })
+        string?[] paths = [entry.MoviePath, entry.CameraPath, RecordingEventLog.SidecarPath(entry.MoviePath), RecordingEditProject.SidecarPath(entry.MoviePath), .. RecordingAudioTracks.AllSidecarPaths(entry.MoviePath)];
+        foreach (string? path in paths)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) continue;
             VisualBasicFileSystem.DeleteFile(path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);

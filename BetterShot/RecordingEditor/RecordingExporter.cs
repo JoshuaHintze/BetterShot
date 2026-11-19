@@ -17,7 +17,8 @@ internal sealed record RecordingExportJob(
     int GifFrameRate,
     int GifMaxDimension,
     int? TimelapseSpeed,
-    string TemporaryFolder);
+    string TemporaryFolder,
+    IReadOnlyList<Recording.AudioTrackKind>? RemixTracks = null);
 
 /// <summary>Renders the frame at a source time with the visible marks burned in, using the screenshot editor's renderer.</summary>
 internal static class MarkCompositor
@@ -78,6 +79,7 @@ internal static class RecordingExporter
     private static async Task<string?> WriteMovieAsync(RecordingExportJob job, RecordingFrameReader reader, Dispatcher renderer, string output, IProgress<double> progress, CancellationToken cancellation)
     {
         RecordingEditState state = job.State;
+        if (job.Kind == RecordingExportKind.Mp4 && job.RemixTracks is { Count: > 0 } tracks) return await WriteRemixedMovieAsync(job, tracks, reader, renderer, output, progress, cancellation);
         bool includeAudio = job.Kind == RecordingExportKind.Mp4 && job.Info.HasAudio;
         if (!state.HasVisibleMarks)
         {
@@ -94,13 +96,47 @@ internal static class RecordingExporter
                 warning = $"The audio could not be included ({error.Message}).";
             }
         }
+        await EncodeMarkedFramesAsync(job, reader, renderer, output, audio, progress, cancellation);
+        return warning;
+    }
+
+    /// <summary>
+    /// An MP4 without the muted tracks: the unmuted separate tracks are mixed again for just the kept stretches, then
+    /// replace the movie's mixed soundtrack (as a background track on the fast path, or muxed with burned-in frames).
+    /// </summary>
+    private static async Task<string?> WriteRemixedMovieAsync(RecordingExportJob job, IReadOnlyList<Recording.AudioTrackKind> tracks, RecordingFrameReader reader,
+        Dispatcher renderer, string output, IProgress<double> progress, CancellationToken cancellation)
+    {
+        RecordingEditState state = job.State;
+        Directory.CreateDirectory(job.TemporaryFolder);
+        string remix = Path.Combine(job.TemporaryFolder, "remix-" + Guid.NewGuid().ToString("N") + ".wav");
+        try
+        {
+            string[] sources = tracks.Select(kind => Recording.RecordingAudioTracks.SidecarPath(job.MoviePath, kind)).ToArray();
+            IReadOnlyList<KeptRange> ranges = state.Timeline.KeptRanges;
+            await Task.Run(() => AudioRemixer.WriteKeptMix(sources, ranges, remix, cancellation), cancellation);
+            if (!state.HasVisibleMarks)
+            {
+                await TrimmedMovieRenderer.RenderAsync(job.MoviePath, ranges, output, job.Info, includeAudio: true, progress, cancellation, remix);
+                return null;
+            }
+            KeptAudio audio = KeptAudio.FromWave(remix, [new KeptRange(0, state.Timeline.OutputDuration, 0)], deleteOnDispose: false);
+            await EncodeMarkedFramesAsync(job, reader, renderer, output, audio, progress, cancellation);
+            return null;
+        }
+        finally { KeptAudio.TryDelete(remix); }
+    }
+
+    private static async Task EncodeMarkedFramesAsync(RecordingExportJob job, RecordingFrameReader reader, Dispatcher renderer, string output, KeptAudio? audio,
+        IProgress<double> progress, CancellationToken cancellation)
+    {
+        RecordingEditState state = job.State;
         using (audio)
         {
             IReadOnlyList<double> times = ExportPlanning.FrameTimes(state.Timeline, job.Info.FrameRate);
             var frames = new MarkedFrameSource(reader, renderer, state, times, job.Info.Width, job.Info.Height);
             await FrameMovieEncoder.EncodeAsync(output, job.Info.Width, job.Info.Height, job.Info.FrameRate, times.Count, frames.RenderAsync, audio, progress, cancellation);
         }
-        return warning;
     }
 
     private static async Task<string?> WriteTimelapseAsync(RecordingExportJob job, RecordingFrameReader reader, Dispatcher renderer, string output, IProgress<double> progress, CancellationToken cancellation)

@@ -2,6 +2,7 @@ using BetterShot.Controls;
 using BetterShot.Editing;
 using System.Globalization;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using static BetterShot.RecordingEditor.RecordingEditorChrome;
@@ -20,15 +21,19 @@ internal sealed partial class RecordingEditorWindow
         LoadedBehavior = MediaState.Manual, UnloadedBehavior = MediaState.Manual, ScrubbingEnabled = true, Stretch = Stretch.Fill
     };
     private readonly Grid _surface = new() { ClipToBounds = true };
-    private readonly Viewbox _viewbox = new() { Stretch = Stretch.Uniform, Margin = new Thickness(28) };
+    private readonly Viewbox _viewbox = new() { Stretch = Stretch.Uniform, Margin = new Thickness(22, 22, 22, 6) };
     private readonly Canvas _editCanvas = new();
-    private readonly TextBlock _timeText = new() { Foreground = Brushes.White, FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0), FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI") };
+    private readonly Run _timeNow = new("0:00.0") { Foreground = Brushes.White };
+    private readonly Run _timeTotal = new(" / 0:00.0") { Foreground = MutedText };
+    private readonly PillSlider _volumeSlider = new("Volume") { Width = 120, Value = 1 };
     private MarkLayer _markLayer = new();
     private RedactionPreviewLayer? _redactionPreview;
-    private Button? _playButton, _speedButton, _loopButton, _splitModeButton, _snapButton, _rowsButton, _putBackButton, _followButton;
+    private Button? _playButton, _speedButton, _loopButton, _volumeButton;
     private bool _playing;
     private bool _loop;
     private double _speed = 1;
+    private double _volume = 1;
+    private bool _playerMuted;
     private double _playhead;
     private bool _mediaReady;
     private double? _jumpTarget;
@@ -37,9 +42,13 @@ internal sealed partial class RecordingEditorWindow
     private double FrameDuration => 1 / Math.Max(1, _info?.FrameRate ?? 30);
     private double DisplayScale => _surface.ActualWidth > 0 && _viewbox.ActualWidth > 0 ? _viewbox.ActualWidth / _surface.ActualWidth : 1;
 
+    /// <summary>The player panel: the video (with markup on top) and the transport row under it.</summary>
     private UIElement BuildPlayer()
     {
-        var area = new Grid { Background = Brush("#111213"), ClipToBounds = true };
+        var panel = new Grid();
+        panel.RowDefinitions.Add(new RowDefinition());
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var area = new Grid { ClipToBounds = true };
         _redactionPreview = new RedactionPreviewLayer(_media);
         _surface.Children.Add(new Border { Background = Brushes.Black });
         _surface.Children.Add(_media);
@@ -48,10 +57,13 @@ internal sealed partial class RecordingEditorWindow
         _surface.Children.Add(_editCanvas);
         _viewbox.Child = new Border
         {
-            BorderBrush = Brush("#4B4D50"), BorderThickness = new Thickness(1), Child = _surface,
-            Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 28, Opacity = .55, ShadowDepth = 5 }
+            Child = _surface, Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 24, Opacity = .45, ShadowDepth = 3 }
         };
         area.Children.Add(_viewbox);
+        panel.Children.Add(area);
+        UIElement transport = BuildTransport();
+        Grid.SetRow(transport, 1);
+        panel.Children.Add(transport);
         _markLayer.MouseLeftButtonDown += Surface_MouseDown;
         _markLayer.MouseMove += Surface_MouseMove;
         _markLayer.MouseLeftButtonUp += Surface_MouseUp;
@@ -60,52 +72,79 @@ internal sealed partial class RecordingEditorWindow
         _media.MediaOpened += Media_Opened;
         _media.MediaFailed += (_, e) => SetStatus($"Windows could not play this recording: {e.ErrorException?.Message}", true);
         _media.MediaEnded += (_, _) => { if (_playing) Pause(); };
-        return area;
+        return Panel(panel, new Thickness(0));
     }
 
+    /// <summary>Time on the left; first/back/play/forward/last in the middle; loop, speed, and volume on the right.</summary>
     private UIElement BuildTransport()
     {
-        var bar = new Grid { Margin = new Thickness(12, 7, 12, 7) };
+        var bar = new Grid { Margin = new Thickness(22, 6, 22, 16), Height = 56 };
         bar.ColumnDefinitions.Add(new ColumnDefinition());
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var left = new StackPanel { Orientation = Orientation.Horizontal };
-        left.Children.Add(IconButton(LucideIconKind.SkipBack, "First frame (Home)", (_, _) => Execute(RecordingEditorCommand.FirstFrame), 34, 34, 16));
-        left.Children.Add(IconButton(LucideIconKind.ChevronLeft, "Back one frame (Left or ,)", (_, _) => StepFrames(-1), 34, 34, 16));
-        _playButton = IconButton(LucideIconKind.Play, "Play or pause (Space)", (_, _) => TogglePlay(), 42, 34, 18);
-        left.Children.Add(_playButton);
-        left.Children.Add(IconButton(LucideIconKind.ChevronRight, "Forward one frame (Right or .)", (_, _) => StepFrames(1), 34, 34, 16));
-        left.Children.Add(IconButton(LucideIconKind.SkipForward, "Last frame (End)", (_, _) => Execute(RecordingEditorCommand.LastFrame), 34, 34, 16));
-        left.Children.Add(Separator());
-        left.Children.Add(IconButton(LucideIconKind.ArrowLeftToLine, "Jump to the in point (Shift+I)", (_, _) => Execute(RecordingEditorCommand.JumpToIn), 34, 34, 16));
-        left.Children.Add(TextButton("I", "Set the in point at the playhead (I)", (_, _) => SetInPoint(), null, 34));
-        left.Children.Add(TextButton("O", "Set the out point at the playhead (O)", (_, _) => SetOutPoint(), null, 34));
-        left.Children.Add(IconButton(LucideIconKind.ArrowRightToLine, "Jump to the out point (Shift+O)", (_, _) => Execute(RecordingEditorCommand.JumpToOut), 34, 34, 16));
-        left.Children.Add(_timeText);
-        bar.Children.Add(left);
+        bar.ColumnDefinitions.Add(new ColumnDefinition());
+        var time = new TextBlock { FontFamily = MonoFont, FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        time.Inlines.Add(_timeNow);
+        time.Inlines.Add(_timeTotal);
+        bar.Children.Add(time);
 
-        var right = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        _speedButton = TextButton("1x", "Playback speed", (sender, _) => OpenSpeedMenu((FrameworkElement)sender), null, 34);
-        right.Children.Add(_speedButton);
-        _loopButton = IconButton(LucideIconKind.Repeat, "Loop the selection (L)", (_, _) => ToggleLoop(), 34, 34, 16);
+        var center = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        center.Children.Add(FlatIconButton(LucideIconKind.SkipBack, "First frame (Home)", (_, _) => Execute(RecordingEditorCommand.FirstFrame), 40, 18));
+        center.Children.Add(FlatIconButton(LucideIconKind.ChevronLeft, "Back one frame (Left or ,)", (_, _) => StepFrames(-1), 40, 20));
+        _playButton = IconButton(LucideIconKind.Play, "Play or pause (Space)", (_, _) => TogglePlay(), 52, 52, 22);
+        _playButton.Background = Brushes.White;
+        _playButton.Foreground = Brushes.Black;
+        _playButton.Margin = new Thickness(12, 0, 12, 0);
+        _playButton.Template = CircleTemplate();
+        center.Children.Add(_playButton);
+        center.Children.Add(FlatIconButton(LucideIconKind.ChevronRight, "Forward one frame (Right or .)", (_, _) => StepFrames(1), 40, 20));
+        center.Children.Add(FlatIconButton(LucideIconKind.SkipForward, "Last frame (End)", (_, _) => Execute(RecordingEditorCommand.LastFrame), 40, 18));
+        Grid.SetColumn(center, 1);
+        bar.Children.Add(center);
+
+        var right = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        _loopButton = FlatIconButton(LucideIconKind.Repeat, "Loop the selection (L)", (_, _) => ToggleLoop(), 38, 19);
         right.Children.Add(_loopButton);
-        right.Children.Add(Separator());
-        _splitModeButton = IconButton(LucideIconKind.Scissors, "Split mode: clicks cut (B)", (_, _) => ToggleSplitMode(), 34, 34, 16);
-        right.Children.Add(_splitModeButton);
-        right.Children.Add(IconButton(LucideIconKind.SquareSplitHorizontal, "Split at the playhead (Ctrl+B)", (_, _) => TimelineSplit(_playhead), 34, 34, 16));
-        right.Children.Add(IconButton(LucideIconKind.Trash2, "Delete the selected clip or mark (Delete). Q deletes from the clip start to the playhead, W from the playhead to the clip end.", (_, _) => DeleteSelection(), 34, 34, 16));
-        _putBackButton = IconButton(LucideIconKind.Undo2, "Put the selected cut back", (_, _) => PutSelectedCutBack(), 34, 34, 16);
-        right.Children.Add(_putBackButton);
-        right.Children.Add(IconButton(LucideIconKind.RotateCcw, "Put the recording back the way it was", (_, _) => PutRecordingBack(), 34, 34, 16));
-        _snapButton = IconButton(LucideIconKind.Magnet, "Snapping (N)", (_, _) => ToggleSnapping(), 34, 34, 16);
-        right.Children.Add(_snapButton);
-        right.Children.Add(Separator());
-        _followButton = IconButton(LucideIconKind.Crosshair, "Follow: moves the selected redaction with what it covers as the recording plays", (sender, _) => OpenFollowMenu((FrameworkElement)sender), 34, 34, 16);
-        right.Children.Add(_followButton);
-        _rowsButton = IconButton(LucideIconKind.Rows3, "Show every mark on its own row", (_, _) => ToggleMarkRows(), 34, 34, 16);
-        right.Children.Add(_rowsButton);
-        Grid.SetColumn(right, 1);
+        _speedButton = TextButton("1x", "Playback speed", (sender, _) => OpenSpeedMenu((FrameworkElement)sender), LucideIconKind.ChevronDown, 34);
+        _speedButton.Background = SurfaceBrush;
+        _speedButton.Margin = new Thickness(8, 0, 8, 0);
+        if (_speedButton.Content is StackPanel speedRow && speedRow.Children[0] is FrameworkElement chevron)
+        {
+            speedRow.Children.RemoveAt(0); // "1x ⌄": the chevron goes after the speed.
+            chevron.Margin = new Thickness(6, 0, 0, 0);
+            chevron.Width = chevron.Height = 13;
+            speedRow.Children.Add(chevron);
+        }
+        right.Children.Add(_speedButton);
+        _volumeButton = FlatIconButton(LucideIconKind.Volume2, "Mute the player", (_, _) => TogglePlayerMute(), 34, 18);
+        right.Children.Add(_volumeButton);
+        _volumeSlider.ValueChanged += (_, _) => SetVolume(_volumeSlider.Value);
+        _volumeSlider.VerticalAlignment = VerticalAlignment.Center;
+        right.Children.Add(_volumeSlider);
+        Grid.SetColumn(right, 2);
         bar.Children.Add(right);
-        return new Border { Background = Brush("#1B1C1D"), BorderBrush = Brush("#2A2B2D"), BorderThickness = new Thickness(0, 1, 0, 0), Child = bar };
+        return bar;
+    }
+
+    /// <summary>The big round white play button (the icon is nudged right so the triangle looks centered).</summary>
+    private static ControlTemplate CircleTemplate()
+    {
+        var template = new ControlTemplate(typeof(Button));
+        var circle = new FrameworkElementFactory(typeof(Border), "chrome");
+        circle.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+        circle.SetValue(Border.CornerRadiusProperty, new CornerRadius(26));
+        var content = new FrameworkElementFactory(typeof(ContentPresenter));
+        content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        content.SetValue(FrameworkElement.MarginProperty, new Thickness(3, 0, 0, 0));
+        circle.AppendChild(content);
+        template.VisualTree = circle;
+        var over = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        over.Setters.Add(new Setter(UIElement.OpacityProperty, .9));
+        template.Triggers.Add(over);
+        var pressed = new Trigger { Property = System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, Value = true };
+        pressed.Setters.Add(new Setter(UIElement.OpacityProperty, .75));
+        template.Triggers.Add(pressed);
+        return template;
     }
 
     private void ConfigureSurface(int width, int height)
@@ -134,6 +173,7 @@ internal sealed partial class RecordingEditorWindow
     private void Media_Opened(object sender, RoutedEventArgs e)
     {
         _mediaReady = true;
+        ApplyPlayerAudio();
         if (_info is { Width: <= 0 } && _media.NaturalVideoWidth > 0) ConfigureSurface(_media.NaturalVideoWidth, _media.NaturalVideoHeight);
         Seek(State.Timeline.FirstPlayable);
     }
@@ -143,6 +183,7 @@ internal sealed partial class RecordingEditorWindow
     {
         System.Windows.Media.CompositionTarget.Rendering -= Playback_Rendering;
         _playing = false;
+        StopTrackPreview();
         try
         {
             _media.Stop();
@@ -167,8 +208,10 @@ internal sealed partial class RecordingEditorWindow
         if (timeline.KeptRanges.Count == 0) { SetStatus("Everything is cut, so there is nothing to play. Put a cut back first.", true); return; }
         double start = timeline.NextPlayable(_playhead) is double next && _playhead < timeline.LastPlayable - FrameDuration ? next : timeline.FirstPlayable;
         Seek(start);
+        ApplyPlayerAudio();
         _media.SpeedRatio = _speed;
         _media.Play();
+        StartTrackPreview(start);
         _playing = true;
         System.Windows.Media.CompositionTarget.Rendering += Playback_Rendering;
         UpdateToolbarState();
@@ -180,6 +223,7 @@ internal sealed partial class RecordingEditorWindow
         System.Windows.Media.CompositionTarget.Rendering -= Playback_Rendering;
         _playing = false;
         _media.Pause();
+        StopTrackPreview();
         Seek(_media.Position.TotalSeconds);
         UpdateToolbarState();
     }
@@ -213,13 +257,18 @@ internal sealed partial class RecordingEditorWindow
             }
         }
         else if (next > position + 0.02) JumpWhilePlaying(next);
-        else _playhead = position;
+        else
+        {
+            _playhead = position;
+            KeepTrackPreviewInStep(position);
+        }
         UpdatePlayheadUi(follow: true);
     }
 
     private void JumpWhilePlaying(double target)
     {
         _media.Position = TimeSpan.FromSeconds(target);
+        _trackPreview?.Seek(target);
         _playhead = target;
         _jumpTarget = target;
         _jumpRequestedUtc = DateTime.UtcNow;
@@ -241,9 +290,8 @@ internal sealed partial class RecordingEditorWindow
 
     private void UpdatePlayheadUi(bool follow)
     {
-        EditTimeline timeline = State.Timeline;
-        string output = timeline.SourceToOutput(_playhead) is double kept ? FormatTime(kept) : "cut";
-        _timeText.Text = $"{FormatTime(_playhead)} / {FormatTime(timeline.Duration)}   ·   edited {output} of {FormatTime(timeline.OutputDuration)}";
+        _timeNow.Text = RecordingTimeText.Tenths(_playhead);
+        _timeTotal.Text = " / " + RecordingTimeText.Tenths(State.Timeline.Duration);
         if (follow) _timeline.FollowPlayhead();
         else _timeline.InvalidateVisual();
         RefreshOverlay();
@@ -271,6 +319,23 @@ internal sealed partial class RecordingEditorWindow
     {
         _speed = speed;
         if (_playing) _media.SpeedRatio = speed;
+        _trackPreview?.SetRate(speed);
+        UpdateToolbarState();
+    }
+
+    private void SetVolume(double volume)
+    {
+        _volume = Math.Clamp(volume, 0, 1);
+        if (_volume > 0) _playerMuted = false;
+        ApplyPlayerAudio();
+        UpdateToolbarState();
+    }
+
+    private void TogglePlayerMute()
+    {
+        _playerMuted = !_playerMuted;
+        if (!_playerMuted && _volume <= 0.01) { _volume = 1; _volumeSlider.Value = 1; }
+        ApplyPlayerAudio();
         UpdateToolbarState();
     }
 
@@ -309,19 +374,26 @@ internal sealed partial class RecordingEditorWindow
 
     private void UpdateToolbarState()
     {
-        if (_playButton?.Content is LucideIcon play) play.Icon = _playing ? LucideIconKind.Pause : LucideIconKind.Play;
-        if (_speedButton?.Content is StackPanel speedRow && speedRow.Children.OfType<TextBlock>().FirstOrDefault() is TextBlock speedLabel) speedLabel.Text = SpeedLabel(_speed);
-        if (_loopButton is not null) SetActive(_loopButton, _loop);
-        if (_splitModeButton is not null) SetActive(_splitModeButton, _splitMode);
-        if (_snapButton is not null) SetActive(_snapButton, _snapping);
-        if (_rowsButton is not null)
+        if (_playButton?.Content is LucideIcon play)
         {
-            SetActive(_rowsButton, _view.MarksOnOwnRows);
-            _rowsButton.ToolTip = _view.MarksOnOwnRows ? "Fold the marks into one row" : "Show every mark on its own row";
+            play.Icon = _playing ? LucideIconKind.Pause : LucideIconKind.Play;
+            play.Margin = new Thickness(_playing ? -3 : 0, 0, 0, 0);
         }
-        if (_putBackButton is not null)
-            _putBackButton.IsEnabled = _selectedSegment is int index && index < State.Timeline.Segments.Count && !State.Timeline.Segments[index].Kept;
-        if (_followButton is not null) _followButton.IsEnabled = SelectedMark is { IsRedaction: true } && _reader is not null;
+        if (_speedButton?.Content is StackPanel speedRow && speedRow.Children.OfType<TextBlock>().FirstOrDefault() is TextBlock speedLabel) speedLabel.Text = SpeedLabel(_speed);
+        if (_loopButton is not null)
+        {
+            SetLit(_loopButton, _loop);
+            _loopButton.ToolTip = _loop ? "Looping the selection (L)" : "Loop the selection (L)";
+        }
+        if (_volumeButton?.Content is LucideIcon speaker)
+        {
+            bool silent = _playerMuted || _volume <= 0.01;
+            speaker.Icon = silent ? LucideIconKind.VolumeX : LucideIconKind.Volume2;
+            _volumeButton.ToolTip = silent ? "Unmute the player" : "Mute the player";
+        }
+        UpdateTimelineToolbar();
+        UpdateHeaderState();
+        UpdateInspector();
         UpdateMarkupToolbar();
     }
 }

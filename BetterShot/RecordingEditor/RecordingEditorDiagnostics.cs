@@ -40,9 +40,240 @@ internal static class RecordingEditorDiagnostics
         VerifyNv12();
         VerifyGif(Path.Combine(runRoot, "gif"));
         VerifyCompositor();
+        VerifySeparateTrackRecording(Path.Combine(runRoot, "tracks"));
+        VerifyWaveformEnvelope();
+        VerifyRemix(Path.Combine(runRoot, "remix"));
+        VerifyAudioPlanning();
+        VerifyProjectVersions();
+        VerifyLosslessPlanning();
+        VerifyEstimatesAndText();
+        VerifyFilmstripLayout();
         string live = await VerifyLiveExportsAsync(Path.Combine(runRoot, "live"), directory);
         App.WriteTestResult(Path.Combine(directory, "recording-editor-test.txt"),
-            "PASS: cut/split/put-back/in-out math and repair, keyboard mapping, mark timing/rows/interpolation, undo/redo/coalescing, tracking follows a moving pattern and loses it when covered, keyframe simplification, lost-field blur policy, project sidecar round-trip/hidden/version tolerance/damage, trim remapping of marks and events, marked-copy sharing decisions, settings round-trip/clamping, timelapse speed, GIF timing/size/too-short, NV12 levels, GIF delay and loop metadata, burned-in solid/pixelate/whole-picture redactions; " + live);
+            "PASS: cut/split/put-back/in-out math and repair, keyboard mapping, mark timing/rows/interpolation, undo/redo/coalescing, tracking follows a moving pattern and loses it when covered, keyframe simplification, lost-field blur policy, project sidecar round-trip/hidden/version tolerance/damage, trim remapping of marks and events, marked-copy sharing decisions, settings round-trip/clamping, timelapse speed, GIF timing/size/too-short, NV12 levels, GIF delay and loop metadata, burned-in solid/pixelate/whole-picture redactions, "
+            + "separate track WAV sidecars aligned sample-for-sample with the mix (mute, underflow, move, delete on failed start), waveform envelope and bar scale, mute-aware remix and sidecar trimming, track preview mixing and rate, mute planning, project v2 mutes and v1 reading, lossless-trim planning and keyframe snapping, export estimates, time/subtitle text, filmstrip tiling; " + live);
+    }
+
+    /// <summary>A synthetic input: a constant level, optionally delivering only part of each request (a stalling device).</summary>
+    private sealed class SyntheticAudioSource(bool isMicrophone, float level, bool stalls) : IAudioSource
+    {
+        public bool IsMicrophone => isMicrophone;
+        public Exception? Failure => null;
+        public int BufferedSamples => 0;
+        public void Start() { }
+        public void Discard() { }
+        public void TrimTo(int samples) { }
+        public void Dispose() { }
+
+        public int Read(Span<float> destination)
+        {
+            int count = stalls ? destination.Length / 2 / 2 * 2 : destination.Length;
+            destination[..count].Fill(level);
+            return count;
+        }
+    }
+
+    /// <summary>The mixer writes each input to its own WAV from the very samples it mixes, so tracks and mix line up exactly.</summary>
+    private static void VerifySeparateTrackRecording(string root)
+    {
+        Directory.CreateDirectory(root);
+        string movie = Path.Combine(root, "Recording.mp4");
+        TimeSpan now = TimeSpan.Zero;
+        var clock = new RecordingClock(() => now);
+        var mixer = new AudioMixer([new SyntheticAudioSource(false, 0.25f, stalls: true), new SyntheticAudioSource(true, 0.5f, stalls: false)], clock, movie);
+        clock.Start();
+        now = TimeSpan.FromSeconds(1);
+        mixer.PumpForTest();
+        mixer.MicrophoneMuted = true;
+        now = TimeSpan.FromSeconds(2);
+        mixer.PumpForTest();
+        mixer.MicrophoneMuted = false;
+        now = TimeSpan.FromSeconds(3);
+        clock.Stop();
+        mixer.Finish();
+        var mix = new List<byte>();
+        while (mixer.TryRead(1, 48_000) is (byte[] chunk, _)) mix.AddRange(chunk);
+        mixer.Dispose();
+        Check(mixer.TrackWarning is null, $"Separate tracks reported a problem: {mixer.TrackWarning}");
+        string systemPath = RecordingAudioTracks.SidecarPath(movie, AudioTrackKind.System), micPath = RecordingAudioTracks.SidecarPath(movie, AudioTrackKind.Microphone);
+        Check(Path.GetFileName(systemPath) == ".Recording.mp4.system.wav" && Path.GetFileName(micPath) == ".Recording.mp4.mic.wav", "Separate track sidecars are misnamed.");
+        Check(File.GetAttributes(systemPath).HasFlag(FileAttributes.Hidden) && File.GetAttributes(micPath).HasFlag(FileAttributes.Hidden), "Separate track sidecars are not hidden.");
+        short[] system = ReadPcm(systemPath), microphone = ReadPcm(micPath);
+        int frames = mix.Count / 4;
+        Check(frames == 3 * 48_000 && system.Length == frames * 2 && microphone.Length == frames * 2, $"Track lengths differ from the mix ({frames} mix frames, {system.Length / 2} system, {microphone.Length / 2} mic).");
+        byte[] mixBytes = mix.ToArray();
+        for (int sample = 0; sample < frames * 2; sample++)
+        {
+            int mixed = BitConverter.ToInt16(mixBytes, sample * 2);
+            Check(Math.Abs(Math.Clamp(system[sample] + microphone[sample], short.MinValue, short.MaxValue) - mixed) <= 2, $"Sample {sample} of the separate tracks does not add up to the mix.");
+        }
+        // The first pump mixed 0 to 0.88 s (the mixer runs 120 ms behind), the muted pump 0.88 to 1.88 s, and Finish the rest.
+        Check(microphone[(int)(1.2 * 48_000) * 2] == 0 && Math.Abs(microphone[(int)(0.5 * 48_000) * 2] - 16_384) <= 1 && Math.Abs(microphone[(int)(2.5 * 48_000) * 2] - 16_384) <= 1,
+            "The microphone track does not show the mute.");
+        Check(system.Any(value => value == 0) && system.Any(value => Math.Abs(value - 8192) <= 1), "Device stalls were not written as silence on the separate track.");
+
+        string moved = Path.Combine(root, "Renamed.mp4");
+        RecordingAudioTracks.MoveSidecars(movie, moved);
+        Check(RecordingAudioTracks.Existing(moved).Count == 2 && RecordingAudioTracks.Existing(movie).Count == 0, "Separate tracks did not move with the movie.");
+        RecordingAudioTracks.DeleteSidecars(moved);
+        Check(RecordingAudioTracks.Existing(moved).Count == 0, "Separate tracks were not deleted.");
+        string failed = Path.Combine(root, "Failed.mp4");
+        var abandoned = new AudioMixer([new SyntheticAudioSource(true, 0.5f, stalls: false)], new RecordingClock(() => now), failed);
+        Check(File.Exists(RecordingAudioTracks.SidecarPath(failed, AudioTrackKind.Microphone)), "The microphone track was not opened.");
+        abandoned.Dispose();
+        Check(!File.Exists(RecordingAudioTracks.SidecarPath(failed, AudioTrackKind.Microphone)), "A recording that never finished left its track behind.");
+    }
+
+    private static short[] ReadPcm(string path)
+    {
+        using var stream = File.OpenRead(path);
+        WaveLayout layout = WaveLayout.Parse(stream);
+        Check(layout.SampleRate == 48_000 && layout.Channels == 2 && layout.BitsPerSample == 16, $"{Path.GetFileName(path)} is not 48 kHz stereo 16-bit.");
+        byte[] data = new byte[layout.DataLength];
+        stream.Position = layout.DataOffset;
+        stream.ReadExactly(data);
+        short[] samples = new short[data.Length / 2];
+        Buffer.BlockCopy(data, 0, samples, 0, samples.Length * 2);
+        return samples;
+    }
+
+    private static void WriteConstantWave(string path, short level, int frames)
+    {
+        using var writer = new PcmWaveWriter(path, 48_000, 2);
+        byte[] pcm = new byte[frames * 4];
+        for (int sample = 0; sample < frames * 2; sample++) BitConverter.TryWriteBytes(pcm.AsSpan(sample * 2), level);
+        writer.WritePcm(pcm);
+        writer.Complete();
+    }
+
+    private static void VerifyWaveformEnvelope()
+    {
+        byte[] pcm = new byte[48_000 * 4];
+        for (int frame = 0; frame < 24_000; frame++) BitConverter.TryWriteBytes(pcm.AsSpan(frame * 4 + (frame % 2) * 2), (short)(frame % 3 == 0 ? 16_384 : -8_000));
+        WaveformPeaks peaks = WaveformEnvelope.Compute(pcm, 48_000, 2);
+        Check(peaks.Peaks.Length == WaveformPeaks.DefaultBucketsPerSecond && Near(peaks.Duration, 1), $"The envelope has {peaks.Peaks.Length} buckets for one second.");
+        Check(Math.Abs(peaks.PeakBetween(0, 0.5) - 0.5f) < 0.001 && peaks.PeakBetween(0.51, 1) == 0 && peaks.PeakBetween(2, 3) == 0, "Envelope peaks are wrong.");
+        Check(Near(WaveformEnvelope.BarFraction(1), 1) && WaveformEnvelope.BarFraction(0) == 0 && WaveformEnvelope.BarFraction(0.001f) == 0
+            && Math.Abs(WaveformEnvelope.BarFraction(0.5f) - (1 + 20 * Math.Log10(0.5) / 48)) < 1e-6, "Waveform bar scale is wrong.");
+    }
+
+    private static void VerifyRemix(string root)
+    {
+        Directory.CreateDirectory(root);
+        string first = Path.Combine(root, "first.wav"), second = Path.Combine(root, "second.wav"), loud = Path.Combine(root, "loud.wav");
+        WriteConstantWave(first, 1000, 48_000);
+        WriteConstantWave(second, 2000, 24_000);
+        WriteConstantWave(loud, 20_000, 48_000);
+        string mixed = Path.Combine(root, "mixed.wav");
+        AudioRemixer.WriteKeptMix([first, second], [new KeptRange(0.25, 0.5, 0), new KeptRange(0.75, 1.0, 0.25)], mixed);
+        short[] samples = ReadPcm(mixed);
+        Check(samples.Length == 24_000 * 2 && samples[0] == 3000 && samples[11_999 * 2] == 3000 && samples[12_000 * 2] == 1000 && samples[^1] == 1000,
+            "The re-mix did not sum the kept stretches (or pad the shorter track with silence).");
+        string clipped = Path.Combine(root, "clipped.wav");
+        AudioRemixer.WriteKeptMix([loud, loud], [new KeptRange(0, 0.1, 0)], clipped);
+        Check(ReadPcm(clipped).All(value => value == short.MaxValue), "The re-mix did not clip at full scale.");
+
+        string movie = Path.Combine(root, "movie.mp4"), trimmed = Path.Combine(root, "movie (trimmed).mp4");
+        File.Copy(first, RecordingAudioTracks.SidecarPath(movie, AudioTrackKind.System));
+        AudioRemixer.TrimSidecars(movie, [new KeptRange(0.5, 1.0, 0)], trimmed);
+        Check(ReadPcm(RecordingAudioTracks.SidecarPath(trimmed, AudioTrackKind.System)).Length == 24_000 * 2 && RecordingAudioTracks.Existing(trimmed).Count == 1,
+            "The separate track was not trimmed along with the movie.");
+        AudioRemixer.TrimSidecars(movie, [new KeptRange(0, 0.25, 0)], movie);
+        Check(ReadPcm(RecordingAudioTracks.SidecarPath(movie, AudioTrackKind.System)).Length == 12_000 * 2, "Trimming a track in place failed.");
+
+        using var provider = new TrackMixProvider([first, second]);
+        provider.Seek(0.25);
+        byte[] buffer = new byte[4800 * 8];
+        provider.Read(buffer, 0, buffer.Length);
+        float level = BitConverter.ToSingle(buffer, 0);
+        Check(Math.Abs(level - 3000 / 32768f) < 1e-4 && Near(provider.PositionSeconds, 0.35), $"The track preview mixed {level} at 0.25 s.");
+        provider.Rate = 2;
+        provider.Volume = 0.5f;
+        provider.Seek(0.6);
+        provider.Read(buffer, 0, buffer.Length);
+        Check(Math.Abs(BitConverter.ToSingle(buffer, 0) - 500 / 32768f) < 1e-4 && Near(provider.PositionSeconds, 0.8), "The track preview ignored its rate or volume.");
+    }
+
+    private static void VerifyAudioPlanning()
+    {
+        AudioTrackKind[] both = [AudioTrackKind.System, AudioTrackKind.Microphone];
+        Check(AudioTrackPlanning.Plan(MutedAudioTracks.None, both, true).Mode == AudioOutputMode.Original, "Nothing muted should keep the original mix.");
+        AudioOutputPlan noMic = AudioTrackPlanning.Plan(MutedAudioTracks.Microphone, both, true);
+        Check(noMic.Mode == AudioOutputMode.Remix && noMic.RemixTracks.SequenceEqual([AudioTrackKind.System]), "Muting the microphone should re-mix system audio only.");
+        Check(AudioTrackPlanning.Plan(MutedAudioTracks.System | MutedAudioTracks.Microphone, both, true).Mode == AudioOutputMode.Silent, "Muting every track should be silent.");
+        Check(AudioTrackPlanning.Plan(MutedAudioTracks.Microphone, [AudioTrackKind.Microphone], true).Mode == AudioOutputMode.Silent, "Muting the only track should be silent.");
+        Check(AudioTrackPlanning.Plan(MutedAudioTracks.Soundtrack, [], true).Mode == AudioOutputMode.Silent && AudioTrackPlanning.Plan(MutedAudioTracks.None, [], true).Mode == AudioOutputMode.Original,
+            "Older recordings should mute or keep their one soundtrack.");
+        Check(AudioTrackPlanning.Plan(MutedAudioTracks.None, [], false).Mode == AudioOutputMode.Silent, "A silent movie has no audio to plan.");
+        Check(AudioTrackPlanning.FromKeys(["mic", "future-track"]) == MutedAudioTracks.Microphone && AudioTrackPlanning.ToKeys(MutedAudioTracks.None) is null
+            && AudioTrackPlanning.ToKeys(MutedAudioTracks.System | MutedAudioTracks.Soundtrack)!.SequenceEqual(["system", "audio"]), "Mute keys do not round-trip.");
+        Check(RecordingEditState.Create(10).HasEdits == false && (RecordingEditState.Create(10) with { MutedTracks = MutedAudioTracks.Microphone }).HasEdits,
+            "A muted track should count as an edit for the marked copy.");
+    }
+
+    private static void VerifyProjectVersions()
+    {
+        const string versionOne = "{\"version\":1,\"duration\":10,\"segments\":[{\"start\":0,\"end\":4,\"kept\":true},{\"start\":4,\"end\":10,\"kept\":false}],\"marks\":[]}";
+        LoadedEditProject old = RecordingEditProject.Deserialize(versionOne, 10);
+        Check(old.Warning is null && old.State.MutedTracks == MutedAudioTracks.None && Near(old.State.Timeline.OutputDuration, 4), "A version 1 project was not read.");
+        RecordingEditState muted = old.State with { MutedTracks = MutedAudioTracks.Microphone };
+        string json = RecordingEditProject.Serialize(muted, old.View, null, [], null);
+        JsonNode node = JsonNode.Parse(json)!;
+        Check(node["version"]!.GetValue<int>() == 2 && node["mutedTracks"]![0]!.GetValue<string>() == "mic", "Mutes were not written as version 2.");
+        Check(RecordingEditProject.Deserialize(json, 10).State.MutedTracks == MutedAudioTracks.Microphone, "Mutes did not round-trip.");
+        Check(JsonNode.Parse(RecordingEditProject.Serialize(old.State, old.View, null, [], null))!["mutedTracks"] is null, "An unmuted project wrote mutedTracks.");
+        Check(RecordingEditProject.Fingerprint(muted) != RecordingEditProject.Fingerprint(old.State), "The marked-copy fingerprint ignored a muted track.");
+        var history = new RecordingEditHistory(old.State);
+        Check(history.Apply(state => state with { MutedTracks = MutedAudioTracks.System }) && history.Undo() && history.Current.MutedTracks == MutedAudioTracks.None, "Muting is not undoable.");
+    }
+
+    private static void VerifyLosslessPlanning()
+    {
+        double[] keyframes = [0, 1, 2, 3, 4];
+        LosslessTrimPlan? inOnly = LosslessTrimPlanner.Plan(keyframes, [new KeptRange(1.3, 4.5, 0)], 1 / 30.0, out _);
+        Check(inOnly is not null && Near(inOnly.Ranges[0].Start, 1) && Math.Abs(inOnly.InSnapSeconds - 0.3) < 1e-9, "The in point did not snap back to its keyframe.");
+        Check(LosslessTrimPlanner.Plan(keyframes, [new KeptRange(0, 1.5, 0), new KeptRange(3.3, 4, 1.5)], 1 / 30.0, out string? reason) is null && reason is not null,
+            "A cut ending between keyframes must re-encode.");
+        LosslessTrimPlan? onKeyframe = LosslessTrimPlanner.Plan(keyframes, [new KeptRange(0, 1.5, 0), new KeptRange(3.01, 4, 1.5)], 1 / 30.0, out _);
+        Check(onKeyframe is not null && onKeyframe.Ranges.Count == 2 && Near(onKeyframe.Ranges[1].Start, 3.01) && onKeyframe.InSnapSeconds == 0, "A cut ending on a keyframe should stay lossless.");
+        LosslessTrimPlan? split = LosslessTrimPlanner.Plan(keyframes, EditTimeline.Create(5).SplitAt(2.5).WithOutPoint(4.2).KeptRanges, 1 / 30.0, out _);
+        Check(split is not null && split.Ranges.Count == 1 && Near(split.Ranges[0].End, 4.2), "A split without a cut was treated as a cut.");
+        EditTimeline actual = EditTimeline.FromKeptRanges(10, [new KeptRange(1, 3, 0), new KeptRange(5, 8, 2)]);
+        Check(actual.KeptRanges.Count == 2 && Near(actual.KeptRanges[0].Start, 1) && Near(actual.KeptRanges[1].End, 8) && Near(actual.OutputDuration, 5), "The trimmed timeline does not match what was kept.");
+        List<KeptRange> merged = LosslessTrimPlanner.Merge([new KeptRange(0, 1, 0), new KeptRange(1, 2, 1), new KeptRange(2, 2, 2)]);
+        Check(merged.Count == 1 && Near(merged[0].End, 2), "Touching kept stretches were not merged, or an empty one was kept.");
+    }
+
+    private static void VerifyEstimatesAndText()
+    {
+        Check(ExportEstimate.Mp4Bytes(10, 100_000, true, true) == 1_000_000 && ExportEstimate.Mp4Bytes(10, 100_000, true, false) == 760_000, "MP4 estimate is wrong.");
+        Check(ExportEstimate.GifBytes(10, 10, 100, 50) == 40_000, "GIF estimate is wrong.");
+        Check(ExportEstimate.TimelapseBytes(40, 4, 1920, 1080) == 7_776_000, "Timelapse estimate is wrong.");
+        Check(ExportEstimate.About(5_872_025) == "About 5.6 MB" && RecordingEditorText.Size(640 * 1024) == "640 KB" && RecordingEditorText.Size(3L * 1024 * 1024 * 1024 / 2) == "1.5 GB", "Sizes are formatted wrong.");
+        Check(RecordingTimeText.Tenths(13.24) == "0:13.2" && RecordingTimeText.Tenths(59.99) == "0:59.9" && RecordingTimeText.Tenths(3725.06) == "1:02:05.0" && RecordingTimeText.Whole(13.2) == "0:13",
+            "Editor times are formatted wrong.");
+        Check(RecordingTimeText.TryParse("1:02.5", out double minutes) && Near(minutes, 62.5) && RecordingTimeText.TryParse("13,2", out double comma) && Near(comma, 13.2)
+            && RecordingTimeText.TryParse("1:02:03.5", out double hours) && Near(hours, 3723.5), "Typed times are parsed wrong.");
+        Check(!RecordingTimeText.TryParse("1:75", out _) && !RecordingTimeText.TryParse("abc", out _) && !RecordingTimeText.TryParse("1.5:20", out _) && !RecordingTimeText.TryParse("", out _), "Bad times were accepted.");
+        System.Globalization.CultureInfo english = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+        var now = new DateTime(2026, 11, 19, 15, 0, 0);
+        // Newer ICU data puts a narrow no-break space before AM/PM; compare with plain spaces.
+        static string Plain(string text) => text.Replace(' ', ' ').Replace(' ', ' ');
+        string subtitle = Plain(RecordingEditorText.Subtitle(new DateTime(2026, 11, 19, 13, 20, 0), now, 13.2, 2278, 1008, 29.4, 5_872_025, english));
+        Check(subtitle == "Today at 1:20 PM · 0:13 · 2278 × 1008 · 29 fps · 5.6 MB", $"The header subtitle reads \"{subtitle}\".");
+        Check(RecordingEditorText.When(now.AddDays(-1), now, english).StartsWith("Yesterday at ", StringComparison.Ordinal)
+            && Plain(RecordingEditorText.When(new DateTime(2025, 3, 4, 9, 5, 0), now, english)) == "Mar 4, 2025 at 9:05 AM", "Recording dates are formatted wrong.");
+        Check(RecordingEditorKeys.Map(Key.OemQuestion, ModifierKeys.Shift) == RecordingEditorCommand.ShowShortcuts && RecordingEditorKeys.Descriptions.Count > 10, "The shortcut sheet key is wrong.");
+    }
+
+    private static void VerifyFilmstripLayout()
+    {
+        int step = FilmstripLayout.Step(50, 100);
+        double tile = FilmstripLayout.TileSeconds(step);
+        Check(tile >= 2 - 1e-9 && tile < 3, $"A 100 px tile at 50 px/s lasts {tile:0.00} s.");
+        Check(FilmstripLayout.Step(50, 100) == FilmstripLayout.Step(51, 100), "Small zoom changes should reuse thumbnails.");
+        Check(FilmstripLayout.VisibleTiles(0, 10, 9, 2).SequenceEqual([0, 1, 2, 3, 4]) && !FilmstripLayout.VisibleTiles(20, 30, 9, 2).Any(), "Visible tiles are wrong.");
+        Check(Near(FilmstripLayout.SampleTime(0, 2, 9), 1) && FilmstripLayout.SampleTime(4, 2, 9) < 9, "Tile sample times are wrong.");
     }
 
     private static void VerifyTimeline()
@@ -438,28 +669,97 @@ internal static class RecordingEditorDiagnostics
         catch (OperationCanceledException) { }
         Check(!File.Exists(canceled) && !Directory.EnumerateFiles(root, "*.partial*").Any(), "A canceled export left files behind.");
 
+        string lossless = await VerifyLosslessTrimAsync(source, reader.Info, root);
+        string remix = await VerifyRemixedExportsAsync(source, reader, cut, markedState, root, dispatcher, progress);
         await RenderEditorAsync(source, reader.Info, root, screenshotFolder);
-        return $"live exports of a synthetic {width}x{height} clip (precise trim {trimmedDuration:0.00} s, burned-in redaction, {gifDecoder.Frames.Count}-frame looping GIF, 2x timelapse {lapseDuration:0.00} s, cancel cleanup) and editor window render";
+        return $"live exports of a synthetic {width}x{height} clip (precise trim {trimmedDuration:0.00} s, burned-in redaction, {gifDecoder.Frames.Count}-frame looping GIF, 2x timelapse {lapseDuration:0.00} s, cancel cleanup), {lossless}, {remix}, and editor renders at 1280x800 and the minimum size";
     }
 
+    /// <summary>Stream-copies the out-trimmed start of the Windows-encoded clip and checks it decodes to the same picture.</summary>
+    private static async Task<string> VerifyLosslessTrimAsync(string source, VideoInfo info, string root)
+    {
+        Mp4MovieIndex index;
+        try { index = Mp4MovieIndex.Read(source); }
+        catch (NotSupportedException unsupported) { return $"lossless trim not offered for this encoder's output ({unsupported.Message})"; }
+        Check(index.KeyframeTimes.Count > 0 && index.KeyframeTimes[0] < 0.01 && index.Video.Count >= 55, $"The clip's index reads {index.Video.Count} video samples and {index.KeyframeTimes.Count} keyframes.");
+        LosslessTrimPlan plan = LosslessTrimPlanner.Plan(index.KeyframeTimes, EditTimeline.Create(info.Duration).WithOutPoint(1.5).KeptRanges, 1 / info.FrameRate, out string? reason)
+            ?? throw new InvalidOperationException($"An out-point trim was not lossless: {reason}");
+        string output = Path.Combine(root, "lossless.mp4");
+        Mp4Remuxer.Write(index, plan.Ranges, source, output, null, CancellationToken.None);
+        RecordingFrameReader trimmed = await RecordingFrameReader.OpenAsync(output);
+        Check(Math.Abs(trimmed.Info.Duration - 1.5) < 0.1, $"The lossless trim is {trimmed.Info.Duration:0.00} s instead of 1.5 s.");
+        DecodedFrame frame = await trimmed.ReadAsync(0.5, info.Width, info.Height, CancellationToken.None);
+        Check(Pixel(frame, 300, 170).red > 200, "The lossless trim does not decode to the original picture.");
+        return $"lossless trim ({index.KeyframeTimes.Count} keyframes, {trimmed.Info.Duration:0.00} s)";
+    }
+
+    /// <summary>Gives the clip separate System/Mic tracks and exports with the microphone muted, on the fast and the burned-in paths.</summary>
+    private static async Task<string> VerifyRemixedExportsAsync(string source, RecordingFrameReader reader, EditTimeline cut, RecordingEditState markedState, string root, Dispatcher dispatcher, IProgress<double> progress)
+    {
+        WriteToneTrack(RecordingAudioTracks.SidecarPath(source, AudioTrackKind.System), reader.Info.Duration, 440, 0.4);
+        WriteToneTrack(RecordingAudioTracks.SidecarPath(source, AudioTrackKind.Microphone), reader.Info.Duration, 220, 0.2);
+        AudioOutputPlan plan = AudioTrackPlanning.Plan(MutedAudioTracks.Microphone, RecordingAudioTracks.Existing(source), reader.Info.HasAudio);
+        Check(plan.Mode == AudioOutputMode.Remix && plan.RemixTracks.Single() == AudioTrackKind.System, "Muting the microphone did not plan a system-only re-mix.");
+        var mutedState = new RecordingEditState(cut, [], false) { MutedTracks = MutedAudioTracks.Microphone };
+        string fast = Path.Combine(root, "remixed.mp4");
+        await RecordingExporter.ExportAsync(new RecordingExportJob(RecordingExportKind.Mp4, source, fast, mutedState, reader.Info, 12, 960, null, root, plan.RemixTracks), reader, dispatcher, progress, CancellationToken.None);
+        VideoInfo fastInfo = (await RecordingFrameReader.OpenAsync(fast)).Info;
+        Check(fastInfo.HasAudio && Math.Abs(fastInfo.Duration - cut.OutputDuration) < 0.15, $"The re-mixed MP4 has audio {fastInfo.HasAudio} and lasts {fastInfo.Duration:0.00} s.");
+        string marked = Path.Combine(root, "remixed-marked.mp4");
+        await RecordingExporter.ExportAsync(new RecordingExportJob(RecordingExportKind.Mp4, source, marked, markedState with { MutedTracks = MutedAudioTracks.Microphone }, reader.Info, 12, 960, null, root, plan.RemixTracks),
+            reader, dispatcher, progress, CancellationToken.None);
+        Check((await RecordingFrameReader.OpenAsync(marked)).Info.HasAudio, "The re-mixed MP4 with burned-in markup has no audio.");
+        Check(!Directory.EnumerateFiles(root, "remix-*.wav").Any(), "The temporary re-mix was left behind.");
+        return "mic-muted re-mixed MP4 exports (fast and burned-in)";
+    }
+
+    private static void WriteToneTrack(string path, double seconds, double frequency, double level)
+    {
+        int frames = (int)(seconds * 48_000);
+        float[] samples = new float[frames * 2];
+        for (int frame = 0; frame < frames; frame++)
+            samples[frame * 2] = samples[frame * 2 + 1] = (float)(level * Math.Sin(2 * Math.PI * frequency * frame / 48_000) * (frame / 24_000 % 2 == 0 ? 1 : 0.1));
+        using var writer = new PcmWaveWriter(path, 48_000, 2);
+        writer.WriteFloat(samples);
+        writer.Complete();
+        RecordingAudioTracks.Hide(path);
+    }
+
+    /// <summary>Renders the editor (synthetic clip, separate tracks, click/key events) at 1280x800 and at its minimum size.</summary>
     private static async Task RenderEditorAsync(string movie, VideoInfo info, string root, string screenshotFolder)
     {
+        var events = new RecordingEventLog();
+        events.AddClick(TimeSpan.FromSeconds(0.4), 40, 40);
+        events.AddKey(TimeSpan.FromSeconds(1.1), "Ctrl+C");
+        events.AddClick(TimeSpan.FromSeconds(1.7), 200, 100);
+        events.WriteSidecar(movie);
         var entry = new RecordingEntry(Guid.NewGuid(), movie, null, DateTime.UtcNow, info.Duration, info.Width, info.Height);
         RecordingEditorWindow editor = RecordingEditorWindow.Open(entry, new RecordingEditorContext(() => CaptureSettings.Default, _ => { }, _ => { }, root));
         try
         {
-            await Task.Delay(1500);
-            await editor.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-            editor.UpdateLayout();
-            DpiScale dpi = VisualTreeHelper.GetDpi(editor);
-            var bitmap = new RenderTargetBitmap(Math.Max(1, (int)Math.Ceiling(editor.ActualWidth * dpi.DpiScaleX)), Math.Max(1, (int)Math.Ceiling(editor.ActualHeight * dpi.DpiScaleY)), 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
-            bitmap.Render(editor);
-            var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(bitmap));
-            using var stream = File.Create(Path.Combine(screenshotFolder, "recording-editor.png"));
-            encoder.Save(stream);
+            editor.Width = 1280;
+            editor.Height = 800;
+            await Task.Delay(2500); // Lets the waveforms and filmstrip thumbnails arrive.
+            await SaveRenderAsync(editor, Path.Combine(screenshotFolder, "recording-editor.png"));
+            editor.Width = editor.MinWidth;
+            editor.Height = editor.MinHeight;
+            await Task.Delay(1200);
+            await SaveRenderAsync(editor, Path.Combine(screenshotFolder, "recording-editor-min.png"));
         }
         finally { editor.Close(); }
+    }
+
+    private static async Task SaveRenderAsync(Window window, string path)
+    {
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        window.UpdateLayout();
+        DpiScale dpi = VisualTreeHelper.GetDpi(window);
+        var bitmap = new RenderTargetBitmap(Math.Max(1, (int)Math.Ceiling(window.ActualWidth * dpi.DpiScaleX)), Math.Max(1, (int)Math.Ceiling(window.ActualHeight * dpi.DpiScaleY)), 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
+        bitmap.Render(window);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
     }
 
     private static DecodedFrame SyntheticFrame(int width, int height, int index)

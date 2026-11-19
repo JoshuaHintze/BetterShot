@@ -128,12 +128,13 @@ internal static class RecordingExportProfiles
 
 /// <summary>
 /// The fast path for exports without burned-in markup: one <see cref="MediaClip"/> per kept stretch, trimmed precisely,
-/// rendered by Windows' media composition engine (hardware encoding, audio included unless asked not to).
+/// rendered by Windows' media composition engine (hardware encoding, audio included unless asked not to). A re-mixed
+/// soundtrack (already cut to the output timeline) replaces the movie's own audio as a background track.
 /// </summary>
 internal static class TrimmedMovieRenderer
 {
     internal static async Task RenderAsync(string sourcePath, IReadOnlyList<KeptRange> ranges, string outputPath, VideoInfo info, bool includeAudio,
-        IProgress<double>? progress, CancellationToken cancellation)
+        IProgress<double>? progress, CancellationToken cancellation, string? replacementAudioPath = null)
     {
         if (ranges.Count == 0) throw new InvalidOperationException("Nothing is kept, so there is nothing to export.");
         StorageFile source = await StorageFile.GetFileFromPathAsync(Path.GetFullPath(sourcePath));
@@ -143,12 +144,18 @@ internal static class TrimmedMovieRenderer
             MediaClip clip = await MediaClip.CreateFromFileAsync(source);
             clip.TrimTimeFromStart = TimeSpan.FromSeconds(range.Start);
             clip.TrimTimeFromEnd = TimeSpan.FromSeconds(Math.Max(0, clip.OriginalDuration.TotalSeconds - range.End));
-            if (!includeAudio) clip.Volume = 0;
+            if (!includeAudio || replacementAudioPath is not null) clip.Volume = 0;
             composition.Clips.Add(clip);
+        }
+        if (replacementAudioPath is not null)
+        {
+            StorageFile audioFile = await StorageFile.GetFileFromPathAsync(Path.GetFullPath(replacementAudioPath));
+            composition.BackgroundAudioTracks.Add(await BackgroundAudioTrack.CreateFromFileAsync(audioFile));
         }
         await using (File.Create(outputPath)) { }
         StorageFile output = await StorageFile.GetFileFromPathAsync(Path.GetFullPath(outputPath));
-        MediaEncodingProfile profile = RecordingExportProfiles.Mp4(info.Width, info.Height, info.FrameRate, includeAudio && info.HasAudio);
+        bool hasAudio = replacementAudioPath is not null || includeAudio && info.HasAudio;
+        MediaEncodingProfile profile = RecordingExportProfiles.Mp4(info.Width, info.Height, info.FrameRate, hasAudio);
         var reportProgress = new Progress<double>(percent => progress?.Report(Math.Clamp(percent / 100, 0, 1)));
         Windows.Media.Transcoding.TranscodeFailureReason failure =
             await composition.RenderToFileAsync(output, MediaTrimmingPreference.Precise, profile).AsTask(cancellation, reportProgress);

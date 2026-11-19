@@ -12,12 +12,13 @@ using static BetterShot.RecordingEditor.RecordingEditorChrome;
 
 namespace BetterShot.RecordingEditor;
 
-/// <summary>What the editor needs from the main window: current settings and library updates.</summary>
+/// <summary>What the editor needs from the main window: current settings (and a way to save "Replace the original"), and library updates.</summary>
 internal sealed record RecordingEditorContext(
     Func<CaptureSettings> Settings,
     Action<RecordingEntry> RecordingChanged,
     Action<RecordingEntry> RecordingAdded,
-    string TemporaryFolder);
+    string TemporaryFolder,
+    Action<Func<CaptureSettings, CaptureSettings>>? UpdateSettings = null);
 
 /// <summary>
 /// Review and trim a finished recording: play it back, cut it with CapCut-style keys, draw markup (including
@@ -26,15 +27,17 @@ internal sealed record RecordingEditorContext(
 /// </summary>
 internal sealed partial class RecordingEditorWindow : Window, IRecordingTimelineHost
 {
-    private const double DefaultTimelineHeight = 196, MinimumTimelineHeight = 120, MaximumTimelineHeight = 520;
+    private const double DefaultTimelineHeight = 262, MinimumTimelineHeight = 160, MaximumTimelineHeight = 620;
     private static readonly List<RecordingEditorWindow> OpenEditors = [];
 
     private readonly RecordingEditorContext _context;
     private readonly RecordingTimeline _timeline;
-    private readonly TextBlock _status = new() { Foreground = MutedText, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-    private readonly ProgressBar _progress = new() { Width = 160, Height = 6, Minimum = 0, Maximum = 1, Margin = new Thickness(10, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+    private readonly TextBlock _status = new() { Foreground = MutedText, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+    private readonly ProgressBar _progress = new() { Width = 120, Height = 5, Minimum = 0, Maximum = 1, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Foreground = ActiveBrush, Background = SurfaceBrush, BorderThickness = new Thickness(0) };
     private readonly Button _cancelOperation;
     private readonly RowDefinition _timelineRow = new() { Height = new GridLength(DefaultTimelineHeight) };
+    private readonly Grid _contentGrid = new();
+    private UIElement _inspectorPanel = new Grid();
     private RecordingEditHistory _history;
     private LoadedEditProject _loaded;
     private RecordingEditViewOptions _view;
@@ -56,20 +59,27 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
         _history = new RecordingEditHistory(RecordingEditState.Create(Math.Max(0.1, entry.DurationSeconds)));
         _loaded = RecordingEditProject.Empty(Math.Max(0.1, entry.DurationSeconds));
         _view = _loaded.View;
+        _replaceOriginal = context.Settings().TrimReplacesOriginal;
         _timeline = new RecordingTimeline(this);
         _cancelOperation = TextButton("Stop", "Stop the export or tracking", (_, _) => _operation?.Cancel(), null, 26);
+        _cancelOperation.Margin = new Thickness(0, 0, 10, 0);
         _cancelOperation.Visibility = Visibility.Collapsed;
         Title = "BetterShot Recording Editor - " + Path.GetFileName(entry.MoviePath);
-        Width = 1240; Height = 860; MinWidth = 980; MinHeight = 620;
+        Width = 1280; Height = 860; MinWidth = 1000; MinHeight = 680;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        Background = Brush("#151617"); Foreground = Brushes.White;
-        FontFamily = new FontFamily("Segoe UI"); FontSize = 14;
+        Background = WindowBrush; Foreground = Brushes.White;
+        FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"); FontSize = 14;
+        UseLayoutRounding = true;
+        try { Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri("pack://application:,,,/Assets/BetterShot.ico")); }
+        catch (Exception error) when (error is IOException or NotSupportedException or UriFormatException) { } // The taskbar falls back to the app icon.
+        ConfigureWindowChrome();
         Content = BuildLayout();
         _history.Changed += (_, _) => OnStateChanged();
         PreviewKeyDown += Editor_PreviewKeyDown;
+        SizeChanged += (_, _) => UpdateResponsiveLayout();
         Loaded += async (_, _) => await OpenRecordingAsync();
         Closing += Editor_Closing;
-        Closed += (_, _) => { OpenEditors.Remove(this); ShutDownPlayer(); };
+        Closed += (_, _) => { OpenEditors.Remove(this); ShutDownPlayer(); DisposeAudio(); };
     }
 
     internal RecordingEntry Entry { get; private set; }
@@ -146,80 +156,43 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
 
     public void TimelineDragFinished() => _history.EndGroup();
 
+    /// <summary>Dragging a yellow trim handle moves the in or out point (one undo step per drag).</summary>
+    public void TimelineMoveTrimHandle(bool inHandle, double time)
+    {
+        if (_playing) Pause();
+        SetTrimPoint(inHandle, time, inHandle ? "trim-in" : "trim-out");
+        Seek(inHandle ? State.Timeline.EffectiveIn : Math.Max(0, State.Timeline.EffectiveOut - FrameDuration));
+    }
+
     // ---------- Layout ----------
 
+    /// <summary>Header; player with the Trim/Export panel beside it (or under it when narrow); the grab handle; the timeline.</summary>
     private UIElement BuildLayout()
     {
         var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition());
+        root.RowDefinitions.Add(new RowDefinition { MinHeight = 200 });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(7) });
         root.RowDefinitions.Add(_timelineRow);
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(38) });
+        root.Children.Add(BuildHeader());
 
-        root.Children.Add(BuildToolbar());
         UIElement player = BuildPlayer();
-        Grid.SetRow(player, 1);
-        root.Children.Add(player);
-        UIElement transport = BuildTransport();
-        Grid.SetRow(transport, 2);
-        root.Children.Add(transport);
+        _inspectorPanel = BuildInspector();
+        _contentGrid.Children.Add(player);
+        _contentGrid.Children.Add(_inspectorPanel);
+        _contentGrid.Margin = new Thickness(14, 2, 14, 0);
+        Grid.SetRow(_contentGrid, 1);
+        root.Children.Add(_contentGrid);
+        UpdateResponsiveLayout();
+
         UIElement grip = BuildTimelineGrip();
-        Grid.SetRow(grip, 3);
+        Grid.SetRow(grip, 2);
         root.Children.Add(grip);
-        var timelineFrame = new Border { Background = Brush("#141517"), Child = _timeline };
-        Grid.SetRow(timelineFrame, 4);
-        root.Children.Add(timelineFrame);
-        UIElement footer = BuildFooter();
-        Grid.SetRow(footer, 5);
-        root.Children.Add(footer);
+        UIElement timeline = BuildTimelinePanel();
+        if (timeline is FrameworkElement frame) frame.Margin = new Thickness(14, 0, 14, 14);
+        Grid.SetRow(timeline, 3);
+        root.Children.Add(timeline);
         return root;
-    }
-
-    private UIElement BuildTimelineGrip()
-    {
-        var grip = new Thumb { Cursor = Cursors.SizeNS, ToolTip = "Drag to resize the timeline; double-click to reset", Background = Brush("#202122") };
-        grip.Template = new ControlTemplate(typeof(Thumb)) { VisualTree = GripVisual() };
-        grip.DragDelta += (_, e) => _timelineRow.Height = new GridLength(Math.Clamp(_timelineRow.Height.Value - e.VerticalChange, MinimumTimelineHeight, MaximumTimelineHeight));
-        grip.MouseDoubleClick += (_, _) => _timelineRow.Height = new GridLength(DefaultTimelineHeight);
-        return grip;
-    }
-
-    private static FrameworkElementFactory GripVisual()
-    {
-        var border = new FrameworkElementFactory(typeof(Border));
-        border.SetValue(Border.BackgroundProperty, Brush("#202122"));
-        border.SetValue(Border.BorderBrushProperty, Brush("#2E2F32"));
-        border.SetValue(Border.BorderThicknessProperty, new Thickness(0, 1, 0, 1));
-        var line = new FrameworkElementFactory(typeof(Border));
-        line.SetValue(FrameworkElement.WidthProperty, 36.0);
-        line.SetValue(FrameworkElement.HeightProperty, 3.0);
-        line.SetValue(Border.CornerRadiusProperty, new CornerRadius(1.5));
-        line.SetValue(Border.BackgroundProperty, Brush("#55585E"));
-        border.AppendChild(line);
-        return border;
-    }
-
-    private UIElement BuildFooter()
-    {
-        var bar = new Grid { Margin = new Thickness(14, 0, 14, 0) };
-        bar.ColumnDefinitions.Add(new ColumnDefinition());
-        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        bar.Children.Add(_status);
-        var operation = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        operation.Children.Add(_progress);
-        operation.Children.Add(_cancelOperation);
-        Grid.SetColumn(operation, 1);
-        bar.Children.Add(operation);
-        var zoom = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
-        zoom.Children.Add(IconButton(LucideIconKind.Minus, "Zoom the timeline out (Ctrl+wheel)", (_, _) => _timeline.ZoomBy(0.8), 32, 28, 14));
-        zoom.Children.Add(IconButton(LucideIconKind.MoveHorizontal, "Fit the whole recording", (_, _) => _timeline.Fit(), 32, 28, 14));
-        zoom.Children.Add(IconButton(LucideIconKind.Plus, "Zoom the timeline in (Ctrl+wheel)", (_, _) => _timeline.ZoomBy(1.25), 32, 28, 14));
-        Grid.SetColumn(zoom, 2);
-        bar.Children.Add(zoom);
-        return new Border { Background = Brush("#1B1C1D"), BorderBrush = Brush("#2A2B2D"), BorderThickness = new Thickness(0, 1, 0, 0), Child = bar };
     }
 
     // ---------- Loading and saving ----------
@@ -247,10 +220,24 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
         LoadEvents();
         ConfigureSurface(_info.Width, _info.Height);
         OpenPlayer();
+        UpdateSubtitle();
+        LoadAudioTracks();
+        LoadLosslessIndex();
+        await AttachFilmstripAsync();
         _timeline.Fit();
         OnStateChanged();
         if (_loaded.Warning is string warning) SetStatus(warning, true);
-        else if (_reader is not null) SetStatus("Space plays. B turns on split mode, Ctrl+B splits at the playhead, I/O set in and out, Q/W delete to the playhead.");
+        else if (_reader is not null) SetStatus("Space plays. B is split mode, I and O set in and out, Q and W delete to the playhead. Press ? for every shortcut.");
+    }
+
+    /// <summary>The filmstrip decodes through its own frame reader so thumbnails never wait behind an export.</summary>
+    private async Task AttachFilmstripAsync()
+    {
+        if (_reader is null || _info is null) { _filmstrip.Attach(null, 0, 0); return; }
+        int height = (int)Math.Round(RecordingTimeline.VideoHeight * Math.Max(1, VisualTreeHelper.GetDpi(this).DpiScaleY));
+        int width = Math.Max(8, (int)Math.Round(height * VideoAspect));
+        try { _filmstrip.Attach(await RecordingFrameReader.OpenAsync(Entry.MoviePath), width, height); }
+        catch (Exception) { _filmstrip.Attach(null, 0, 0); } // Thumbnails are cosmetic; the clip still draws without them.
     }
 
     private void LoadProject(double duration)
@@ -287,7 +274,7 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
 
     /// <summary>
     /// Saves the project. Leaving the editor (<paramref name="updateMarkedCopy"/>) also refreshes the marked copy that
-    /// dragging shares; Ctrl+S only saves and offers "Update marked copy".
+    /// dragging shares; Ctrl+S only saves (Done or Share update the marked copy).
     /// </summary>
     private async Task<bool> SaveAsync(bool updateMarkedCopy)
     {
@@ -296,7 +283,7 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
         if (updateMarkedCopy && NeedsMarkedCopyUpdate) return await UpdateMarkedCopyAsync();
         UpdateToolbarState();
         SetStatus(NeedsMarkedCopyUpdate
-            ? "Saved. Choose Update marked copy (or Done) so dragging this recording shares the edited version."
+            ? "Saved. Choose Done or Share so dragging this recording shares the edited version."
             : "Saved. The recording stays as it was, so every cut and mark stays editable.");
         return true;
     }
@@ -346,6 +333,7 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
         if (_selectedMark is Guid id && State.Find(id) is null) _selectedMark = null;
         if (_selectedSegment is int index && index >= State.Timeline.Segments.Count) _selectedSegment = null;
         UpdateTitle();
+        RefreshAudioRouting();
         RefreshSelectionUi();
     }
 
@@ -402,6 +390,7 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
             case RecordingEditorCommand.Redo: RedoEdit(); break;
             case RecordingEditorCommand.Save: _ = SaveAsync(updateMarkedCopy: false); break;
             case RecordingEditorCommand.Escape: EscapePressed(); break;
+            case RecordingEditorCommand.ShowShortcuts: ShowShortcutSheet(); break;
         }
     }
 
@@ -441,14 +430,26 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
         UpdateToolbarState();
     }
 
-    private void SetInPoint()
+    private void SetInPoint() => SetTrimPoint(inPoint: true, _playhead);
+
+    private void SetOutPoint() => SetTrimPoint(inPoint: false, _playhead);
+
+    /// <summary>Moves the in or out point, keeping at least a frame between them (a drag passes a coalescing key).</summary>
+    private void SetTrimPoint(bool inPoint, double time, string? coalesceKey = null)
     {
-        if (Apply(state => state with { Timeline = state.Timeline.WithInPoint(_playhead) })) SetStatus($"In point set at {FormatTime(_playhead)}.");
+        EditTimeline timeline = State.Timeline;
+        double gap = Math.Max(FrameDuration, EditTimeline.MinimumSegment);
+        double clamped = inPoint ? Math.Clamp(time, 0, timeline.EffectiveOut - gap) : Math.Clamp(time, timeline.EffectiveIn + gap, timeline.Duration);
+        bool changed = Apply(state => state with { Timeline = inPoint ? state.Timeline.WithInPoint(clamped) : state.Timeline.WithOutPoint(clamped) }, coalesceKey);
+        if (changed && coalesceKey is null) SetStatus($"{(inPoint ? "In" : "Out")} point set at {RecordingTimeText.Tenths(clamped)}.");
     }
 
-    private void SetOutPoint()
+    /// <summary>The steppers' arrows: one frame earlier or later.</summary>
+    private void StepTrimPoint(bool inPoint, int frames)
     {
-        if (Apply(state => state with { Timeline = state.Timeline.WithOutPoint(_playhead) })) SetStatus($"Out point set at {FormatTime(_playhead)}.");
+        double current = inPoint ? State.Timeline.EffectiveIn : State.Timeline.EffectiveOut;
+        SetTrimPoint(inPoint, current + frames * FrameDuration);
+        PauseAndSeek(inPoint ? State.Timeline.EffectiveIn : Math.Max(0, State.Timeline.EffectiveOut - FrameDuration));
     }
 
     private void DeleteToPlayhead(bool fromClipStart)
@@ -482,14 +483,5 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
             return;
         }
         SetStatus("Select a cut on the clip track first.");
-    }
-
-    private void PutRecordingBack()
-    {
-        if (Apply(state => state with { Timeline = state.Timeline.Reset() }))
-        {
-            _selectedSegment = null;
-            SetStatus("The recording is back the way it was: no cuts and no in or out points.");
-        }
     }
 }
