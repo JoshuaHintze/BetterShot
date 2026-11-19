@@ -57,6 +57,15 @@ internal sealed class RecordingLibraryStore
         Save();
     }
 
+    /// <summary>Replaces an entry in place (for example, after its movie was trimmed), keeping the list order.</summary>
+    internal void Update(RecordingEntry entry)
+    {
+        int index = _entries.FindIndex(existing => existing.Id == entry.Id);
+        if (index < 0) return;
+        _entries[index] = entry;
+        Save();
+    }
+
     internal void Remove(Guid id)
     {
         if (_entries.RemoveAll(entry => entry.Id == id) > 0) Save();

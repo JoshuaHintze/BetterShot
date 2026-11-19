@@ -483,6 +483,7 @@
                 </Border>
                 <StackPanel x:Name="RecordingActions" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="5" Visibility="Hidden">
                   <Button Tag="{Binding}" Width="30" Height="30" Padding="7" Margin="0,0,4,0" Background="#E6282A30" BorderBrush="#555861" Click="PlayRecording_Click" ToolTip="Play recording" AutomationProperties.Name="Play recording"><controls:LucideIcon Icon="Play" Width="15" Height="15" /></Button>
+                  <Button Tag="{Binding}" Width="30" Height="30" Padding="7" Margin="0,0,4,0" Background="#E6282A30" BorderBrush="#555861" Click="EditRecording_Click" ToolTip="Edit: trim, mark up, and export" AutomationProperties.Name="Edit recording"><controls:LucideIcon Icon="Scissors" Width="15" Height="15" /></Button>
                   <Button Tag="{Binding}" Width="30" Height="30" Padding="7" Margin="0,0,4,0" Background="#E6282A30" BorderBrush="#555861" Click="ShowRecordingInFolder_Click" ToolTip="Show in folder" AutomationProperties.Name="Show recording in folder"><controls:LucideIcon Icon="FolderOpen" Width="15" Height="15" /></Button>
                   <Button Tag="{Binding}" Width="30" Height="30" Padding="7" Background="#E6282A30" BorderBrush="#555861" Click="DeleteRecording_Click" ToolTip="Move recording to the Recycle Bin" AutomationProperties.Name="Delete recording"><controls:LucideIcon Icon="Trash2" Width="15" Height="15" /></Button>
                 </StackPanel>
@@ -772,8 +773,35 @@
             <CheckBox x:Name="HighlightClicksCheckBox" Style="{StaticResource SettingToggle}" Content="Highlight mouse clicks" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
             <CheckBox x:Name="ShowKeystrokesCheckBox" Style="{StaticResource SettingToggle}" Content="Show keystrokes" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
             <TextBlock Text="Shows shortcuts such as Ctrl+Shift+K. Ordinary typing is never shown or saved." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
-            <CheckBox x:Name="ReviewAfterRecordingCheckBox" Style="{StaticResource SettingToggle}" Content="Review after recording" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
-            <TextBlock Text="Opens the finished recording. Trimming is coming in a later update." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <CheckBox x:Name="ReviewAfterRecordingCheckBox" Style="{StaticResource SettingToggle}" Content="Review and trim after recording" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <TextBlock Text="Opens the recording editor when a recording finishes. Edit from the library or a recording thumbnail at any time." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <CheckBox x:Name="KeepMarkedCopyCheckBox" Style="{StaticResource SettingToggle}" Content="Keep a marked copy for sharing" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <TextBlock Text="Dragging an edited recording shares a rendered copy with its cuts and marks. Recordings with a redaction always share the covered copy." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <CheckBox x:Name="TrimReplacesOriginalCheckBox" Style="{StaticResource SettingToggle}" Content="Save trim replaces the original" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
+            <TextBlock Text="Off keeps the original and saves the trimmed copy beside it." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <Grid Margin="0,14,0,0">
+              <TextBlock Text="GIF frame rate" Style="{StaticResource SettingLabel}" />
+              <ComboBox x:Name="GifFpsComboBox" Style="{StaticResource DarkComboBox}" Width="130" Height="34" HorizontalAlignment="Right" SelectionChanged="RecordingCombo_SelectionChanged" AutomationProperties.Name="GIF frame rate">
+                <ComboBoxItem Content="8 fps" Tag="8" />
+                <ComboBoxItem Content="10 fps" Tag="10" />
+                <ComboBoxItem Content="12 fps" Tag="12" />
+                <ComboBoxItem Content="15 fps" Tag="15" />
+                <ComboBoxItem Content="20 fps" Tag="20" />
+                <ComboBoxItem Content="24 fps" Tag="24" />
+              </ComboBox>
+            </Grid>
+            <Grid Margin="0,12,0,0">
+              <TextBlock Text="GIF size" Style="{StaticResource SettingLabel}" />
+              <ComboBox x:Name="GifMaxDimensionComboBox" Style="{StaticResource DarkComboBox}" Width="130" Height="34" HorizontalAlignment="Right" SelectionChanged="RecordingCombo_SelectionChanged" AutomationProperties.Name="GIF size">
+                <ComboBoxItem Content="480 px" Tag="480" />
+                <ComboBoxItem Content="640 px" Tag="640" />
+                <ComboBoxItem Content="800 px" Tag="800" />
+                <ComboBoxItem Content="960 px" Tag="960" />
+                <ComboBoxItem Content="1280 px" Tag="1280" />
+                <ComboBoxItem Content="Original" Tag="0" />
+              </ComboBox>
+            </Grid>
+            <TextBlock Text="The longest side of exported GIFs. Smaller GIFs share faster." Style="{StaticResource SettingHint}" Margin="0,6,0,0" />
             <TextBlock Text="Recording file name" Style="{StaticResource SettingLabel}" Margin="0,16,0,0" />
             <TextBox x:Name="RecordingFileNamePatternBox" Style="{StaticResource DarkTextBox}" Height="34" Margin="0,8,0,0" TextChanged="RecordingFileNamePattern_TextChanged" LostKeyboardFocus="RecordingFileNamePattern_LostKeyboardFocus" KeyDown="RecordingFileNamePattern_KeyDown" AutomationProperties.Name="Recording file name pattern" />
             <TextBlock x:Name="RecordingFileNamePreviewText" Foreground="#FFE477" FontSize="12" Margin="0,7,0,0" TextTrimming="CharacterEllipsis" />

@@ -121,6 +121,12 @@ internal sealed class HistorySettingsDto
     public int? RecordingFrameRate { get; set; }
     public HotkeyDto? RecordHotkey { get; set; }
 
+    // Phase 7 recording editor options. Optional; missing means the defaults.
+    public int? GifFps { get; set; }
+    public int? GifMaxDimension { get; set; }
+    public bool? KeepMarkedCopy { get; set; }
+    public bool? TrimReplacesOriginal { get; set; }
+
     /// <summary>Fields written by newer builds or other features are carried through every rewrite.</summary>
     [JsonExtensionData] public Dictionary<string, JsonElement>? AdditionalFields { get; set; }
 }

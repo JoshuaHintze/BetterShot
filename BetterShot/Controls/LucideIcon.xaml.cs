@@ -57,7 +57,24 @@ public enum LucideIconKind
     Camera,
     CameraOff,
     Pause,
-    Play
+    Play,
+    SkipBack,
+    SkipForward,
+    ChevronLeft,
+    ChevronRight,
+    ArrowLeftToLine,
+    ArrowRightToLine,
+    Repeat,
+    Scissors,
+    SquareSplitHorizontal,
+    RotateCcw,
+    Magnet,
+    Crosshair,
+    Rows3,
+    Eye,
+    EyeOff,
+    Download,
+    MoveHorizontal
 }
 
 public partial class LucideIcon : UserControl
@@ -141,6 +158,23 @@ public partial class LucideIcon : UserControl
             case LucideIconKind.CameraOff: Path("M14.564 14.558a3 3 0 1 1-4.122-4.121"); Path("m2 2 20 20"); Path("M20 20H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 .819-.175"); Path("M9.695 4.024A2 2 0 0 1 10.004 4h3.993a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v7.344"); break;
             case LucideIconKind.Pause: Rectangle(14, 3, 5, 18, 1); Rectangle(5, 3, 5, 18, 1); break;
             case LucideIconKind.Play: Path("M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"); break;
+            case LucideIconKind.SkipBack: Path("M19 20 9 12l10-8z"); Path("M5 19V5"); break;
+            case LucideIconKind.SkipForward: Path("M5 4l10 8-10 8z"); Path("M19 5v14"); break;
+            case LucideIconKind.ChevronLeft: Path("m15 18-6-6 6-6"); break;
+            case LucideIconKind.ChevronRight: Path("m9 18 6-6-6-6"); break;
+            case LucideIconKind.ArrowLeftToLine: Path("M3 19V5"); Path("m13 6-6 6 6 6"); Path("M7 12h14"); break;
+            case LucideIconKind.ArrowRightToLine: Path("M17 12H3"); Path("m11 18 6-6-6-6"); Path("M21 5v14"); break;
+            case LucideIconKind.Repeat: Path("m17 2 4 4-4 4"); Path("M3 11v-1a4 4 0 0 1 4-4h14"); Path("m7 22-4-4 4-4"); Path("M21 13v1a4 4 0 0 1-4 4H3"); break;
+            case LucideIconKind.Scissors: Circle(6, 6, 3); Path("M8.12 8.12 12 12"); Path("M20 4 8.12 15.88"); Circle(6, 18, 3); Path("M14.8 14.8 20 20"); break;
+            case LucideIconKind.SquareSplitHorizontal: Path("M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3"); Path("M16 5h3c1 0 2 1 2 2v10c0 1-1 2-2 2h-3"); Path("M12 4v16"); break;
+            case LucideIconKind.RotateCcw: Path("M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"); Path("M3 3v5h5"); break;
+            case LucideIconKind.Magnet: Path("m6 15-4-4 6.75-6.77a7.79 7.79 0 0 1 11 11L13 22l-4-4 6.39-6.36a2.14 2.14 0 0 0-3-3L6 15"); Path("m5 8 4 4"); Path("m12 15 4 4"); break;
+            case LucideIconKind.Crosshair: Circle(12, 12, 10); Path("M22 12h-4"); Path("M6 12H2"); Path("M12 6V2"); Path("M12 22v-4"); break;
+            case LucideIconKind.Rows3: Rectangle(3, 3, 18, 18, 2); Path("M21 9H3"); Path("M21 15H3"); break;
+            case LucideIconKind.Eye: Path("M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"); Circle(12, 12, 3); break;
+            case LucideIconKind.EyeOff: Path("M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"); Path("M14.084 14.158a3 3 0 0 1-4.242-4.242"); Path("M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"); Path("m2 2 20 20"); break;
+            case LucideIconKind.Download: Path("M12 15V3"); Path("M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"); Path("m7 10 5 5 5-5"); break;
+            case LucideIconKind.MoveHorizontal: Path("m18 8 4 4-4 4"); Path("M2 12h20"); Path("m6 8-4 4 4 4"); break;
         }
     }
 
