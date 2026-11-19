@@ -91,14 +91,36 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
         if (existing is not null)
         {
             if (existing.WindowState == WindowState.Minimized) existing.WindowState = WindowState.Normal;
-            existing.Activate();
+            BringToFront(existing);
             return existing;
         }
         var editor = new RecordingEditorWindow(entry, context);
         OpenEditors.Add(editor);
         editor.Show();
+        BringToFront(editor);
         return editor;
     }
+
+    /// <summary>
+    /// Opened from a floating thumbnail (which never takes focus), Show() alone left the editor behind the app the user
+    /// was in. Activate it, and if Windows still keeps another app in front, lift it above everything once.
+    /// </summary>
+    private static void BringToFront(Window window)
+    {
+        window.Activate();
+        IntPtr handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+        if (handle == IntPtr.Zero || GetForegroundWindow() == handle) return;
+        window.Topmost = true;
+        window.Topmost = false;
+        SetForegroundWindow(handle);
+        window.Activate();
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr window);
 
     internal static void CloseAll()
     {
@@ -315,6 +337,25 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
 
     private async void Done_Click(object sender, RoutedEventArgs e)
     {
+        CommitTextEdit();
+        if (State.HasEdits)
+        {
+            Pause();
+            MessageBoxResult answer = MessageBox.Show(this,
+                "Replace the original recording with your edited version?\n\n" +
+                "Yes: replace the original. Your markup, cuts, and redactions become part of the video for good and can't be changed later.\n\n" +
+                "No: keep the original as it is and save the edited version beside it as \"(edited)\". You can keep changing the markup.\n\n" +
+                "Cancel: keep editing.",
+                "Save your edits", MessageBoxButton.YesNoCancel, MessageBoxImage.Question, MessageBoxResult.Yes);
+            if (answer == MessageBoxResult.Cancel) return;
+            if (answer == MessageBoxResult.Yes)
+            {
+                if (!SaveProject() || !await ReplaceOriginalWithEditsAsync()) return;
+                _closingConfirmed = true;
+                Close();
+                return;
+            }
+        }
         if (_history.IsDirty || NeedsMarkedCopyUpdate)
         {
             if (!await SaveAsync(updateMarkedCopy: true)) return;

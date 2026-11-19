@@ -144,6 +144,7 @@ internal sealed partial class RecordingEditorWindow
         if (!RecordingSharing.NeedsMarkedCopy(State, _context.Settings().KeepMarkedCopy))
         {
             RecordingSharing.DeleteMarkedCopy(Entry.MoviePath);
+            if (!State.HasEdits) RecordingSharing.DeleteEditedCopy(Entry.MoviePath);
             if (_markedCopyFingerprint is not null) { _markedCopyFingerprint = null; SaveProject(); }
             UpdateToolbarState();
             return true;
@@ -160,13 +161,70 @@ internal sealed partial class RecordingEditorWindow
             _markedCopyFingerprint = RecordingEditProject.Fingerprint(state);
             bool stillCurrent = ReferenceEquals(state, State) || RecordingEditProject.Fingerprint(State) == _markedCopyFingerprint;
             if (!_history.IsDirty || stillCurrent) SaveProject();
-            SetStatus((state.HasRedaction ? "Updated the covered copy. Dragging this recording shares it, never the unredacted original." : "Updated the marked copy. Dragging this recording now shares it.")
+            string? edited = null;
+            try { edited = RecordingSharing.PublishEditedCopy(Entry.MoviePath); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                warning = (warning is null ? string.Empty : warning + " ") + $"The edited file could not be saved beside the recording ({error.Message}); close any player that has it open and choose Done again.";
+            }
+            string savedNote = edited is null ? string.Empty : $"Saved the edited version as {Path.GetFileName(edited)}. ";
+            SetStatus(savedNote + (state.HasRedaction ? "Dragging this recording shares the covered copy, never the unredacted original." : "Dragging this recording shares the edited version.")
                 + (warning is null ? string.Empty : " " + warning), warning is not null);
             return true;
         }
         catch (OperationCanceledException) { SetStatus("The marked copy was not updated."); return false; }
         catch (Exception error) { SetStatus($"Could not update the marked copy: {error.Message}", true); return false; }
         finally { UpdateToolbarState(); }
+    }
+
+    // ---------- Done: replace the original ----------
+
+    /// <summary>
+    /// Renders the recording with every cut, mute, and mark burned in and puts it in place of the original file. The
+    /// edit project is cleared afterwards (its marks are now part of the picture), the separate audio tracks and click
+    /// markers are cut to match, and any "(edited)" copy or marked copy is removed because the original now is the edit.
+    /// </summary>
+    private async Task<bool> ReplaceOriginalWithEditsAsync()
+    {
+        if (!CanExport(out RecordingFrameReader reader, out VideoInfo info)) return false;
+        RecordingEditState state = State;
+        string folder = Path.GetDirectoryName(Entry.MoviePath)!;
+        string temporary = Path.Combine(folder, "." + Path.GetFileNameWithoutExtension(Entry.MoviePath) + "-" + Guid.NewGuid().ToString("N")[..8] + ".partial.mp4");
+        (RecordingExportKind kind, IReadOnlyList<AudioTrackKind>? remix) = MovieAudioChoice();
+        var job = new RecordingExportJob(kind, Entry.MoviePath, temporary, state, info, 0, 0, null, _context.TemporaryFolder, remix);
+        using OperationScope operation = BeginOperation("Saving your edits into the recording…");
+        try
+        {
+            string? warning = await RecordingExporter.ExportAsync(job, reader, Dispatcher, new Progress<double>(ReportProgress), operation.Token);
+            double duration = await MeasureDurationAsync(temporary, state.Timeline.KeptRanges.Sum(range => range.Duration));
+            IReadOnlyList<KeptRange> ranges = state.Timeline.KeptRanges;
+            IReadOnlyList<RecordingEvent> events = TrimRemap.RemapEvents(_events, state.Timeline);
+            ShutDownPlayer();
+            _trackPreview?.Dispose(); // Releases the separate tracks so they can be replaced.
+            _trackPreview = null;
+            _filmstrip.Attach(null, 0, 0);
+            _reader = null;
+            await MoveWithRetryAsync(temporary, Entry.MoviePath);
+            if (state.Timeline.HasCuts) AudioRemixer.TrimSidecars(Entry.MoviePath, ranges, Entry.MoviePath);
+            WriteEvents(Entry.MoviePath, events);
+            RecordingSharing.DeleteMarkedCopy(Entry.MoviePath);
+            RecordingSharing.DeleteEditedCopy(Entry.MoviePath);
+            try { string project = RecordingEditProject.SidecarPath(Entry.MoviePath); if (File.Exists(project)) File.Delete(project); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { } // A stale project would only re-show marks; the file itself is replaced.
+            _history.Reset(RecordingEditState.Create(Math.Max(0.1, duration)));
+            Entry = Entry with { DurationSeconds = duration };
+            _context.RecordingChanged(Entry);
+            if (warning is not null) MessageBox.Show(this, warning, "BetterShot", MessageBoxButton.OK, MessageBoxImage.Information);
+            return true;
+        }
+        catch (OperationCanceledException) { SetStatus("The original was not replaced."); return false; }
+        catch (Exception error) { SetStatus($"The original was not replaced: {error.Message}", true); return false; }
+        finally
+        {
+            try { if (File.Exists(temporary)) File.Delete(temporary); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
     }
 
     // ---------- Save trim ----------

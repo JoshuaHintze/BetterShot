@@ -135,6 +135,7 @@ public partial class MainWindow : Window
         FitInitialWindowToWorkArea();
         if (!GlobalHotKey.Register(_source.Handle)) SetStatus("Ctrl+Shift+F9 is unavailable; use Capture or the tray menu.", true);
         _hotkeys.Attach(_source.Handle);
+        _hotkeys.HookShortcutPressed += action => Dispatcher.BeginInvoke(() => RunHotkeyAction(action));
         RegisterSavedHotkeys();
     }
 

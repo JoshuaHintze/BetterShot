@@ -16,8 +16,17 @@ internal sealed class GlobalHotKeyRegistry : IDisposable
     private readonly HashSet<HotkeyAction> _registered = new();
     private IntPtr _window;
     private bool _suspended;
+    private WinKeyChordHook? _winHook;
+
+    /// <summary>
+    /// Raised on the UI thread's hook callback when a Win-key shortcut is pressed. Win combinations go through a low-level
+    /// hook instead of RegisterHotKey because Windows reserves many of them (Win + Shift + R is Snipping Tool recording).
+    /// </summary>
+    internal event Action<HotkeyAction>? HookShortcutPressed;
 
     internal void Attach(IntPtr window) => _window = window;
+
+    private static bool UsesHook(HotkeyBinding binding) => binding.Modifiers.HasFlag(HotkeyModifiers.Windows);
 
     internal static int IdFor(HotkeyAction action) => FirstId + (int)action;
 
@@ -64,6 +73,13 @@ internal sealed class GlobalHotKeyRegistry : IDisposable
     private string? RegisterNative(HotkeyAction action, HotkeyBinding binding)
     {
         if (_window == IntPtr.Zero) return "BetterShot's window is not ready yet.";
+        if (UsesHook(binding))
+        {
+            _winHook ??= new WinKeyChordHook(OnWinChord);
+            if (!_winHook.Enable()) return $"Windows refused the keyboard hook needed for {binding}.";
+            _registered.Add(action);
+            return null;
+        }
         if (RegisterHotKey(_window, IdFor(action), (uint)binding.Modifiers | ModNoRepeat, (uint)binding.VirtualKey))
         {
             _registered.Add(action);
@@ -84,13 +100,30 @@ internal sealed class GlobalHotKeyRegistry : IDisposable
     private void UnregisterNative(HotkeyAction action)
     {
         if (!_registered.Remove(action) || _window == IntPtr.Zero) return;
+        if (UsesHook(_bindings.GetValueOrDefault(action)))
+        {
+            if (!_registered.Any(other => UsesHook(_bindings.GetValueOrDefault(other)))) _winHook?.Disable();
+            return;
+        }
         UnregisterHotKey(_window, IdFor(action));
+    }
+
+    private bool OnWinChord(HotkeyBinding pressed)
+    {
+        foreach (HotkeyAction action in _registered)
+        {
+            if (_bindings.GetValueOrDefault(action) != pressed) continue;
+            HookShortcutPressed?.Invoke(action);
+            return true;
+        }
+        return false;
     }
 
     public void Dispose()
     {
         foreach (HotkeyAction action in _registered.ToArray()) UnregisterNative(action);
         _bindings.Clear();
+        _winHook?.Dispose();
     }
 
     [DllImport("user32.dll", SetLastError = true)]

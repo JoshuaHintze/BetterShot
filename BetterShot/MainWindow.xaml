@@ -3,13 +3,44 @@
     <shell:WindowChrome CaptionHeight="56" ResizeBorderThickness="6" CornerRadius="0" GlassFrameThickness="0" UseAeroCaptionButtons="False" />
   </shell:WindowChrome.WindowChrome>
   <Window.Resources>
-    <Style x:Key="ChromeButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Width" Value="42" />
-      <Setter Property="Height" Value="32" />
+    <!-- Window caption buttons: round, borderless, and centred on the header row they sit in (see AlignCaptionButtons). -->
+    <Style x:Key="ChromeButton" TargetType="Button">
+      <Setter Property="Width" Value="40" />
+      <Setter Property="Height" Value="40" />
       <Setter Property="Padding" Value="0" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Focusable" Value="False" />
       <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="20">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#2B2C30" /></Trigger>
+              <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#34363B" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="CloseChromeButton" TargetType="Button" BasedOn="{StaticResource ChromeButton}">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="20">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#C42B1C" /></Trigger>
+              <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#A32519" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
     <Style x:Key="QuietButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Height" Value="34" />
@@ -591,16 +622,16 @@
     <!-- Windows caption buttons. The top 56 DIP of the window drags it; controls there opt out. -->
     <StackPanel x:Name="CaptionButtons" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Panel.ZIndex="20">
       <Button x:Name="SettingsButton" Style="{StaticResource ChromeButton}" ToolTip="Settings" AutomationProperties.Name="Settings" Click="Settings_Click">
-        <controls:LucideIcon Icon="Settings" Width="16" Height="16" Foreground="#C8C9CD" />
+        <controls:LucideIcon Icon="Settings" Width="17" Height="17" Foreground="#C8C9CD" />
       </Button>
       <Button Style="{StaticResource ChromeButton}" ToolTip="Minimize" AutomationProperties.Name="Minimize" Click="Minimize_Click">
-        <controls:LucideIcon Icon="Minus" Width="12" Height="12" Foreground="#C8C9CD" />
+        <controls:LucideIcon Icon="Minus" Width="14" Height="14" Foreground="#C8C9CD" />
       </Button>
       <Button Style="{StaticResource ChromeButton}" ToolTip="Maximize or restore" AutomationProperties.Name="Maximize or restore" Click="Maximize_Click">
-        <controls:LucideIcon Icon="Square" Width="12" Height="12" Foreground="#C8C9CD" />
+        <controls:LucideIcon Icon="Square" Width="13" Height="13" Foreground="#C8C9CD" />
       </Button>
-      <Button Style="{StaticResource ChromeButton}" ToolTip="Close to tray" AutomationProperties.Name="Close to tray" Click="Close_Click">
-        <controls:LucideIcon Icon="X" Width="12" Height="12" Foreground="#C8C9CD" />
+      <Button Style="{StaticResource CloseChromeButton}" ToolTip="Close to tray" AutomationProperties.Name="Close to tray" Click="Close_Click">
+        <controls:LucideIcon Icon="X" Width="14" Height="14" Foreground="#C8C9CD" />
       </Button>
     </StackPanel>
     <Border x:Name="SettingsPanel" Grid.ColumnSpan="2" Visibility="Collapsed" Margin="0,40,0,0" Width="430" HorizontalAlignment="Right" Background="#1B1C20" BorderBrush="#36383E" BorderThickness="1,0,0,0" Padding="30" Panel.ZIndex="10">

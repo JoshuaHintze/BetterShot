@@ -96,6 +96,34 @@ internal static class RecordingSharing
         return (moviePath, "The marked copy is out of date, so the original recording was shared.");
     }
 
+    /// <summary>The visible edited version saved beside the recording when the user chooses Done ("Name (edited).mp4").</summary>
+    internal static string EditedCopyPath(string moviePath)
+    {
+        string full = Path.GetFullPath(moviePath);
+        return Path.Combine(Path.GetDirectoryName(full) ?? string.Empty, Path.GetFileNameWithoutExtension(full) + " (edited)" + Path.GetExtension(full));
+    }
+
+    /// <summary>
+    /// Copies the rendered marked copy beside the recording so the edits are in a file the user can find and play.
+    /// The original stays untouched (its cuts and marks remain editable); each Done replaces the previous edited file.
+    /// </summary>
+    internal static string PublishEditedCopy(string moviePath)
+    {
+        string target = EditedCopyPath(moviePath);
+        string temporary = target + ".partial";
+        File.Copy(MarkedCopyPath(moviePath), temporary, overwrite: true);
+        File.Move(temporary, target, overwrite: true);
+        return target;
+    }
+
+    /// <summary>Removes the visible edited file once the recording no longer has edits to show.</summary>
+    internal static void DeleteEditedCopy(string moviePath)
+    {
+        try { string edited = EditedCopyPath(moviePath); if (File.Exists(edited)) File.Delete(edited); }
+        catch (IOException) { } // In use (playing elsewhere); it is replaced on the next Done.
+        catch (UnauthorizedAccessException) { }
+    }
+
     internal static void DeleteMarkedCopy(string moviePath)
     {
         string copy = MarkedCopyPath(moviePath);

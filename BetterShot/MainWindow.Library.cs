@@ -21,13 +21,16 @@ public partial class MainWindow
     /// <summary>Below this window width an open editor hides the library unless the user shows it again.</summary>
     private const double LibraryAutoHideWidth = 1080;
     /// <summary>Room kept free at the top right for the Settings and caption buttons.</summary>
-    private const double CaptionInset = 4 * 42 + 8;
+    private const double CaptionInset = 4 * 40 + 24;
+    /// <summary>Distance from the window's right edge to the caption buttons in the library-only and editing layouts.</summary>
+    private const double LibraryCaptionRight = 22, EditorCaptionRight = 14;
     private static readonly Brush SavingDot = Frozen(Color.FromRgb(0x34, 0xC7, 0x59));
     private static readonly Brush IdleDot = Frozen(Color.FromRgb(0x7A, 0x7C, 0x82));
     private readonly DispatcherTimer _libraryClock = new() { Interval = TimeSpan.FromMinutes(1) };
     private EditorSurface? _editor;
     private bool _libraryWanted = true;
     private bool _libraryForced;
+    private bool _compactLibraryHeader;
     private bool _gridMode;
     private bool _oldestFirst;
     private bool _showingVideos;
@@ -141,7 +144,38 @@ public partial class MainWindow
         LibraryPanel.Margin = editing ? new Thickness(10, 10, 0, 10) : new Thickness(10);
         // The caption buttons overlap the library header only while the library reaches the right edge.
         LibraryHeaderButtons.Margin = editing ? new Thickness(0) : new Thickness(0, 0, CaptionInset - 16, 0);
+        if (_compactLibraryHeader != editing)
+        {
+            _compactLibraryHeader = editing;
+            double size = editing ? 38 : 46;
+            SortButton.Width = SortButton.Height = ViewModeButton.Width = ViewModeButton.Height = size;
+            ViewModeButton.Margin = new Thickness(editing ? 6 : 10, 0, 0, 0);
+            VideosTabButton.Margin = new Thickness(editing ? 14 : 20, 0, 0, 0);
+            StyleTab(ImagesTabButton, !_showingVideos);
+            StyleTab(VideosTabButton, _showingVideos);
+        }
         if (_editor is not null) _editor.LibraryVisible = showLibrary;
+        Dispatcher.BeginInvoke(AlignCaptionButtons, DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// Centres the Settings/minimize/maximize/close buttons on the visible header row (library or editor) so they sit
+    /// inside the card beside the header buttons instead of floating on the window's top edge.
+    /// </summary>
+    private void AlignCaptionButtons()
+    {
+        FrameworkElement? row = _editor is not null ? _editor.HeaderRightForTest : LibraryPanel.IsVisible ? LibraryHeaderButtons : null;
+        double right = _editor is not null ? EditorCaptionRight : LibraryCaptionRight;
+        double top = 10;
+        if (row is not null && row.IsVisible && row.ActualHeight > 0 && CaptionButtons.ActualHeight > 0 && row.IsDescendantOf(RootGrid))
+        {
+            double center = row.TransformToAncestor(RootGrid).Transform(new Point(0, row.ActualHeight / 2)).Y;
+            top = Math.Max(0, Math.Round(center - CaptionButtons.ActualHeight / 2));
+        }
+        var margin = new Thickness(0, top, right, 0);
+        if (CaptionButtons.Margin != margin) CaptionButtons.Margin = margin;
+        var settingsMargin = new Thickness(0, top + CaptionButtons.ActualHeight + 8, 0, 0);
+        if (SettingsPanel.Margin != settingsMargin) SettingsPanel.Margin = settingsMargin;
     }
 
     private void ShowLibraryTab(bool videos)
@@ -155,9 +189,10 @@ public partial class MainWindow
         SortButton.Visibility = ViewModeButton.Visibility = videos ? Visibility.Hidden : Visibility.Visible;
     }
 
-    private static void StyleTab(Button tab, bool selected)
+    private void StyleTab(Button tab, bool selected)
     {
-        tab.FontSize = selected ? 32 : 24;
+        // Beside the editor the library column is narrow, so the tabs shrink to leave room for the sort and view buttons.
+        tab.FontSize = _compactLibraryHeader ? (selected ? 26 : 19) : (selected ? 32 : 24);
         tab.FontWeight = selected ? FontWeights.Bold : FontWeights.SemiBold;
         tab.Foreground = selected ? Brushes.White : new SolidColorBrush(Color.FromRgb(0x8E, 0x90, 0x97));
     }

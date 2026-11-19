@@ -23,6 +23,8 @@ public sealed class HotkeyRecorderButton : Button
     private readonly TextBlock _label = new() { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
     private HotkeyBinding _binding;
     private bool _unavailable;
+    /// <summary>Catches Win-key combinations while listening; Windows handles many of them before this control sees the keys.</summary>
+    private WinKeyChordHook? _winHook;
 
     public event EventHandler? RecordingStarted;
     public event EventHandler? RecordingEnded;
@@ -64,12 +66,20 @@ public sealed class HotkeyRecorderButton : Button
         Keyboard.Focus(this);
         RecordingStarted?.Invoke(this, EventArgs.Empty);
         ShowPrompt(HotkeyModifiers.None);
+        _winHook = new WinKeyChordHook(binding =>
+        {
+            Dispatcher.BeginInvoke(() => { if (IsRecording) Finish(binding); });
+            return true;
+        });
+        if (!_winHook.Enable()) _winHook = null;
     }
 
     private void StopRecording()
     {
         if (!IsRecording) return;
         IsRecording = false;
+        _winHook?.Dispose();
+        _winHook = null;
         UpdateLabel();
         RecordingEnded?.Invoke(this, EventArgs.Empty);
     }

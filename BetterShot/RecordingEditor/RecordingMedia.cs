@@ -43,10 +43,15 @@ internal sealed record VideoInfo(double Duration, int Width, int Height, double 
 /// </summary>
 internal sealed class RecordingFrameReader
 {
-    private readonly MediaComposition _composition;
+    /// <summary>ERROR_OPLOCK_HANDLE_CLOSED: the file system (notably OneDrive's sync filter) closed our handle because another open broke its oplock.</summary>
+    private const int OplockHandleClosed = unchecked((int)0x80070323);
+    private const int MaximumReopens = 3;
+    private readonly string _moviePath;
+    private MediaComposition _composition;
 
-    private RecordingFrameReader(MediaComposition composition, VideoInfo info)
+    private RecordingFrameReader(string moviePath, MediaComposition composition, VideoInfo info)
     {
+        _moviePath = moviePath;
         _composition = composition;
         Info = info;
     }
@@ -55,15 +60,25 @@ internal sealed class RecordingFrameReader
 
     internal static async Task<RecordingFrameReader> OpenAsync(string moviePath)
     {
-        StorageFile file = await StorageFile.GetFileFromPathAsync(Path.GetFullPath(moviePath));
-        MediaClip clip = await MediaClip.CreateFromFileAsync(file);
+        MediaClip clip = await OpenClipAsync(moviePath);
         VideoEncodingProperties video = clip.GetVideoEncodingProperties();
         double frameRate = video.FrameRate.Denominator == 0 ? 30 : video.FrameRate.Numerator / (double)video.FrameRate.Denominator;
         if (!double.IsFinite(frameRate) || frameRate < 1 || frameRate > 240) frameRate = 30;
         var info = new VideoInfo(clip.OriginalDuration.TotalSeconds, (int)video.Width, (int)video.Height, frameRate, clip.EmbeddedAudioTracks.Count > 0);
+        return new RecordingFrameReader(moviePath, Compose(clip), info);
+    }
+
+    private static async Task<MediaClip> OpenClipAsync(string moviePath)
+    {
+        StorageFile file = await StorageFile.GetFileFromPathAsync(Path.GetFullPath(moviePath));
+        return await MediaClip.CreateFromFileAsync(file);
+    }
+
+    private static MediaComposition Compose(MediaClip clip)
+    {
         var composition = new MediaComposition();
         composition.Clips.Add(clip);
-        return new RecordingFrameReader(composition, info);
+        return composition;
     }
 
     /// <summary>Frames at the given source times, scaled to <paramref name="width"/> x <paramref name="height"/>.</summary>
@@ -72,7 +87,21 @@ internal sealed class RecordingFrameReader
         if (times.Count == 0) return [];
         double last = Math.Max(0, Info.Duration - 0.5 / Info.FrameRate);
         TimeSpan[] stamps = times.Select(time => TimeSpan.FromSeconds(Math.Clamp(time, 0, last))).ToArray();
-        IReadOnlyList<ImageStream> streams = await _composition.GetThumbnailsAsync(stamps, width, height, VideoFramePrecision.NearestFrame).AsTask(cancellation);
+        IReadOnlyList<ImageStream> streams;
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                streams = await _composition.GetThumbnailsAsync(stamps, width, height, VideoFramePrecision.NearestFrame).AsTask(cancellation);
+                break;
+            }
+            catch (Exception error) when (error.HResult == OplockHandleClosed && attempt < MaximumReopens)
+            {
+                // Recordings saved under OneDrive: opening the movie elsewhere (the player, audio extraction for an
+                // export) breaks our handle's oplock and Windows closes it. Reopen the movie and read again.
+                _composition = Compose(await OpenClipAsync(_moviePath));
+            }
+        }
         var frames = new List<DecodedFrame>(streams.Count);
         foreach (ImageStream stream in streams)
         {

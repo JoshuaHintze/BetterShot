@@ -224,7 +224,14 @@ internal sealed class FrameMovieEncoder
         if (!prepared.CanTranscode) throw new InvalidOperationException($"Windows could not start the video encoder ({prepared.FailureReason}).");
         await prepared.TranscodeAsync().AsTask(_cancellation);
         _cancellation.ThrowIfCancellationRequested();
-        if (_failure is not null) throw new InvalidOperationException($"A frame could not be prepared: {_failure.Message}", _failure);
+        if (_failure is not null) throw new InvalidOperationException($"A frame could not be prepared: {OneLine(_failure)}", _failure);
+    }
+
+    /// <summary>A Windows error as one readable line (WinRT messages can repeat themselves across blank lines or be empty).</summary>
+    private static string OneLine(Exception error)
+    {
+        string first = error.Message.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault() ?? string.Empty;
+        return first.Length > 0 ? first : $"{error.GetType().Name} 0x{error.HResult:X8}";
     }
 
     private async void Source_SampleRequested(MediaStreamSource sender, MediaStreamSourceSampleRequestedEventArgs args)

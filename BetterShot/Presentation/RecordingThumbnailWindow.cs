@@ -12,8 +12,8 @@ using Forms = System.Windows.Forms;
 namespace BetterShot.Presentation;
 
 /// <summary>
-/// Floating card shown after a recording finishes, like screenshot thumbnails: click to play, drag to share the MP4
-/// file, hover for Open / Show in folder / Delete. Recording cards stack in a column just right of the screenshot
+/// Floating card shown after a recording finishes, like screenshot thumbnails: click to edit, drag to share the MP4
+/// file, hover for Play / Edit / Show in folder / Delete. Recording cards stack in a column just right of the screenshot
 /// column at the bottom-left of the display, so the two never overlap. Always on top.
 /// </summary>
 internal sealed class RecordingThumbnailWindow : Window
@@ -73,12 +73,13 @@ internal sealed class RecordingThumbnailWindow : Window
         {
             Margin = new Thickness(8), Background = new SolidColorBrush(Color.FromArgb(0xF2, 0x1B, 0x1C, 0x21)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x4B, 0x4D, 0x55)), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(13),
-            Padding = new Thickness(7), Cursor = Cursors.Hand, ToolTip = "Click to play; drag to share the MP4 file",
+            Padding = new Thickness(7), Cursor = Cursors.Hand, ToolTip = "Click to edit; drag to share the MP4 file",
             Effect = new DropShadowEffect { BlurRadius = 22, ShadowDepth = 5, Opacity = 0.52 }, Child = grid
         };
         card.PreviewMouseLeftButtonDown += Card_MouseDown;
         card.PreviewMouseMove += Card_MouseMove;
         card.PreviewMouseLeftButtonUp += Card_MouseUp;
+        card.LostMouseCapture += (_, _) => _armed = false;
         Content = card;
         MouseEnter += (_, _) => ShowActions(true);
         MouseLeave += (_, _) => ShowActions(false);
@@ -113,7 +114,7 @@ internal sealed class RecordingThumbnailWindow : Window
     private StackPanel ActionRow()
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal };
-        row.Children.Add(IconButton(LucideIconKind.Play, "Play recording", (_, _) => TryRun(() => RecordingFiles.Open(Entry.MoviePath))));
+        row.Children.Add(IconButton(LucideIconKind.Play, "Play recording", (_, _) => PlayInBackground()));
         row.Children.Add(IconButton(LucideIconKind.Scissors, "Edit: trim, mark up, and export", (_, _) => EditRequested?.Invoke(this, EventArgs.Empty)));
         row.Children.Add(IconButton(LucideIconKind.FolderOpen, "Show in folder", (_, _) => TryRun(() => RecordingFiles.ShowInFolder(Entry.MoviePath))));
         row.Children.Add(IconButton(LucideIconKind.Trash2, "Move recording to the Recycle Bin", (_, _) => DeleteRequested?.Invoke(this, EventArgs.Empty)));
@@ -144,7 +145,9 @@ internal sealed class RecordingThumbnailWindow : Window
         _pointerDown = e.GetPosition(this);
         _armed = true;
         e.Handled = true;
-        CaptureMouse();
+        // Capture on the card, not the window: with the window holding capture, the button-up went to the window and
+        // never reached Card_MouseUp, so the click never finished and the mouse stayed captured (the app looked frozen).
+        ((UIElement)sender).CaptureMouse();
     }
 
     private void Card_MouseMove(object sender, MouseEventArgs e)
@@ -154,7 +157,7 @@ internal sealed class RecordingThumbnailWindow : Window
         if (Math.Abs(current.X - _pointerDown.X) < SystemParameters.MinimumHorizontalDragDistance &&
             Math.Abs(current.Y - _pointerDown.Y) < SystemParameters.MinimumVerticalDragDistance) return;
         _armed = false;
-        ReleaseMouseCapture();
+        ((UIElement)sender).ReleaseMouseCapture();
         (string? share, string? note) = RecordingFiles.SharePath(Entry.MoviePath);
         if (share is null)
         {
@@ -169,8 +172,22 @@ internal sealed class RecordingThumbnailWindow : Window
     {
         if (!_armed) return;
         _armed = false;
-        ReleaseMouseCapture();
-        TryRun(() => RecordingFiles.Open(Entry.MoviePath));
+        ((UIElement)sender).ReleaseMouseCapture();
+        EditRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Opens the movie in the default player off the UI thread: the shell can take seconds (or show its own picker)
+    /// to launch a player, and this card must stay responsive meanwhile.
+    /// </summary>
+    private void PlayInBackground()
+    {
+        string path = Entry.MoviePath;
+        _ = Task.Run(() =>
+        {
+            try { RecordingFiles.Open(path); }
+            catch (Exception error) { Dispatcher.BeginInvoke(() => MessageBox.Show($"Could not play the recording: {error.Message}", "BetterShot", MessageBoxButton.OK, MessageBoxImage.Warning)); }
+        });
     }
 
     private static bool IsInsideButton(DependencyObject? element)

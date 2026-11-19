@@ -115,7 +115,9 @@ internal sealed partial class RecordingEditorWindow
             button.Height = 36;
             if (group.Members.Length > 1)
             {
-                button.Content = WithCornerTriangle((UIElement)button.Content);
+                var icon = (UIElement)button.Content;
+                button.Content = null; // Detach the icon from the button before it moves into the corner-triangle grid.
+                button.Content = WithCornerTriangle(icon);
                 button.MouseRightButtonUp += (sender, e) => { e.Handled = true; OpenToolGroupMenu(current, (FrameworkElement)sender); };
             }
             group.Button = button;
@@ -230,7 +232,7 @@ internal sealed partial class RecordingEditorWindow
         _revertButton.Background = Brushes.Transparent;
         _revertButton.FontSize = 16;
         row.Children.Add(_revertButton);
-        Button done = TextButton("Done", "Save and close (marked copy updated for sharing)", Done_Click, LucideIconKind.Check, 42);
+        Button done = TextButton("Done", "Save and close: asks whether to replace the original or save an \"(edited)\" copy beside it", Done_Click, LucideIconKind.Check, 42);
         done.Background = ActiveBrush;
         done.Foreground = Brushes.Black;
         done.FontSize = 16;
