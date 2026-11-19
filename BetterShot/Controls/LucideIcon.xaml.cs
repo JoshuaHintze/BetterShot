@@ -29,7 +29,11 @@ public enum LucideIconKind
     Plus,
     Pencil,
     Pin,
-    X
+    X,
+    Fullscreen,
+    Timer,
+    Folder,
+    FolderOpen
 }
 
 public partial class LucideIcon : UserControl
@@ -84,6 +88,10 @@ public partial class LucideIcon : UserControl
             case LucideIconKind.Pencil: Path("M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"); Path("m15 5 4 4"); break;
             case LucideIconKind.Pin: Path("M12 17v5"); Path("M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"); break;
             case LucideIconKind.X: Path("M18 6 6 18"); Path("m6 6 12 12"); break;
+            case LucideIconKind.Fullscreen: Path("M3 7V5a2 2 0 0 1 2-2h2"); Path("M17 3h2a2 2 0 0 1 2 2v2"); Path("M21 17v2a2 2 0 0 1-2 2h-2"); Path("M7 21H5a2 2 0 0 1-2-2v-2"); Rectangle(7, 8, 10, 8, 1); break;
+            case LucideIconKind.Timer: Path("M10 2h4"); Path("M12 14l3-3"); Path("M20 14a8 8 0 1 1-16 0a8 8 0 1 1 16 0"); break;
+            case LucideIconKind.Folder: Path("M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"); break;
+            case LucideIconKind.FolderOpen: Path("m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"); break;
         }
     }
 

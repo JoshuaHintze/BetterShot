@@ -26,8 +26,9 @@ public partial class App : System.Windows.Application
             {
                 passed = Platform.ShortcutClassifier.RunSelfTests();
                 Capture.ScreenGeometry.RunSelfTest();
+                Platform.HotkeyBinding.RunSelfTest();
                 EditorDiagnostics.RunSelfTest();
-                result = passed ? "PASS: shortcut classification, suppression, screen geometry, document editing, rendering, and PNG file-drop snapshots" : "FAIL: shortcut classification or suppression";
+                result = passed ? "PASS: shortcut classification, suppression, screen geometry, monitor-under-cursor, hotkey validation, document editing, rendering, and PNG file-drop snapshots" : "FAIL: shortcut classification or suppression";
             }
             catch (Exception ex)
             {
@@ -71,6 +72,12 @@ public partial class App : System.Windows.Application
         if (e.Args.Contains("--history-test", StringComparer.OrdinalIgnoreCase))
         {
             _ = RunHistoryTestAsync(testOutput);
+            return;
+        }
+
+        if (e.Args.Contains("--capture-settings-test", StringComparer.OrdinalIgnoreCase))
+        {
+            _ = RunCaptureSettingsTestAsync(testOutput);
             return;
         }
 
@@ -298,6 +305,11 @@ public partial class App : System.Windows.Application
     {
         try { await HistoryDiagnostics.RunAsync(output); Shutdown(0); }
         catch (Exception ex) { WriteTestResult(output, $"FAIL: history test: {ex}", "history-test.txt"); Shutdown(1); }
+    }
+    private async Task RunCaptureSettingsTestAsync(string? output)
+    {
+        try { await CaptureSettingsDiagnostics.RunAsync(output); Shutdown(0); }
+        catch (Exception ex) { WriteTestResult(output, $"FAIL: capture settings test: {ex}", "capture-settings-test.txt"); Shutdown(1); }
     }
     private async Task RunShellTestAsync(string? output)
     {

@@ -11,7 +11,8 @@ using BetterShot.Interop;
 
 namespace BetterShot.Capture;
 
-public enum CaptureMode { Area, Window, Display }
+/// <summary>Area, Window, and Display open the frozen selection overlay; Fullscreen immediately captures the display under the cursor.</summary>
+public enum CaptureMode { Area, Window, Display, Fullscreen }
 
 /// <summary>
 /// Captures the currently composed virtual desktop, then selects from that frozen frame.
@@ -122,7 +123,9 @@ public sealed class CaptureService
             return await dispatcher.InvokeAsync(() => CaptureAsync(mode)).Task.Unwrap();
 
         var (desktop, virtualBounds) = CaptureVirtualDesktop();
-        var selected = await SelectionSession.SelectAsync(desktop, virtualBounds, mode);
+        Int32Rect? selected = mode == CaptureMode.Fullscreen
+            ? DisplayUnderCursor(virtualBounds)
+            : await SelectionSession.SelectAsync(desktop, virtualBounds, mode);
         if (selected is null || selected.Value.Width <= 0 || selected.Value.Height <= 0)
             return null;
 
@@ -133,6 +136,14 @@ public sealed class CaptureService
         var result = new CroppedBitmap(desktop, local);
         result.Freeze();
         return result;
+    }
+
+    private static Int32Rect DisplayUnderCursor(Int32Rect virtualBounds)
+    {
+        Int32Rect[] monitors = NativeMethods.GetMonitorRects()
+            .Select(rect => new Int32Rect(rect.Left, rect.Top, rect.Width, rect.Height)).ToArray();
+        if (!NativeMethods.GetCursorPos(out NativeMethods.Point cursor)) return monitors.FirstOrDefault(virtualBounds);
+        return ScreenGeometry.MonitorAt(monitors, cursor.X, cursor.Y) ?? virtualBounds;
     }
 
     private static (BitmapSource Image, Int32Rect Bounds) CaptureVirtualDesktop()

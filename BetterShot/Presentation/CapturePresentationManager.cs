@@ -1,4 +1,5 @@
 using BetterShot.Editing;
+using BetterShot.Export;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -18,7 +19,24 @@ public sealed class CapturePresentationManager : IDisposable
     public event EventHandler<CaptureDocumentEventArgs>? DeleteRequested;
     public event EventHandler<CaptureDocumentEventArgs>? Removed;
 
+    private TimeSpan _autoDismissAfter = TimeSpan.Zero;
+
     public bool DragAsFile { get; set; }
+    /// <summary>Format/resize used by thumbnail Save, Copy, and drag exports; read live so open thumbnails follow Settings.</summary>
+    internal ExportOptions Export { get; set; } = ExportOptions.Default;
+    /// <summary>Settings-provided save state used to suggest file names in Save dialogs.</summary>
+    internal Func<int> FileNameCounter { get; set; } = () => 1;
+
+    /// <summary>Zero keeps thumbnails until dismissed. Changing it restarts the countdown on visible thumbnails.</summary>
+    internal TimeSpan AutoDismissAfter
+    {
+        get => _autoDismissAfter;
+        set
+        {
+            _autoDismissAfter = value < TimeSpan.Zero ? TimeSpan.Zero : value;
+            foreach (CaptureThumbnailWindow thumbnail in _thumbnails) thumbnail.RestartAutoDismiss();
+        }
+    }
     public IReadOnlyList<CaptureDocument> Recent => _recent;
     internal IReadOnlyList<CaptureThumbnailWindow> Thumbnails => _thumbnails;
     internal int OpenEditorCount => _editors.Count;
@@ -32,7 +50,14 @@ public sealed class CapturePresentationManager : IDisposable
         _screens[thumbnail] = Forms.Screen.FromPoint(Forms.Cursor.Position).DeviceName;
         thumbnail.Show();
         Reflow();
+        thumbnail.RestartAutoDismiss();
         return thumbnail;
+    }
+
+    /// <summary>Adds a new capture to the front of Recent without a floating thumbnail.</summary>
+    public void AddWithoutThumbnail(CaptureDocument document)
+    {
+        if (!_recent.Contains(document)) _recent.Insert(0, document);
     }
 
     public void Retain(CaptureDocument document)
@@ -76,7 +101,7 @@ public sealed class CapturePresentationManager : IDisposable
 
     internal void Dismiss(CaptureThumbnailWindow thumbnail)
     {
-        _thumbnails.Remove(thumbnail);
+        if (!_thumbnails.Remove(thumbnail)) return;
         _screens.Remove(thumbnail);
         thumbnail.Close();
         Reflow();

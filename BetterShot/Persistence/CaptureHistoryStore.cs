@@ -16,10 +16,8 @@ internal sealed class CaptureHistoryStore
     private readonly string _settingsPath;
     private readonly List<string> _lastLoadErrors = [];
     private readonly HashSet<Guid> _expiredDuringLastPurge = [];
-    private int _retentionDays = 7;
-    private bool _replaceScreenshotShortcut;
-    private bool _startWithWindows;
-    private bool _dragAsFile;
+    private CaptureSettings _settings = CaptureSettings.Default;
+    private Dictionary<string, JsonElement>? _additionalSettingsFields;
 
     internal CaptureHistoryStore(string root)
     {
@@ -34,41 +32,43 @@ internal sealed class CaptureHistoryStore
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "BetterShot", "History");
 
-    internal int RetentionDays => _retentionDays;
-    internal bool ReplaceScreenshotShortcut => _replaceScreenshotShortcut;
-    internal bool StartWithWindows => _startWithWindows;
-    internal bool DragAsFile => _dragAsFile;
+    internal CaptureSettings Settings => _settings;
+    /// <summary>Days captures are kept; <see cref="CaptureSettings.NeverExpire"/> (0) keeps them until deleted.</summary>
+    internal int RetentionDays => _settings.RetentionDays;
+    internal bool KeepForever => _settings.KeepForever;
+    internal bool ReplaceScreenshotShortcut => _settings.ReplaceScreenshotShortcut;
+    internal bool StartWithWindows => _settings.StartWithWindows;
+    internal bool DragAsFile => _settings.DragAsFile;
     internal IReadOnlyList<string> LastLoadErrors => _lastLoadErrors;
 
+    /// <summary>Accepts 1-365 days, or <see cref="CaptureSettings.NeverExpire"/> to keep captures until deleted.</summary>
     internal void SetRetentionDays(int days)
     {
-        if (days is < 1 or > 365)
-            throw new ArgumentOutOfRangeException(nameof(days), "Retention must be between 1 and 365 days.");
-
-        Directory.CreateDirectory(_root);
-        WriteSettings(days, _replaceScreenshotShortcut, _startWithWindows, _dragAsFile);
-        _retentionDays = days;
+        if (days != CaptureSettings.NeverExpire && days is < 1 or > 365)
+            throw new ArgumentOutOfRangeException(nameof(days), "Retention must be between 1 and 365 days, or never.");
+        UpdateSettings(settings => settings with { RetentionDays = days });
     }
 
-    internal void SetReplaceScreenshotShortcut(bool enabled)
-    {
-        Directory.CreateDirectory(_root);
-        WriteSettings(_retentionDays, enabled, _startWithWindows, _dragAsFile);
-        _replaceScreenshotShortcut = enabled;
-    }
+    internal void SetReplaceScreenshotShortcut(bool enabled) =>
+        UpdateSettings(settings => settings with { ReplaceScreenshotShortcut = enabled });
 
-    internal void SetStartWithWindows(bool enabled)
-    {
-        Directory.CreateDirectory(_root);
-        WriteSettings(_retentionDays, _replaceScreenshotShortcut, enabled, _dragAsFile);
-        _startWithWindows = enabled;
-    }
+    internal void SetStartWithWindows(bool enabled) =>
+        UpdateSettings(settings => settings with { StartWithWindows = enabled });
 
-    internal void SetDragAsFile(bool enabled)
+    internal void SetDragAsFile(bool enabled) =>
+        UpdateSettings(settings => settings with { DragAsFile = enabled });
+
+    /// <summary>
+    /// Writes the changed snapshot atomically (including every other field and unknown fields from
+    /// newer builds) and only then updates the in-memory value, so a failed write changes nothing.
+    /// </summary>
+    internal void UpdateSettings(Func<CaptureSettings, CaptureSettings> change)
     {
+        ArgumentNullException.ThrowIfNull(change);
+        CaptureSettings updated = change(_settings).Normalize();
         Directory.CreateDirectory(_root);
-        WriteSettings(_retentionDays, _replaceScreenshotShortcut, _startWithWindows, enabled);
-        _dragAsFile = enabled;
+        WriteJsonAtomically(_settingsPath, CaptureSettingsMapper.ToDto(updated, _additionalSettingsFields));
+        _settings = updated;
     }
 
     internal IReadOnlyList<CaptureDocument> Load(DateTime utcNow)
@@ -140,10 +140,10 @@ internal sealed class CaptureHistoryStore
     internal IReadOnlyList<Guid> PurgeExpired(DateTime utcNow)
     {
         _lastLoadErrors.Clear();
-        DateTime cutoff = utcNow.ToUniversalTime().AddDays(-_retentionDays);
         var removed = new List<Guid>();
         _expiredDuringLastPurge.Clear();
-        if (!Directory.Exists(_root)) return removed;
+        if (_settings.KeepForever || !Directory.Exists(_root)) return removed;
+        DateTime cutoff = utcNow.ToUniversalTime().AddDays(-_settings.RetentionDays);
 
         foreach (string path in Directory.EnumerateFiles(_root, "*.capture", SearchOption.TopDirectoryOnly))
         {
@@ -363,10 +363,8 @@ internal sealed class CaptureHistoryStore
                 File.ReadAllText(_settingsPath), JsonOptions);
             if (settings?.RetentionDays is >= 1 and <= 365)
             {
-                _retentionDays = settings.RetentionDays;
-                _replaceScreenshotShortcut = settings.ReplaceScreenshotShortcut;
-                _startWithWindows = settings.StartWithWindows;
-                _dragAsFile = settings.DragAsFile;
+                _settings = CaptureSettingsMapper.FromDto(settings);
+                _additionalSettingsFields = settings.AdditionalFields;
             }
         }
         catch (JsonException)
@@ -378,15 +376,6 @@ internal sealed class CaptureHistoryStore
             // Keep the safe default if settings cannot currently be read.
         }
     }
-
-    private void WriteSettings(int retentionDays, bool replaceScreenshotShortcut, bool startWithWindows, bool dragAsFile) =>
-        WriteJsonAtomically(_settingsPath, new HistorySettingsDto
-        {
-            RetentionDays = retentionDays,
-            ReplaceScreenshotShortcut = replaceScreenshotShortcut,
-            StartWithWindows = startWithWindows,
-            DragAsFile = dragAsFile
-        });
 
     private static void WriteJsonAtomically<T>(string destination, T value)
     {
