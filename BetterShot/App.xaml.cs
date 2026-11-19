@@ -288,40 +288,44 @@ public partial class App : System.Windows.Application
                 editor.Width = testWidth;
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
                 editor.UpdateLayout();
-                var root = (System.Windows.Controls.Grid)editor.Content;
-                var toolbar = (System.Windows.Controls.Border)root.Children[0];
-                var bar = (System.Windows.Controls.Grid)toolbar.Child;
-                Rect? previous = null;
-                foreach (FrameworkElement group in bar.Children)
-                {
-                    Point origin = group.TranslatePoint(new Point(), bar);
-                    var bounds = new Rect(origin, group.RenderSize);
-                    if (bounds.Left < -0.5 || bounds.Right > bar.ActualWidth + 0.5 ||
-                        bounds.Top < -0.5 || bounds.Bottom > bar.ActualHeight + 0.5 ||
-                        (previous is Rect prior && prior.Right > bounds.Left + 0.5))
-                        throw new InvalidOperationException($"Editor toolbar overlaps or clips at {testWidth} DIP.");
-                    previous = bounds;
-                }
+                editor.Surface.VerifyChromeFitsForTest($"{testWidth} DIP");
                 RenderWindow(editor, Path.Combine(directory, $"workflow-editor-{testWidth:0}.png"));
             }
 
-            InlineTextDiagnostics.Verify(editor, document);
+            InlineTextDiagnostics.Verify(editor.Surface, document);
             editor.Width = 1180;
-            editor.SetZoomForTest(0.85);
-            editor.BeginTextForTest(new Point(60, 45));
-            editor.SetTextForTest("Hello gyp\nEdit text right on the image");
+            editor.Surface.SetZoomForTest(0.85);
+            editor.Surface.BeginTextForTest(new Point(60, 45));
+            editor.Surface.SetTextForTest("Hello gyp\nEdit text right on the image");
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             RenderWindow(editor, Path.Combine(directory, "workflow-inline-text.png"));
-            editor.CommitTextForTest();
+            editor.Surface.CommitTextForTest();
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             RenderWindow(editor, Path.Combine(directory, "workflow-text-handles.png"));
+            // Callout (Q): drag out a bubble, type bold text into it, and compare the editor preview with the export.
+            editor.Surface.HandleShortcutForTest(System.Windows.Input.Key.Q);
+            editor.Surface.BeginCalloutForTest(new Point(470, 300), new Point(720, 220));
+            editor.Surface.SetTextForTest("Press Q, drag, and type right in the bubble");
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            RenderWindow(editor, Path.Combine(directory, "workflow-callout-typing.png"));
+            editor.Surface.CommitTextForTest();
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            RenderWindow(editor, Path.Combine(directory, "workflow-callout.png"));
+            SaveBitmap(document.Render(), Path.Combine(directory, "workflow-callout-export.png"));
+            if (document.Items.OfType<TextAnnotation>().LastOrDefault() is not { IsCallout: true, WrapWidth: not null })
+                throw new InvalidOperationException("The callout was not committed with a wrapping bubble.");
+            editor.Surface.SetInspectorForTest(true, docked: false);
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            RenderWindow(editor, Path.Combine(directory, "workflow-inspector-floating.png"));
+            editor.Surface.SetInspectorForTest(true, docked: true);
+            document.Undo();
             editor.Close();
             shell.Presentation.OpenEditor(document);
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             EditorWindow reopened = shell.Presentation.EditorFor(document) ?? throw new InvalidOperationException("The shared document could not be reopened.");
             if (!ReferenceEquals(shell.Presentation.Recent[1], document)) throw new InvalidOperationException("Reopening replaced the shared document.");
             reopened.Close(); shell.Presentation.Dismiss(thumbnail); shell.CloseForTest(); shell = null;
-            WriteTestResult(Path.Combine(directory, "workflow-test.txt"), "PASS: thumbnail-first capture, no auto-editor, multi-capture retention, dismiss behavior, shared-document reopen, thumbnail render, editor layout, inline text editing, text handle undo/cancel, pointer-anchored zoom, and Space-drag canvas navigation");
+            WriteTestResult(Path.Combine(directory, "workflow-test.txt"), "PASS: thumbnail-first capture, no auto-editor, multi-capture retention, dismiss behavior, shared-document reopen, thumbnail render, editor layout, inspector, callout creation, inline text editing, text handle undo/cancel, pointer-anchored zoom, and Space-drag canvas navigation");
             Shutdown(0);
         }
         catch (Exception ex)

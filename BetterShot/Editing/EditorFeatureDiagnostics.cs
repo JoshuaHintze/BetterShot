@@ -6,10 +6,10 @@ using System.Windows.Media;
 
 namespace BetterShot.Editing;
 
-/// <summary>Editor-window checks for grouped tools, crop, background, styling, selection commands, callouts, and Done.</summary>
+/// <summary>Editor checks for grouped tools, crop, background, styling, selection commands, callouts, the inspector, and Done.</summary>
 internal static class EditorFeatureDiagnostics
 {
-    internal static void Verify(EditorWindow editor, CaptureDocument document)
+    internal static void Verify(EditorSurface editor, CaptureDocument document)
     {
         string directory = Path.Combine(Path.GetTempPath(), "BetterShot-editor-test-" + Guid.NewGuid().ToString("N"));
         var styles = new EditorStyleStore(Path.Combine(directory, "editor-styles.json"));
@@ -23,7 +23,7 @@ internal static class EditorFeatureDiagnostics
             VerifyStyling(editor, document, styles);
             VerifySelectionCommands(editor, document);
             VerifyCallout(editor, document);
-            VerifyPopups(editor);
+            VerifyInspector(editor, styles);
             VerifyDone(styles);
         }
         finally
@@ -35,7 +35,7 @@ internal static class EditorFeatureDiagnostics
         }
     }
 
-    private static void VerifyShortcuts(EditorWindow editor)
+    private static void VerifyShortcuts(EditorSurface editor)
     {
         var expectations = new (Key Key, EditorTool Tool)[]
         {
@@ -53,7 +53,7 @@ internal static class EditorFeatureDiagnostics
         Check(!editor.HandleShortcutForTest(Key.Enter), "Enter was handled outside an active crop.");
     }
 
-    private static void VerifyCrop(EditorWindow editor, CaptureDocument document)
+    private static void VerifyCrop(EditorSurface editor, CaptureDocument document)
     {
         editor.SetZoomForTest(0.5);
         Check(editor.HandleShortcutForTest(Key.C) && editor.IsCroppingForTest && editor.CurrentToolForTest == EditorTool.Crop, "C did not start cropping.");
@@ -76,7 +76,7 @@ internal static class EditorFeatureDiagnostics
         Check(document.Crop is null && editor.ImageSourceForTest?.PixelWidth == 920, "Crop undo did not restore the full preview.");
     }
 
-    private static void VerifyBackground(EditorWindow editor, CaptureDocument document)
+    private static void VerifyBackground(EditorSurface editor, CaptureDocument document)
     {
         document.SetBackground(new BackgroundStyle("ocean", 48, 18, true));
         Check(editor.ImageSourceForTest?.PixelWidth == 920 + 96 && document.Render().PixelHeight == 560 + 96, "Background padding was not shown in the preview and export.");
@@ -84,7 +84,7 @@ internal static class EditorFeatureDiagnostics
         Check(editor.ImageSourceForTest?.PixelWidth == 920 && !document.Background.IsEnabled, "Background undo failed.");
     }
 
-    private static void VerifyStyling(EditorWindow editor, CaptureDocument document, EditorStyleStore styles)
+    private static void VerifyStyling(EditorSurface editor, CaptureDocument document, EditorStyleStore styles)
     {
         editor.HandleShortcutForTest(Key.R);
         editor.ApplyStyleForTest(style => style with { Stroke = Colors.Blue, Width = 14, Dashed = true });
@@ -115,7 +115,7 @@ internal static class EditorFeatureDiagnostics
         Check(document.Items.OfType<RectangleAnnotation>().Last() is { Width: 4, Opacity: .5 }, "Applying a preset did not restyle the selection.");
     }
 
-    private static void VerifySelectionCommands(EditorWindow editor, CaptureDocument document)
+    private static void VerifySelectionCommands(EditorSurface editor, CaptureDocument document)
     {
         var target = document.Items.OfType<RectangleAnnotation>().Last();
         editor.SelectAnnotationForTest(target);
@@ -135,23 +135,31 @@ internal static class EditorFeatureDiagnostics
         menu!.IsOpen = false;
     }
 
-    private static void VerifyCallout(EditorWindow editor, CaptureDocument document)
+    private static void VerifyCallout(EditorSurface editor, CaptureDocument document)
     {
         int count = document.Items.Count;
-        editor.BeginCalloutForTest(new Point(300, 420), new Point(380, 330));
-        editor.SetTextForTest("Look here");
+        // Drag from (300, 420) to (520, 330): the drag is the bubble, the tail points out from the drag's start corner.
+        editor.BeginCalloutForTest(new Point(300, 420), new Point(520, 330));
+        Check(editor.TextEditorForTest is { TextWrapping: TextWrapping.Wrap, FontWeight: var weight } && weight == FontWeights.Bold, "The callout editor is not bold, wrapping, and inline.");
+        editor.SetTextForTest("Look here, this wraps onto more than one line");
         editor.CommitTextForTest();
         var callout = document.Items.OfType<TextAnnotation>().Last();
-        Check(document.Items.Count == count + 1 && callout.IsCallout && callout.Tail == new Point(300, 420) && callout.Position == new Point(380, 330) && callout.Text == "Look here",
-            "Callout was not created inline with its tail at the drag start.");
+        Check(document.Items.Count == count + 1 && callout.IsCallout && callout.Text.StartsWith("Look here") && callout.WrapWidth is double wrap && wrap > 100,
+            "Callout was not created inline with a wrapping bubble width.");
+        Rect bubble = callout.BubbleBounds;
+        Check(Math.Abs(bubble.Left - 300) < 1 && Math.Abs(bubble.Top - 330) < 1 && Math.Abs(bubble.Width - 220) < 1, "The callout bubble does not match the dragged rectangle.");
+        Check(bubble.Height > callout.FontSize * 2, "The callout bubble did not grow to fit wrapped text.");
+        Check(callout.Tail is Point pointer && pointer.X < 300 && pointer.Y > 420, "The callout tail does not point out from the drag start.");
+        Check(GeometryUtil.Contrast(callout.BubbleColor) == callout.TextColor, "Callout text is not contrast-aware.");
+        Point oldTail = callout.Tail!.Value;
         editor.UpdateLayout();
         Thumb tail = editor.TextOverlayForTest.Children.OfType<Thumb>().Single(thumb => thumb.Tag is TextCorner.Tail);
         tail.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
         tail.RaiseEvent(new DragDeltaEventArgs(10, 0) { RoutedEvent = Thumb.DragDeltaEvent });
         tail.RaiseEvent(new DragCompletedEventArgs(10, 0, false) { RoutedEvent = Thumb.DragCompletedEvent });
-        Check(document.Items.OfType<TextAnnotation>().Last().Tail == new Point(320, 420), "Callout tail handle did not move the pointer.");
+        Check(document.Items.OfType<TextAnnotation>().Last().Tail == oldTail + new Vector(20, 0), "Callout tail handle did not move the pointer.");
         document.Undo();
-        Check(document.Items.OfType<TextAnnotation>().Last().Tail == new Point(300, 420), "Callout tail move was not undoable.");
+        Check(document.Items.OfType<TextAnnotation>().Last().Tail == oldTail, "Callout tail move was not undoable.");
         editor.BeginCalloutForTest(new Point(500, 200), new Point(500, 200));
         editor.CancelTextForTest();
         Check(document.Items.Count == count + 1, "Cancelling a new callout changed the document.");
@@ -159,12 +167,23 @@ internal static class EditorFeatureDiagnostics
         Check(document.Items.Count == count, "Callout creation was not one undo step.");
     }
 
-    private static void VerifyPopups(EditorWindow editor)
+    private static void VerifyInspector(EditorSurface editor, EditorStyleStore styles)
     {
         editor.HandleShortcutForTest(Key.R);
-        editor.OpenOptionsForTest();
-        Check(editor.OptionsPopupForTest is { IsOpen: true, Child: not null }, "Style options did not open.");
-        editor.OptionsPopupForTest!.IsOpen = false;
+        editor.SetInspectorForTest(true, docked: true);
+        editor.UpdateLayout();
+        Check(editor.InspectorVisibleForTest && editor.InspectorDockedForTest, "The docked inspector is not showing.");
+        editor.SetInspectorForTest(true, docked: false);
+        editor.UpdateLayout();
+        Check(editor.InspectorVisibleForTest && !editor.InspectorDockedForTest && !styles.InspectorDocked, "The floating inspector is not showing.");
+        Check(editor.HandleShortcutForTest(Key.I) && !editor.InspectorVisibleForTest && !styles.ShowsInspector, "I did not hide the inspector.");
+        Check(editor.HandleShortcutForTest(Key.I) && editor.InspectorVisibleForTest, "I did not show the inspector again.");
+        editor.SetInspectorForTest(true, docked: true);
+        editor.ApplyQuickColorForTest(2);
+        Check(styles.Get(EditorTool.Rectangle).Stroke == styles.QuickColors[2], "A quick color did not apply.");
+        editor.SetHexForTest("#3366CC");
+        Check(styles.Get(EditorTool.Rectangle).Stroke == Color.FromRgb(0x33, 0x66, 0xCC), "The hex field did not apply.");
+        Check(EditorSurface.TryParseHex("ff4245", out Color parsed) && parsed == ToolStyle.DefaultStroke && !EditorSurface.TryParseHex("#12", out _), "Hex parsing is wrong.");
         editor.OpenBackgroundOptionsForTest();
         Check(editor.BackgroundPopupForTest is { IsOpen: true, Child: not null }, "Background options did not open.");
         editor.BackgroundPopupForTest!.IsOpen = false;
@@ -179,9 +198,9 @@ internal static class EditorFeatureDiagnostics
         try
         {
             window.Show();
-            window.HandleShortcutForTest(Key.C);
-            window.SetPendingCropForTest(new Rect(10, 10, 100, 60));
-            Check(window.HandleShortcutForTest(Key.Enter, ModifierKeys.Control) && closed, "Ctrl+Enter did not close the editor.");
+            window.Surface.HandleShortcutForTest(Key.C);
+            window.Surface.SetPendingCropForTest(new Rect(10, 10, 100, 60));
+            Check(window.Surface.HandleShortcutForTest(Key.Enter, ModifierKeys.Control) && closed, "Ctrl+Enter did not close the editor.");
             Check(document.Crop == new Rect(10, 10, 100, 60), "Done did not commit the pending crop.");
         }
         finally

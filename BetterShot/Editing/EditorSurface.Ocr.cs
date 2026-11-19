@@ -14,9 +14,8 @@ namespace BetterShot.Editing;
 /// On-device text actions: Copy all text, Copy text from selection (rubber band), and automatic redaction of
 /// detected emails, numbers, and keys. Text is always read from the original pixels with redactions masked.
 /// </summary>
-public sealed partial class EditorWindow
+public sealed partial class EditorSurface
 {
-    private const double CompactToolbarWidth = 840;
     private const double MinimumSelectionDrag = 4;
     private static readonly Brush HintFill = Frozen(Color.FromArgb(40, 255, 212, 0));
     private static readonly Brush HintSelectedFill = Frozen(Color.FromArgb(110, 255, 212, 0));
@@ -31,7 +30,6 @@ public sealed partial class EditorWindow
     private Point? _selectionStart;
     private bool _selectingText;
     private RecognizedText? _selectionText;
-    private Button? _doneButton;
 
     internal bool SelectingTextForTest => _selectingText;
     internal string ToastTextForTest => _toastText.Text;
@@ -50,7 +48,7 @@ public sealed partial class EditorWindow
     private Border CreateToast() => new()
     {
         Child = _toastText, Background = Brush("#F0232427"), BorderBrush = Brush("#45474B"), BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 8, 14, 8), Margin = new Thickness(0, 0, 0, 22),
+        CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 8, 14, 8), Margin = new Thickness(0, 0, 0, 82),
         HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false, Opacity = 0,
         Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 16, Opacity = .5, ShadowDepth = 3 }
     };
@@ -63,21 +61,24 @@ public sealed partial class EditorWindow
         _ocrOverlay.MouseLeftButtonUp += OcrOverlay_MouseLeftButtonUp;
         _ocrOverlay.LostMouseCapture += (_, _) => { if (_selectionStart is not null) ClearSelectionBand(); };
         _ocrOverlay.SizeChanged += (_, _) => DrawWordHints();
-        SizeChanged += (_, _) => UpdateCompactToolbar();
-        Closed += (_, _) => { _ocrCancellation.Cancel(); _toastTimer.Stop(); };
     }
 
-    /// <summary>Split button: the main part copies all text; the chevron offers both scopes.</summary>
+    /// <summary>"Copy Text ⌄" split button: the main part copies all text; the chevron offers both scopes.</summary>
     private FrameworkElement BuildOcrButton()
     {
-        Button main = IconButton(LucideIconKind.ScanText, "Copy all text (Ctrl+Shift+C)", (_, _) => _ = CopyAllTextAsync(), 28);
-        Button chevron = IconButton(LucideIconKind.ChevronDown, "Text options", (_, _) => { }, 16, 36, 11);
-        main.Margin = new Thickness(0); chevron.Margin = new Thickness(0);
-        main.Background = Brushes.Transparent; chevron.Background = Brushes.Transparent;
-        chevron.Padding = new Thickness(0, 5, 3, 5);
+        var label = new StackPanel { Orientation = Orientation.Horizontal };
+        label.Children.Add(new LucideIcon { Icon = LucideIconKind.ScanText, Width = 19, Height = 19, Foreground = Brushes.White, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center });
+        _ocrLabel = new TextBlock { Text = "Copy Text", FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        label.Children.Add(_ocrLabel);
+        var main = new Button { Content = label, Height = 42, Padding = new Thickness(12, 0, 4, 0), Background = Brushes.Transparent, Foreground = Brushes.White, BorderThickness = new Thickness(0), Cursor = Cursors.Hand, ToolTip = "Copy all text (Ctrl+Shift+C)" };
+        main.Template = ButtonTemplate(10);
+        System.Windows.Automation.AutomationProperties.SetName(main, "Copy all text");
+        main.Click += (_, _) => _ = CopyAllTextAsync();
+        Button chevron = IconButton(LucideIconKind.ChevronDown, "Text options", (_, _) => { }, 26, 42, 14);
+        chevron.Margin = new Thickness(0);
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(main); row.Children.Add(chevron);
-        var chrome = new Border { Child = row, CornerRadius = new CornerRadius(9), Margin = new Thickness(1, 0, 1, 0), Background = Brush("#303133") };
+        var chrome = new Border { Child = row, Margin = new Thickness(4, 0, 4, 0) };
         chevron.Click += (_, _) => OpenOcrMenu(chrome);
         return chrome;
     }
@@ -103,42 +104,6 @@ public sealed partial class EditorWindow
         if (_selectingText && key == Key.Escape) { CancelTextSelection("Text selection cancelled."); return true; }
         if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.C) { _ = CopyAllTextAsync(); return true; }
         return false;
-    }
-
-    /// <summary>Below this width the Done label collapses to its icon so the single-row toolbar never clips.</summary>
-    private void UpdateCompactToolbar()
-    {
-        if (_doneButton?.Content is not StackPanel { Children: [LucideIcon icon, TextBlock label] }) return;
-        bool compact = ActualWidth < CompactToolbarWidth;
-        _doneButton.Width = compact ? 36 : 82;
-        _doneButton.Padding = compact ? new Thickness(5) : new Thickness(10, 5, 10, 5);
-        label.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        icon.Margin = compact ? new Thickness(0) : new Thickness(0, 0, 7, 0);
-        CompactSquareButtons(_toolbarBar, compact);
-    }
-
-    private Grid? _toolbarBar;
-    private readonly Dictionary<Button, (double Width, Thickness Margin)> _fullToolbarButtonSizes = new();
-
-    /// <summary>Square 36 DIP toolbar buttons shrink to 32 DIP with tighter gaps in compact mode, so tools, Ask Claude, OCR, Copy, Save and Done stay on one row at the 780 DIP minimum width.</summary>
-    private void CompactSquareButtons(DependencyObject? parent, bool compact)
-    {
-        if (parent is null) return;
-        foreach (object child in LogicalTreeHelper.GetChildren(parent))
-        {
-            if (child is Button button && !ReferenceEquals(button, _doneButton))
-            {
-                if (!_fullToolbarButtonSizes.TryGetValue(button, out var full))
-                {
-                    if (button.Width != 36) continue;
-                    full = (button.Width, button.Margin);
-                    _fullToolbarButtonSizes[button] = full;
-                }
-                button.Width = compact ? 32 : full.Width;
-                button.Margin = compact ? new Thickness(1, 0, 1, 0) : full.Margin;
-            }
-            else if (child is Panel or Border or Grid) CompactSquareButtons(child as DependencyObject, compact);
-        }
     }
 
     private async Task CopyAllTextAsync()

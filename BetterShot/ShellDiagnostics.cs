@@ -33,35 +33,85 @@ internal static class ShellDiagnostics
             shell.PresentDocumentForTest(selected);
             await SettleAsync(shell);
             if (!ReferenceEquals(shell.SelectedDocumentForTest, selected)) throw new InvalidOperationException("The newest recent capture was not selected.");
-            if (!shell.SelectedTimeText.Text.StartsWith("Today, ")) throw new InvalidOperationException("The capture timestamp is not readable.");
-            VerifyVisibleControlsFit(shell, "populated shell at 1179 x 860");
+            if (!shell.GroupNamesForTest.SequenceEqual(["Today"])) throw new InvalidOperationException("Today's captures were not grouped under Today.");
+            if (!shell.SaveLocationForTest.Contains(" › ") && !shell.SaveLocationForTest.Contains("to ")) throw new InvalidOperationException("The save location line is missing.");
+            if (shell.EmbeddedEditorForTest is not null) throw new InvalidOperationException("Presenting a capture opened the editor.");
+            VerifyVisibleControlsFit(shell, "populated library at 1179 x 860");
             Render(shell, Path.Combine(directory, "shell-populated-user-size.png"));
-
-            shell.RecentList.SelectedIndex = 3;
+            shell.SetGridModeForTest(true);
             await SettleAsync(shell);
-            if (!ReferenceEquals(shell.SelectedDocumentForTest, older)) throw new InvalidOperationException("Selecting an older card did not select its document.");
-            shell.RecentList.SelectedIndex = 0;
+            VerifyVisibleControlsFit(shell, "library grid");
+            Render(shell, Path.Combine(directory, "shell-library-grid.png"));
+            shell.SetGridModeForTest(false);
+
+            shell.SelectDocumentForTest(older);
+            await SettleAsync(shell);
+            if (!ReferenceEquals(shell.SelectedDocumentForTest, older)) throw new InvalidOperationException("Selecting an older row did not select its document.");
+            shell.SelectDocumentForTest(selected);
             await SettleAsync(shell);
             BitmapSource? previewBeforeEdit = shell.PreviewSourceForTest;
             selected.Add(new RectangleAnnotation(new Rect(24, 24, 90, 54), Colors.DeepSkyBlue, 5));
             await SettleAsync(shell);
-            if (ReferenceEquals(previewBeforeEdit, shell.PreviewSourceForTest)) throw new InvalidOperationException("The selected recent capture preview did not refresh after an edit.");
-            if (!ReferenceEquals(shell.SelectedDocumentForTest, selected)) throw new InvalidOperationException("Editing a recent capture changed the shell selection.");
+            if (ReferenceEquals(previewBeforeEdit, shell.PreviewSourceForTest)) throw new InvalidOperationException("The selected capture's thumbnail did not refresh after an edit.");
+            if (!ReferenceEquals(shell.SelectedDocumentForTest, selected)) throw new InvalidOperationException("Editing a recent capture changed the library selection.");
 
+            // Library + editor in one window (KhingShot layout).
+            shell.Width = 1100;
+            shell.Height = 900;
+            shell.OpenInEditorForTest(selected);
+            await SettleAsync(shell);
+            Editing.EditorSurface editor = shell.EmbeddedEditorForTest ?? throw new InvalidOperationException("The capture did not open in the embedded editor.");
+            if (!shell.LibraryVisibleForTest) throw new InvalidOperationException("The library did not stay beside the editor at 1100 DIP.");
+            editor.SetInspectorForTest(true, docked: true);
+            await SettleAsync(shell);
+            VerifyVisibleControlsFit(shell, "library and editor at 1100 x 900");
+            editor.VerifyChromeFitsForTest("library and editor at 1100 x 900");
+            Render(shell, Path.Combine(directory, "shell-editor-1100x900.png"));
+            editor.SetInspectorForTest(true, docked: false);
+            await SettleAsync(shell);
+            editor.VerifyChromeFitsForTest("floating inspector at 1100 x 900");
+            Render(shell, Path.Combine(directory, "shell-editor-floating-inspector.png"));
+            shell.SelectDocumentForTest(older);
+            await SettleAsync(shell);
+            if (!ReferenceEquals(shell.EmbeddedEditorForTest?.Document, older)) throw new InvalidOperationException("Picking another row did not switch the editor.");
+            shell.ToggleLibraryForTest();
+            await SettleAsync(shell);
+            if (shell.LibraryVisibleForTest) throw new InvalidOperationException("The sidebar toggle did not hide the library.");
+            editor = shell.EmbeddedEditorForTest!;
+            editor.VerifyChromeFitsForTest("editor without library at 1100 x 900");
+            Render(shell, Path.Combine(directory, "shell-editor-no-library.png"));
+            shell.Width = 1800;
+            await SettleAsync(shell);
+            editor.VerifyChromeFitsForTest("wide editor without library");
+            if (!editor.ToolbarInHeaderForTest || !editor.ToolbarExtrasVisibleForTest) throw new InvalidOperationException("The wide editor did not move the tool pill (with quick colors) into the header.");
+            Render(shell, Path.Combine(directory, "shell-editor-wide.png"));
+            shell.ToggleLibraryForTest();
             shell.Width = shell.MinWidth;
             shell.Height = shell.MinHeight;
             await SettleAsync(shell);
-            VerifyVisibleControlsFit(shell, $"populated shell at minimum size ({shell.MinWidth:0} x {shell.MinHeight:0})");
+            if (shell.LibraryVisibleForTest) throw new InvalidOperationException("The library did not auto-hide beside the editor at the minimum size.");
+            VerifyVisibleControlsFit(shell, $"editor at minimum size ({shell.MinWidth:0} x {shell.MinHeight:0})");
+            editor.VerifyChromeFitsForTest("editor at minimum size");
+            Render(shell, Path.Combine(directory, "shell-editor-min.png"));
+            editor.SetInspectorForTest(true, docked: true);
+            shell.CloseEditorForTest();
+            await SettleAsync(shell);
+            if (shell.EmbeddedEditorForTest is not null || !shell.LibraryVisibleForTest) throw new InvalidOperationException("Closing the editor did not return to the library.");
+
+            VerifyVisibleControlsFit(shell, $"library at minimum size ({shell.MinWidth:0} x {shell.MinHeight:0})");
             Render(shell, Path.Combine(directory, "shell-populated-min.png"));
+
+            shell.ShowVideosForTest(true);
+            await SettleAsync(shell);
+            VerifyVisibleControlsFit(shell, "Videos tab");
+            Render(shell, Path.Combine(directory, "shell-videos.png"));
+            shell.ShowVideosForTest(false);
 
             shell.Width = 1100;
             shell.Height = 900;
             await SettleAsync(shell);
             VerifyVisibleControlsFit(shell, "default size");
             Render(shell, Path.Combine(directory, "shell-populated-default.png"));
-            shell.RecentList.SelectedIndex = 1;
-            await SettleAsync(shell);
-            Render(shell, Path.Combine(directory, "shell-portrait.png"));
             shell.PresentDocumentForTest(ShellPreviewSamples.Wide());
             await SettleAsync(shell);
             Render(shell, Path.Combine(directory, "shell-wide.png"));
@@ -94,7 +144,7 @@ internal static class ShellDiagnostics
 
             shell.CloseForTest();
             shell = null;
-            App.WriteTestResult(Path.Combine(directory, "shell-test.txt"), "PASS: empty and populated shell rendering, minimum-size layout, Settings panel, selected-preview edit refresh, and close-to-tray reopen behavior");
+            App.WriteTestResult(Path.Combine(directory, "shell-test.txt"), "PASS: empty and populated library (list, grid, Videos, day groups), library + editor at 1100x900, floating inspector, hidden library, wide header toolbar, minimum-size editor and library, Settings panel, thumbnail edit refresh, and close-to-tray reopen behavior");
         }
         finally { shell?.CloseForTest(); }
     }

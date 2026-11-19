@@ -273,10 +273,14 @@ internal static class RecordingDiagnostics
         try
         {
             shell.Show();
+            // Record lives in the library's + capture menu.
+            shell.SetCaptureMenuOpenForTest(true);
+            await shell.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Check(shell.RecordButton.IsVisible && shell.RecordModeButton.IsVisible, "Record button is not visible.");
+            shell.SetCaptureMenuOpenForTest(false);
             shell.OpenSettingsForTest();
             await shell.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             shell.UpdateLayout();
-            Check(shell.RecordButton.IsVisible && shell.RecordModeButton.IsVisible, "Record button is not visible.");
             Check(shell.RecordingSettingsSection is not null && shell.RecorderFor(HotkeyAction.Record) == shell.RecordHotkeyRecorder, "Recording settings are not wired.");
             Check(shell.RecordingStateForTest == RecordingState.Idle && shell.RecordingsPanel.Visibility == Visibility.Collapsed, "Recording UI did not start idle.");
             shell.RecordingSettingsSection!.BringIntoView();

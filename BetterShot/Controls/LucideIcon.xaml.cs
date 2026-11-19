@@ -80,7 +80,20 @@ public enum LucideIconKind
     Rows3,
     Eye,
     EyeOff,
-    MoveHorizontal
+    MoveHorizontal,
+    PanelLeft,
+    ArrowUpDown,
+    LayoutGrid,
+    List,
+    Grid3x3,
+    CaseSensitive,
+    Pipette,
+    SlidersHorizontal,
+    History,
+    ArrowBigUp,
+    PanelLeftClose,
+    PictureInPicture2,
+    ZoomOut
 }
 
 public partial class LucideIcon : UserControl
@@ -187,6 +200,22 @@ public partial class LucideIcon : UserControl
             case LucideIconKind.Eye: Path("M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"); Circle(12, 12, 3); break;
             case LucideIconKind.EyeOff: Path("M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"); Path("M14.084 14.158a3 3 0 0 1-4.242-4.242"); Path("M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"); Path("m2 2 20 20"); break;
             case LucideIconKind.MoveHorizontal: Path("m18 8 4 4-4 4"); Path("M2 12h20"); Path("m6 8-4 4 4 4"); break;
+            // Official Lucide panel-left, arrow-up-down, layout-grid, list, grid-3x3, case-sensitive, pipette,
+            // sliders-horizontal, history, arrow-big-up, panel-left-close, and picture-in-picture-2.
+            case LucideIconKind.PanelLeft: Rectangle(3, 3, 18, 18, 2); Path("M9 3v18"); break;
+            case LucideIconKind.ArrowUpDown: Path("m21 16-4 4-4-4"); Path("M17 20V4"); Path("m3 8 4-4 4 4"); Path("M7 4v16"); break;
+            case LucideIconKind.LayoutGrid: Rectangle(3, 3, 7, 7, 1); Rectangle(14, 3, 7, 7, 1); Rectangle(14, 14, 7, 7, 1); Rectangle(3, 14, 7, 7, 1); break;
+            case LucideIconKind.List: Path("M3 12h.01"); Path("M3 18h.01"); Path("M3 6h.01"); Path("M8 12h13"); Path("M8 18h13"); Path("M8 6h13"); break;
+            case LucideIconKind.Grid3x3: Rectangle(3, 3, 18, 18, 2); Path("M3 9h18"); Path("M3 15h18"); Path("M9 3v18"); Path("M15 3v18"); break;
+            case LucideIconKind.CaseSensitive: Path("m3 15 4-8 4 8"); Path("M4 13h6"); Circle(18, 12, 3); Path("M21 9v6"); break;
+            case LucideIconKind.Pipette: Path("m2 22 1-1h3l9-9"); Path("M3 21v-3l9-9"); Path("m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"); break;
+            case LucideIconKind.SlidersHorizontal: Path("M10 5H3"); Path("M12 19H3"); Path("M14 3v4"); Path("M16 17v4"); Path("M21 12h-9"); Path("M21 19h-5"); Path("M21 5h-7"); Path("M8 10v4"); Path("M8 12H3"); break;
+            case LucideIconKind.History: Path("M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"); Path("M3 3v5h5"); Path("M12 7v5l4 2"); break;
+            case LucideIconKind.ArrowBigUp: Path("M9 18v-6H5l7-7 7 7h-4v6H9z"); break;
+            case LucideIconKind.PanelLeftClose: Rectangle(3, 3, 18, 18, 2); Path("M9 3v18"); Path("m16 15-3-3 3-3"); break;
+            case LucideIconKind.PictureInPicture2: Path("M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h4"); Rectangle(12, 13, 10, 7, 2); break;
+            // Official Lucide zoom-out (zoom-in above uses the same lens).
+            case LucideIconKind.ZoomOut: Circle(11, 11, 8); Path("M21 21 16.65 16.65"); Path("M8 11h6"); break;
         }
     }
 

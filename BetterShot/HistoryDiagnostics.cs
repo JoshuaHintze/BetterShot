@@ -123,7 +123,7 @@ internal static class HistoryDiagnostics
         document.Add(new EllipseAnnotation(new Rect(40, 40, 120, 80), Colors.Orange, 8) { Fill = Color.FromArgb(120, 0, 128, 255), Dashed = true, Shadow = true, Opacity = .8 });
         document.Add(new LineAnnotation(new Point(20, 300), new Point(260, 300), Colors.Cyan, 4) { Dashed = true });
         document.Add(new HighlighterAnnotation(new[] { new Point(100, 420), new Point(400, 425) }, Color.FromRgb(255, 212, 0), 8));
-        document.Add(new TextAnnotation(new Point(600, 40), "Callout", Colors.Purple, 22) { Tail = new Point(560, 120), Shadow = true });
+        document.Add(new TextAnnotation(new Point(600, 40), "Callout", Colors.Purple, 22) { Tail = new Point(560, 120), Shadow = true, WrapWidth = 180 });
         document.Add(new TextAnnotation(new Point(40, 500), "Label", Colors.White, 20) { Background = true, Fill = Colors.Navy });
         document.Add(new RectangleAnnotation(new Rect(300, 320, 120, 50), Colors.Black, 8, true) { RedactionMode = RedactionStyle.Pixelate });
         document.Add(new RectangleAnnotation(new Rect(450, 320, 120, 50), Colors.Black, 4, true) { RedactionMode = RedactionStyle.Blur });
@@ -154,7 +154,7 @@ internal static class HistoryDiagnostics
         var legacy = EditorDiagnostics.CreateSampleDocument();
         legacy.Add(new PenAnnotation(new[] { new Point(25, 25), new Point(50, 90) }, Colors.LimeGreen, 3));
         store.Save(legacy);
-        string[] optional = ["Opacity", "Dashed", "Shadow", "Fill", "CornerRadius", "RedactionStyle", "Zoom", "Tail", "TextBackground"];
+        string[] optional = ["Opacity", "Dashed", "Shadow", "Fill", "CornerRadius", "RedactionStyle", "Zoom", "Tail", "TextBackground", "WrapWidth"];
         EditDocumentJson(Path.Combine(root, legacy.Id.ToString("N") + ".capture"), node =>
         {
             node.AsObject().Remove("Crop");
@@ -234,7 +234,7 @@ internal static class HistoryDiagnostics
                 Check(shell.Presentation.Recent.Any(d => d.Id == fresh.Id) && File.Exists(freshPath), "Failed disk deletion silently removed the visible capture.");
             }
             shell.Presentation.OpenEditor(fresh); await SettleAsync(shell);
-            var deletingEditor = shell.Presentation.EditorFor(fresh)!;
+            var deletingEditor = shell.Presentation.EditorFor(fresh)!.Surface;
             deletingEditor.BeginTextForTest(new Point(35, 80));
             deletingEditor.SetTextForTest("Pending text must not resurrect a deleted capture");
             fresh.Add(new RectangleAnnotation(new Rect(35, 20, 110, 25), Colors.Red, 3));
@@ -245,7 +245,7 @@ internal static class HistoryDiagnostics
             Check(new CaptureHistoryStore(root).Load(DateTime.UtcNow).All(d => d.Id != fresh.Id), "A queued edit resurrected the deleted capture.");
 
             shell.Presentation.OpenEditor(restored); await SettleAsync(shell);
-            var editing = shell.Presentation.EditorFor(restored)!;
+            var editing = shell.Presentation.EditorFor(restored)!.Surface;
             editing.BeginTextForTest(new Point(45, 45));
             editing.SetTextForTest("Retained across restart");
             shell.CloseForTest(); shell = null;

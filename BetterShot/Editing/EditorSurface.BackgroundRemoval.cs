@@ -9,7 +9,7 @@ using System.Windows.Media.Imaging;
 namespace BetterShot.Editing;
 
 /// <summary>"Remove the background" in the Background popup: local U²-Netp inference stored as an undoable document mask.</summary>
-public sealed partial class EditorWindow
+public sealed partial class EditorSurface
 {
     private static readonly Lazy<HttpClient> ModelClient = new(CreateModelClient);
     private CancellationTokenSource? _backgroundRemoval;
@@ -62,7 +62,7 @@ public sealed partial class EditorWindow
         using var cancellation = new CancellationTokenSource();
         EventHandler cancelOnClose = (_, _) => cancellation.Cancel();
         _backgroundRemoval = cancellation;
-        Closed += cancelOnClose;
+        Detached += cancelOnClose;
         RebuildBackgroundOptions();
         try
         {
@@ -80,7 +80,7 @@ public sealed partial class EditorWindow
         catch (Exception ex) { _status.Text = $"Could not remove the background: {ex.Message}"; }
         finally
         {
-            Closed -= cancelOnClose;
+            Detached -= cancelOnClose;
             _backgroundRemoval = null;
             RebuildBackgroundOptions();
         }
@@ -105,7 +105,7 @@ public sealed partial class EditorWindow
             $"BetterShot needs to download it once from {BackgroundRemovalModel.SourceDescription}:\n{BackgroundRemovalModel.DownloadUrl}\n\n" +
             $"It will be saved in {model.Directory} and checked against a pinned SHA-256 checksum before use. Your screenshots are never uploaded.\n\n" +
             "Download the model now?";
-        MessageBoxResult answer = MessageBox.Show(this, message, "Download background removal model", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
+        MessageBoxResult answer = MessageBox.Show(Window.GetWindow(this) ?? Application.Current.MainWindow, message, "Download background removal model", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
         if (answer != MessageBoxResult.Yes)
         {
             _status.Text = "Background removal needs the model. Nothing was downloaded.";

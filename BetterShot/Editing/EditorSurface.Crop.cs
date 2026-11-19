@@ -7,7 +7,7 @@ using System.Windows.Shapes;
 
 namespace BetterShot.Editing;
 
-public sealed partial class EditorWindow
+public sealed partial class EditorSurface
 {
     private const double CropHandleSize = 12;
     private const double MinimumCropSize = 8;
@@ -84,7 +84,8 @@ public sealed partial class EditorWindow
         _cropDim = null; _cropBorder = null; _cropLabel = null; _cropLabelChrome = null; _cropActions = null;
         _tool = _toolBeforeCrop == EditorTool.Crop ? EditorTool.Select : _toolBeforeCrop;
         UpdateToolVisuals();
-        UpdateStyleButton();
+        UpdateInspector();
+        UpdateToolbarExtras();
         _image.Focus();
     }
 

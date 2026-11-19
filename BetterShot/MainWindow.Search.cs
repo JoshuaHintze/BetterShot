@@ -89,6 +89,7 @@ public partial class MainWindow
             SaveTextIndex();
         }
         LoadTextSearchSettingIntoControls();
+        RefreshTextChips();
         RefreshSearch();
     }
 
@@ -101,6 +102,7 @@ public partial class MainWindow
     private void TextIndexer_Changed(object? sender, EventArgs e)
     {
         UpdateTextIndexStatus();
+        RefreshTextChips();
         if (!CaptureSearch.IsEmptyQuery(SearchQuery)) RefreshSearch();
     }
 
@@ -210,7 +212,7 @@ public partial class MainWindow
 
     private void FocusSearch_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.F || Keyboard.Modifiers != ModifierKeys.Control || RecentState.Visibility != Visibility.Visible) return;
+        if (e.Key != Key.F || Keyboard.Modifiers != ModifierKeys.Control || LibraryPanel.Visibility != Visibility.Visible || _showingVideos) return;
         SearchBox.Focus();
         SearchBox.SelectAll();
         e.Handled = true;

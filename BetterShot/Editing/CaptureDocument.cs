@@ -331,43 +331,88 @@ internal sealed record PenAnnotation(IReadOnlyList<Point> Points, Color Ink, dou
     internal override Annotation WithStyle(ToolStyle style) => (PenAnnotation)ApplyCommonStyle(style, false) with { Ink = style.Stroke, Stroke = style.Width };
 }
 
-/// <summary>Plain text, or a callout bubble when <see cref="Tail"/> is set.</summary>
+/// <summary>
+/// Plain text, or a callout bubble when <see cref="Tail"/> is set. Callouts draw bold, contrast-aware text in a filled
+/// rounded bubble whose width is <see cref="WrapWidth"/> (text wraps; the height follows the text) and a tapered tail
+/// from the bubble edge to <see cref="Tail"/>. Callouts created before wrapping existed keep a null width and size to their text.
+/// </summary>
 internal sealed record TextAnnotation(Point Position, string Text, Color Ink, double FontSize) : Annotation(Ink, Math.Max(2, FontSize / 12))
 {
+    internal const double MinimumWrapWidth = 24;
     public Point? Tail { get; init; }
     public bool Background { get; init; }
+    /// <summary>Text column width in capture pixels; null keeps text on the lines the user typed.</summary>
+    public double? WrapWidth { get; init; }
     internal bool IsCallout => Tail is not null;
+    internal double? EffectiveWrapWidth => WrapWidth is double width && double.IsFinite(width) ? Math.Max(MinimumWrapWidth, width) : null;
 
-    private FormattedText Format() => new(Text, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
-        new Typeface("Segoe UI"), FontSize, new SolidColorBrush(TextColor), 1);
-    internal Rect Bounds { get { var f = Format(); return new Rect(Position, new Size(Math.Max(1, f.WidthIncludingTrailingWhitespace), Math.Max(FontSize, f.Height))); } }
+    internal static Typeface TextTypeface(bool callout) =>
+        new(new FontFamily("Segoe UI"), FontStyles.Normal, callout ? FontWeights.Bold : FontWeights.Normal, FontStretches.Normal);
+
+    private FormattedText Format()
+    {
+        var formatted = new FormattedText(Text, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            TextTypeface(IsCallout), FontSize, new SolidColorBrush(TextColor), 1);
+        if (EffectiveWrapWidth is double width) formatted.MaxTextWidth = width;
+        return formatted;
+    }
+
+    internal Rect Bounds
+    {
+        get
+        {
+            FormattedText formatted = Format();
+            double width = EffectiveWrapWidth ?? Math.Max(1, formatted.WidthIncludingTrailingWhitespace);
+            return new Rect(Position, new Size(width, Math.Max(FontSize, formatted.Height)));
+        }
+    }
+
     internal Color BubbleColor => Fill ?? (IsCallout ? Color : GeometryUtil.Contrast(Color, dark: Color.FromArgb(220, 18, 18, 20)));
     internal Color TextColor => IsCallout ? GeometryUtil.Contrast(BubbleColor) : Color;
+    /// <summary>Horizontal and vertical space between the text and the bubble edge.</summary>
+    internal Vector BubblePadding => IsCallout ? new Vector(FontSize * .62, FontSize * .42) : new Vector(FontSize * .45, FontSize * .22);
+    internal double BubbleRadius
+    {
+        get
+        {
+            Rect box = BubbleBounds;
+            return Math.Min(IsCallout ? FontSize * .55 : FontSize * .45, Math.Min(box.Width, box.Height) / 2);
+        }
+    }
+
     internal Rect BubbleBounds
     {
         get
         {
             Rect bounds = Bounds;
             if (!IsCallout && !Background) return bounds;
-            bounds.Inflate(FontSize * .45, FontSize * .22);
+            Vector padding = BubblePadding;
+            bounds.Inflate(padding.X, padding.Y);
             return bounds;
         }
     }
+
     internal override Rect Extent { get { Rect r = BubbleBounds; if (Tail is Point tail) r.Union(tail); return r; } }
 
     protected override void DrawContent(DrawingContext dc, AnnotationRenderContext context)
     {
-        if (IsCallout || Background)
-        {
-            Brush bubble = new SolidColorBrush(BubbleColor);
-            Rect box = BubbleBounds;
-            double radius = Math.Min(FontSize * .45, Math.Min(box.Width, box.Height) / 2);
-            if (Tail is Point tail) dc.DrawGeometry(bubble, null, TailGeometry(box, tail));
-            dc.DrawRoundedRectangle(bubble, null, box, radius, radius);
-        }
+        if (IsCallout || Background) dc.DrawGeometry(new SolidColorBrush(BubbleColor), null, BubbleGeometry());
         dc.DrawText(Format(), Position);
     }
 
+    /// <summary>The bubble and its tail as one shape, so translucent callouts never darken where they overlap.</summary>
+    internal Geometry BubbleGeometry()
+    {
+        Rect box = BubbleBounds;
+        double radius = BubbleRadius;
+        Geometry bubble = new RectangleGeometry(box, radius, radius);
+        if (Tail is not Point tail || box.Contains(tail)) return bubble;
+        Geometry combined = new CombinedGeometry(GeometryCombineMode.Union, bubble, TailGeometry(box, tail));
+        combined.Freeze();
+        return combined;
+    }
+
+    /// <summary>A tapered wedge whose wide base sits just inside the bubble edge facing the tail point.</summary>
     private Geometry TailGeometry(Rect box, Point tail)
     {
         Point center = new(box.X + box.Width / 2, box.Y + box.Height / 2);
@@ -375,11 +420,25 @@ internal sealed record TextAnnotation(Point Position, string Text, Color Ink, do
         var geometry = new StreamGeometry();
         if (direction.Length < 1) return geometry;
         direction.Normalize();
+        Point edge = EdgePoint(box, center, direction);
+        double half = Math.Max(4, Math.Min(FontSize * .5, Math.Min(box.Width, box.Height) / 2.6));
+        Point baseCenter = edge - direction * Math.Min(half * 1.4, (edge - center).Length);
         Vector normal = new(-direction.Y, direction.X);
-        double half = Math.Max(4, Math.Min(FontSize * .45, Math.Min(box.Width, box.Height) / 2.5));
-        using (var c = geometry.Open()) { c.BeginFigure(center + normal * half, true, true); c.LineTo(tail, true, false); c.LineTo(center - normal * half, true, false); }
+        using (StreamGeometryContext context = geometry.Open())
+        {
+            context.BeginFigure(baseCenter + normal * half, true, true);
+            context.LineTo(tail, true, true);
+            context.LineTo(baseCenter - normal * half, true, true);
+        }
         geometry.Freeze();
         return geometry;
+    }
+
+    private static Point EdgePoint(Rect box, Point center, Vector direction)
+    {
+        double scaleX = Math.Abs(direction.X) < 1e-6 ? double.PositiveInfinity : box.Width / 2 / Math.Abs(direction.X);
+        double scaleY = Math.Abs(direction.Y) < 1e-6 ? double.PositiveInfinity : box.Height / 2 / Math.Abs(direction.Y);
+        return center + direction * Math.Min(scaleX, scaleY);
     }
 
     internal override bool Hit(Point p, double t) =>
@@ -396,6 +455,7 @@ internal sealed record TextAnnotation(Point Position, string Text, Color Ink, do
     internal override Annotation WithStyle(ToolStyle style) => this with
     {
         Ink = style.Stroke, Color = style.Stroke, FontSize = style.FontSize, Width = Math.Max(2, style.FontSize / 12),
+        WrapWidth = WrapWidth is double width ? width * style.FontSize / Math.Max(1, FontSize) : null,
         Fill = style.Fill, Background = !IsCallout && style.TextBackground, Opacity = style.Opacity, Shadow = style.Shadow, Dashed = false
     };
 }

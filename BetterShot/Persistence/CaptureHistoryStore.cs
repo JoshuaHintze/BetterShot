@@ -341,6 +341,7 @@ internal sealed class CaptureHistoryStore
                 dto.Text = text.Text; dto.Radius = text.FontSize;
                 dto.Tail = text.Tail is Point tail ? new PointDto { X = tail.X, Y = tail.Y } : null;
                 dto.TextBackground = text.Background ? true : null;
+                dto.WrapWidth = text.WrapWidth;
                 break;
             case StepAnnotation step:
                 dto.Kind = "step";
@@ -447,7 +448,8 @@ internal sealed class CaptureHistoryStore
     private static TextAnnotation Callout(AnnotationDto dto, Color color)
     {
         PointDto tail = dto.Tail ?? throw new InvalidDataException("Callout tail is missing.");
-        return Text(dto, color) with { Tail = Point(tail.X, tail.Y), Background = false };
+        double? wrapWidth = dto.WrapWidth is double width && double.IsFinite(width) && width > 0 ? width : null;
+        return Text(dto, color) with { Tail = Point(tail.X, tail.Y), Background = false, WrapWidth = wrapWidth };
     }
 
     private static StepAnnotation Step(AnnotationDto dto, Color color)
