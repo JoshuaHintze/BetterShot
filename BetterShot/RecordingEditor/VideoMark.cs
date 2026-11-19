@@ -3,7 +3,7 @@ using System.Windows.Media;
 
 namespace BetterShot.RecordingEditor;
 
-internal enum MarkKind { Text, Arrow, Rectangle, Ellipse, Line, Highlighter, Callout, Step, Spotlight, Redaction }
+internal enum MarkKind { Text, Arrow, Rectangle, Ellipse, Line, Highlighter, Callout, Step, Spotlight, Redaction, Pen }
 
 /// <summary>What a followed redaction does once tracking can no longer find what it covers.</summary>
 internal enum LostFieldPolicy { StopFollowing, BlurWholePicture }
@@ -44,6 +44,7 @@ internal sealed record VideoMark(Guid Id, Annotation Shape, double Start, double
         HighlighterAnnotation => MarkKind.Highlighter,
         StepAnnotation => MarkKind.Step,
         SpotlightAnnotation => MarkKind.Spotlight,
+        PenAnnotation => MarkKind.Pen,
         _ => MarkKind.Rectangle
     };
 

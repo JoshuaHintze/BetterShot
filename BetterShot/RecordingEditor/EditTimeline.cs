@@ -60,6 +60,19 @@ internal sealed record EditTimeline
         return timeline.WithInPoint(inPoint).WithOutPoint(outPoint);
     }
 
+    /// <summary>A timeline that keeps exactly the given stretches (what a trim actually wrote, after keyframe snapping).</summary>
+    internal static EditTimeline FromKeptRanges(double duration, IReadOnlyList<KeptRange> ranges)
+    {
+        EditTimeline timeline = Create(duration);
+        double position = 0;
+        foreach (KeptRange range in ranges.OrderBy(range => range.Start))
+        {
+            timeline = timeline.CutRange(position, range.Start);
+            position = Math.Max(position, range.End);
+        }
+        return timeline.CutRange(position, duration);
+    }
+
     /// <summary>True when nothing is cut and no in/out point is set.</summary>
     internal bool IsUnedited => Segments.All(segment => segment.Kept) && InPoint is null && OutPoint is null;
 

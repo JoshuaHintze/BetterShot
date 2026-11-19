@@ -7,7 +7,7 @@ using static BetterShot.RecordingEditor.RecordingEditorChrome;
 
 namespace BetterShot.RecordingEditor;
 
-internal enum VideoMarkTool { Select, Text, Arrow, Rectangle, Ellipse, Line, Highlighter, Callout, Step, Spotlight, Redact }
+internal enum VideoMarkTool { Select, Text, Arrow, Rectangle, Ellipse, Line, Highlighter, Callout, Step, Spotlight, Redact, Pen }
 
 /// <summary>
 /// Markup on the frame at the playhead: drawing tools (reusing the screenshot editor's annotation types), select/move/
@@ -22,14 +22,13 @@ internal sealed partial class RecordingEditorWindow
     ];
     private static readonly (string Name, double Width)[] Widths = [("Thin", 2), ("Medium", 4), ("Thick", 8), ("Heavy", 14)];
     private static readonly double[] FontSizes = [24, 32, 48, 64];
-    private readonly Dictionary<VideoMarkTool, Button> _toolButtons = [];
     private readonly List<Point> _highlighterPoints = [];
     private VideoMarkTool _tool = VideoMarkTool.Arrow;
     private Color _color = Palette[0].Color;
     private double _strokeWidth = 4;
     private double _fontSize = 32;
     private RedactionStyle _redactionStyle = RedactionStyle.Solid;
-    private Button? _hideMarkupButton, _markedCopyButton;
+    private Button? _hideMarkupButton;
     private Point? _drawStart;
     private Annotation? _drawPreview;
     private Annotation? _dragPreview;
@@ -40,75 +39,24 @@ internal sealed partial class RecordingEditorWindow
 
     private VideoMark? SelectedMark => _selectedMark is Guid id ? State.Find(id) : null;
 
-    private UIElement BuildToolbar()
-    {
-        var bar = new Grid();
-        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        bar.ColumnDefinitions.Add(new ColumnDefinition());
-        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var left = new StackPanel { Orientation = Orientation.Horizontal };
-        AddTool(left, VideoMarkTool.Select, LucideIconKind.MousePointer2, "Select, move, and resize marks");
-        AddTool(left, VideoMarkTool.Text, LucideIconKind.Type, "Text");
-        AddTool(left, VideoMarkTool.Arrow, LucideIconKind.ArrowUpRight, "Arrow");
-        AddTool(left, VideoMarkTool.Rectangle, LucideIconKind.Square, "Rectangle");
-        AddTool(left, VideoMarkTool.Ellipse, LucideIconKind.Circle, "Ellipse");
-        AddTool(left, VideoMarkTool.Line, LucideIconKind.Slash, "Line");
-        AddTool(left, VideoMarkTool.Highlighter, LucideIconKind.Highlighter, "Highlighter");
-        AddTool(left, VideoMarkTool.Callout, LucideIconKind.MessageSquare, "Callout: drag from what it points at to where the bubble goes");
-        AddTool(left, VideoMarkTool.Step, LucideIconKind.ListOrdered, "Step number");
-        AddTool(left, VideoMarkTool.Spotlight, LucideIconKind.Flashlight, "Spotlight");
-        AddTool(left, VideoMarkTool.Redact, LucideIconKind.RectangleEllipsis, "Redact (solid, pixelate, or blur)");
-        left.Children.Add(Separator());
-        left.Children.Add(TextButton("Style", "Color, width, text size, and redaction style for new marks and the selected mark", (sender, _) => OpenStyleMenu((FrameworkElement)sender), LucideIconKind.ChevronDown));
-        left.Children.Add(Separator());
-        left.Children.Add(IconButton(LucideIconKind.Undo2, "Undo (Ctrl+Z)", (_, _) => UndoEdit()));
-        left.Children.Add(IconButton(LucideIconKind.Redo2, "Redo (Ctrl+Y)", (_, _) => RedoEdit()));
-        bar.Children.Add(left);
-
-        var right = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        _hideMarkupButton = IconButton(LucideIconKind.Eye, "Hide markup in the player and the export (redactions stay covered)", (_, _) => ToggleHideMarkup());
-        right.Children.Add(_hideMarkupButton);
-        right.Children.Add(TextButton("Export", "Export a trimmed MP4, a GIF, or a timelapse", (sender, _) => OpenExportMenu((FrameworkElement)sender), LucideIconKind.Download));
-        right.Children.Add(TextButton("Save trim", "Write the kept stretch to a movie file (see Settings > Recording for replace or keep)", async (_, _) => await ApplyTrimAsync(), LucideIconKind.Scissors));
-        _markedCopyButton = TextButton("Update marked copy", "Render the copy that is shared when this recording is dragged", async (_, _) => await UpdateMarkedCopyAsync(), LucideIconKind.Send);
-        _markedCopyButton.Visibility = Visibility.Collapsed;
-        right.Children.Add(_markedCopyButton);
-        right.Children.Add(IconButton(LucideIconKind.Save, "Save edits (Ctrl+S)", async (_, _) => await SaveAsync(updateMarkedCopy: false)));
-        Button done = TextButton("Done", "Save and close", Done_Click, LucideIconKind.Check);
-        done.Background = ActiveBrush;
-        done.Foreground = Brushes.Black;
-        right.Children.Add(done);
-        Grid.SetColumn(right, 2);
-        bar.Children.Add(right);
-        return new Border { Background = ToolbarBrush, BorderBrush = Brush("#303234"), BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(12, 10, 12, 10), Height = 60, Child = bar };
-    }
-
-    private void AddTool(Panel panel, VideoMarkTool tool, LucideIconKind icon, string tip)
-    {
-        Button button = IconButton(icon, tip, (_, _) => SelectTool(tool));
-        _toolButtons[tool] = button;
-        panel.Children.Add(button);
-    }
-
     private void SelectTool(VideoMarkTool tool)
     {
         CommitTextEdit();
         CancelDraw();
         _tool = tool;
-        if (tool != VideoMarkTool.Select) SetStatus($"{tool} marks start at the playhead and last 3 seconds; drag the ends of the bar to change that.");
+        if (tool != VideoMarkTool.Select) SetStatus($"{ToolName(tool)} marks start at the playhead and last 3 seconds; drag the ends of the bar to change that.");
         UpdateMarkupToolbar();
     }
 
     private void UpdateMarkupToolbar()
     {
-        foreach ((VideoMarkTool tool, Button button) in _toolButtons) SetActive(button, tool == _tool);
+        UpdateToolPill();
         _markLayer.Cursor = _tool == VideoMarkTool.Select ? Cursors.Arrow : _tool == VideoMarkTool.Text ? Cursors.IBeam : Cursors.Cross;
         if (_hideMarkupButton?.Content is LucideIcon eye)
         {
             eye.Icon = State.HideMarkup ? LucideIconKind.EyeOff : LucideIconKind.Eye;
             _hideMarkupButton.ToolTip = State.HideMarkup ? "Show markup in the player and the export" : "Hide markup in the player and the export (redactions stay covered)";
         }
-        if (_markedCopyButton is not null) _markedCopyButton.Visibility = NeedsMarkedCopyUpdate && !_history.IsDirty ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ToggleHideMarkup()
@@ -169,7 +117,7 @@ internal sealed partial class RecordingEditorWindow
             BeginTextEdit(bubble, null, start, string.Empty);
             return;
         }
-        if ((point - start).Length < minimum && _tool != VideoMarkTool.Highlighter) { RefreshOverlay(); return; }
+        if ((point - start).Length < minimum && _tool is not (VideoMarkTool.Highlighter or VideoMarkTool.Pen)) { RefreshOverlay(); return; }
         if (BuildShape(start, point, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) is Annotation shape) AddMark(shape);
         else RefreshOverlay();
     }
@@ -197,6 +145,7 @@ internal sealed partial class RecordingEditorWindow
             VideoMarkTool.Spotlight => new SpotlightAnnotation(new Rect(start, square), 8),
             VideoMarkTool.Redact => new RectangleAnnotation(new Rect(start, square), Colors.Black, _strokeWidth, Redaction: true) { RedactionMode = _redactionStyle },
             VideoMarkTool.Highlighter when _highlighterPoints.Count > 1 => new HighlighterAnnotation(_highlighterPoints.ToArray(), _color, _strokeWidth * 2),
+            VideoMarkTool.Pen when _highlighterPoints.Count > 1 => new PenAnnotation(_highlighterPoints.ToArray(), _color, _strokeWidth),
             VideoMarkTool.Callout => null,
             _ => null
         };
@@ -434,6 +383,7 @@ internal sealed partial class RecordingEditorWindow
         if (width is double newWidth) _strokeWidth = newWidth;
         if (fontSize is double newSize) _fontSize = newSize;
         if (redaction is RedactionStyle newRedaction) _redactionStyle = newRedaction;
+        UpdateToolPill();
         if (SelectedMark is not VideoMark mark) return;
         ToolStyle current = mark.Shape.CaptureStyle(new ToolStyle());
         ToolStyle style = current with

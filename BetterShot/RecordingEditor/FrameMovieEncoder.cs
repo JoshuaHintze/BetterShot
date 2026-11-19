@@ -50,20 +50,20 @@ internal readonly record struct WaveLayout(int SampleRate, int Channels, int Bit
 }
 
 /// <summary>
-/// The recording's soundtrack decoded once to a temporary 48 kHz stereo 16-bit WAV (by Windows' transcoder), then read
-/// back for just the kept stretches so exports keep audio exactly in step with the cut video.
+/// The recording's soundtrack decoded once to a temporary 48 kHz stereo 16-bit WAV (by Windows' transcoder), or an
+/// already re-mixed WAV, read back for just the kept stretches so exports keep audio exactly in step with the cut video.
 /// </summary>
 internal sealed class KeptAudio : IDisposable
 {
     private readonly FileStream _stream;
     private readonly WaveLayout _layout;
     private readonly IReadOnlyList<KeptRange> _ranges;
-    private readonly string _temporaryPath;
+    private readonly string? _temporaryPath;
     private int _rangeIndex;
     private long _frameInRange;
     private long _framesWritten;
 
-    private KeptAudio(string temporaryPath, FileStream stream, WaveLayout layout, IReadOnlyList<KeptRange> ranges)
+    private KeptAudio(string? temporaryPath,FileStream stream, WaveLayout layout, IReadOnlyList<KeptRange> ranges)
     {
         _temporaryPath = temporaryPath;
         _stream = stream;
@@ -75,6 +75,26 @@ internal sealed class KeptAudio : IDisposable
     internal int Channels => _layout.Channels;
 
     internal static async Task<KeptAudio> ExtractAsync(string moviePath, IReadOnlyList<KeptRange> ranges, string temporaryFolder, CancellationToken cancellation)
+    {
+        string wavePath = await ExtractSoundtrackAsync(moviePath, temporaryFolder, cancellation);
+        try { return FromWave(wavePath, ranges, deleteOnDispose: true); }
+        catch
+        {
+            TryDelete(wavePath);
+            throw;
+        }
+    }
+
+    /// <summary>Reads the kept stretches of an existing 16-bit PCM WAV; the file is deleted on dispose when asked.</summary>
+    internal static KeptAudio FromWave(string wavePath, IReadOnlyList<KeptRange> ranges, bool deleteOnDispose)
+    {
+        var stream = new FileStream(wavePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        try { return new KeptAudio(deleteOnDispose ? wavePath : null, stream, WaveLayout.Parse(stream), ranges); }
+        catch { stream.Dispose(); throw; }
+    }
+
+    /// <summary>Decodes the movie's soundtrack to a temporary 48 kHz stereo 16-bit WAV and returns its path (the caller deletes it).</summary>
+    internal static async Task<string> ExtractSoundtrackAsync(string moviePath, string temporaryFolder, CancellationToken cancellation)
     {
         Directory.CreateDirectory(temporaryFolder);
         string wavePath = Path.Combine(temporaryFolder, "audio-" + Guid.NewGuid().ToString("N") + ".wav");
@@ -89,9 +109,7 @@ internal sealed class KeptAudio : IDisposable
             PrepareTranscodeResult prepared = await transcoder.PrepareFileTranscodeAsync(source, destination, profile).AsTask(cancellation);
             if (!prepared.CanTranscode) throw new InvalidOperationException($"Windows could not read the recording's audio ({prepared.FailureReason}).");
             await prepared.TranscodeAsync().AsTask(cancellation);
-            var stream = new FileStream(wavePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            try { return new KeptAudio(wavePath, stream, WaveLayout.Parse(stream), ranges); }
-            catch { stream.Dispose(); throw; }
+            return wavePath;
         }
         catch
         {
@@ -131,10 +149,10 @@ internal sealed class KeptAudio : IDisposable
     public void Dispose()
     {
         _stream.Dispose();
-        TryDelete(_temporaryPath);
+        if (_temporaryPath is not null) TryDelete(_temporaryPath);
     }
 
-    private static void TryDelete(string path)
+    internal static void TryDelete(string path)
     {
         try { if (File.Exists(path)) File.Delete(path); }
         catch (IOException) { } // A leftover temp WAV is harmless; the temp folder is cleaned by Windows.

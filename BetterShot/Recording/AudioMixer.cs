@@ -1,3 +1,4 @@
+using System.IO;
 using System.Threading;
 
 namespace BetterShot.Recording;
@@ -7,6 +8,8 @@ namespace BetterShot.Recording;
 /// clock, not by the devices: silent loopback devices deliver no packets at all, so gaps are filled with silence and
 /// the audio track always has exactly as much audio as the video has time. A small fixed latency absorbs device
 /// jitter. Output is pulled by the encoder through <see cref="TryRead"/>.
+/// When given a movie path, each input is also written losslessly to its own hidden WAV sidecar
+/// (<see cref="RecordingAudioTracks"/>) from the very same samples, so the separate tracks line up with the mix exactly.
 /// </summary>
 internal sealed class AudioMixer : IDisposable
 {
@@ -16,7 +19,8 @@ internal sealed class AudioMixer : IDisposable
     private static readonly TimeSpan MixLatency = TimeSpan.FromMilliseconds(120);
     private static readonly int MaximumBacklogSamples = SampleRate * Channels * 3 / 10; // 300 ms
     private static readonly int SteadyBacklogSamples = (int)(SampleRate * Channels * MixLatency.TotalSeconds);
-    private readonly IReadOnlyList<AudioInput> _inputs;
+    private readonly IReadOnlyList<IAudioSource> _inputs;
+    private readonly PcmWaveWriter?[] _trackWriters;
     private readonly RecordingClock _clock;
     private readonly object _gate = new();
     private readonly Queue<byte[]> _output = new();
@@ -31,10 +35,33 @@ internal sealed class AudioMixer : IDisposable
     private float[] _mix = [];
     private float[] _scratch = [];
 
-    internal AudioMixer(IReadOnlyList<AudioInput> inputs, RecordingClock clock)
+    internal AudioMixer(IReadOnlyList<IAudioSource> inputs, RecordingClock clock, string? trackSidecarMoviePath = null)
     {
         _inputs = inputs;
         _clock = clock;
+        _trackWriters = new PcmWaveWriter?[inputs.Count];
+        if (trackSidecarMoviePath is not null) OpenTrackWriters(trackSidecarMoviePath);
+    }
+
+    /// <summary>Set when a separate track could not be written; the mixed soundtrack is unaffected.</summary>
+    internal string? TrackWarning { get; private set; }
+
+    /// <summary>Paths of the separate track files being written (completed by <see cref="Finish"/>).</summary>
+    internal IReadOnlyList<string> TrackPaths => _trackWriters.OfType<PcmWaveWriter>().Select(writer => writer.FilePath).ToArray();
+
+    private void OpenTrackWriters(string moviePath)
+    {
+        for (int index = 0; index < _inputs.Count; index++)
+        {
+            AudioTrackKind kind = _inputs[index].IsMicrophone ? AudioTrackKind.Microphone : AudioTrackKind.System;
+            string path = RecordingAudioTracks.SidecarPath(moviePath, kind);
+            if (_trackWriters.Any(writer => writer?.FilePath == path)) continue; // One file per kind.
+            try { _trackWriters[index] = new PcmWaveWriter(path, SampleRate, Channels); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                TrackWarning ??= $"The separate audio tracks could not be saved ({error.Message}); the movie keeps the mixed audio.";
+            }
+        }
     }
 
     internal bool MicrophoneMuted { get; set; }
@@ -46,13 +73,13 @@ internal sealed class AudioMixer : IDisposable
 
     internal void StartInputs()
     {
-        foreach (AudioInput input in _inputs) input.Start();
+        foreach (IAudioSource input in _inputs) input.Start();
     }
 
     /// <summary>Call right after the clock starts: drops pre-roll audio and begins mixing every 10 ms.</summary>
     internal void BeginTimeline()
     {
-        foreach (AudioInput input in _inputs) input.Discard();
+        foreach (IAudioSource input in _inputs) input.Discard();
         _timer = new Timer(_ => Tick(), null, TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(10));
     }
 
@@ -66,6 +93,28 @@ internal sealed class AudioMixer : IDisposable
             if (_finished) return;
             ProduceUpTo(_clock.Elapsed);
             _finished = true;
+            CompleteTrackWriters();
+        }
+    }
+
+    private void CompleteTrackWriters()
+    {
+        for (int index = 0; index < _trackWriters.Length; index++)
+        {
+            if (_trackWriters[index] is not PcmWaveWriter writer) continue;
+            try
+            {
+                writer.Complete();
+                writer.Dispose();
+                RecordingAudioTracks.Hide(writer.FilePath);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                writer.Dispose();
+                RecordingAudioTracks.TryDelete(writer.FilePath);
+                TrackWarning ??= $"A separate audio track could not be finished ({error.Message}); the movie keeps the mixed audio.";
+                _trackWriters[index] = null;
+            }
         }
     }
 
@@ -112,11 +161,11 @@ internal sealed class AudioMixer : IDisposable
                 if (_clock.IsPaused)
                 {
                     if (!_flushedForPause) { ProduceUpTo(_clock.Elapsed); _flushedForPause = true; }
-                    foreach (AudioInput input in _inputs) input.Discard();
+                    foreach (IAudioSource input in _inputs) input.Discard();
                     return;
                 }
                 _flushedForPause = false;
-                foreach (AudioInput input in _inputs)
+                foreach (IAudioSource input in _inputs)
                     if (input.BufferedSamples > MaximumBacklogSamples) input.TrimTo(SteadyBacklogSamples);
                 ProduceUpTo(_clock.Elapsed - MixLatency);
             }
@@ -145,11 +194,15 @@ internal sealed class AudioMixer : IDisposable
         if (_mix.Length < samples) { _mix = new float[samples]; _scratch = new float[samples]; }
         Span<float> mix = _mix.AsSpan(0, samples);
         mix.Clear();
-        foreach (AudioInput input in _inputs)
+        for (int inputIndex = 0; inputIndex < _inputs.Count; inputIndex++)
         {
+            IAudioSource input = _inputs[inputIndex];
             Span<float> scratch = _scratch.AsSpan(0, samples);
             int read = input.Read(scratch);
-            if (input.IsMicrophone && MicrophoneMuted) continue; // Still drained so unmuting doesn't replay old audio.
+            bool muted = input.IsMicrophone && MicrophoneMuted; // Still drained so unmuting doesn't replay old audio.
+            if (muted) read = 0;
+            scratch[read..].Clear(); // Missing device audio is silence, on the mix and on the separate track alike.
+            WriteTrack(inputIndex, scratch);
             for (int index = 0; index < read; index++) mix[index] += scratch[index];
         }
         byte[] pcm = new byte[samples * 2];
@@ -159,10 +212,36 @@ internal sealed class AudioMixer : IDisposable
         _producedFrames += frames;
     }
 
+    private void WriteTrack(int inputIndex, ReadOnlySpan<float> samples)
+    {
+        if (_trackWriters[inputIndex] is not PcmWaveWriter writer) return;
+        try { writer.WriteFloat(samples); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            // A full disk must not stop the recording: drop this track and keep the mixed soundtrack.
+            writer.Dispose();
+            RecordingAudioTracks.TryDelete(writer.FilePath);
+            _trackWriters[inputIndex] = null;
+            TrackWarning ??= $"A separate audio track stopped saving ({error.Message}); the movie keeps the mixed audio.";
+        }
+    }
+
+    /// <summary>Releases the inputs. Separate tracks not completed by <see cref="Finish"/> (a failed start) are deleted.</summary>
     public void Dispose()
     {
         _timer?.Dispose();
         _timer = null;
-        foreach (AudioInput input in _inputs) input.Dispose();
+        foreach (IAudioSource input in _inputs) input.Dispose();
+        lock (_gate)
+        {
+            if (_finished) return;
+            for (int index = 0; index < _trackWriters.Length; index++)
+            {
+                if (_trackWriters[index] is not PcmWaveWriter writer) continue;
+                writer.Dispose();
+                RecordingAudioTracks.TryDelete(writer.FilePath);
+                _trackWriters[index] = null;
+            }
+        }
     }
 }

@@ -108,25 +108,103 @@ internal static class RecordingEditorChrome
             : $"{(int)time.TotalMinutes}:{time.Seconds:00}.{fraction}";
     }
 
-    private static ControlTemplate RoundedTemplate()
+    // ---------- KhingShot-style surfaces (dark charcoal, rounded panels, yellow accent) ----------
+
+    internal static readonly Brush WindowBrush = Freeze(Color.FromRgb(0x17, 0x17, 0x19));
+    internal static readonly Brush PanelBrush = Freeze(Color.FromRgb(0x1F, 0x20, 0x22));
+    internal static readonly Brush PanelBorderBrush = Freeze(Color.FromRgb(0x2E, 0x2F, 0x33));
+    internal static readonly Brush SurfaceBrush = Freeze(Color.FromRgb(0x2A, 0x2B, 0x2E));
+    internal static readonly Brush SurfaceBorderBrush = Freeze(Color.FromRgb(0x3A, 0x3B, 0x40));
+    internal static readonly Brush DimText = Freeze(Color.FromRgb(0x6C, 0x6F, 0x76));
+    internal static readonly FontFamily MonoFont = new("Cascadia Mono, Consolas");
+
+    /// <summary>A rounded panel like the player, trim/export, and timeline panels in KhingShot.</summary>
+    internal static Border Panel(UIElement child, Thickness padding) => new()
+    {
+        Background = PanelBrush, BorderBrush = PanelBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14),
+        Padding = padding, Child = child, SnapsToDevicePixels = true
+    };
+
+    /// <summary>A borderless icon button that only shows a background on hover (or yellow when made active).</summary>
+    internal static Button FlatIconButton(LucideIconKind kind, string tip, RoutedEventHandler click, double size = 36, double iconSize = 18)
+    {
+        Button button = IconButton(kind, tip, click, size, size, iconSize);
+        button.Background = Brushes.Transparent;
+        button.Margin = new Thickness(1, 0, 1, 0);
+        return button;
+    }
+
+    /// <summary>Highlights a flat toggle: yellow icon on a soft tile when on (KhingShot's snapping and loop buttons).</summary>
+    internal static void SetLit(Button button, bool lit)
+    {
+        button.Background = lit ? SurfaceBrush : Brushes.Transparent;
+        button.Foreground = lit ? ActiveBrush : Brushes.White;
+    }
+
+    internal static Border VerticalRule(double height = 22) => new() { Width = 1, Height = height, Margin = new Thickness(8, 0, 8, 0), Background = SurfaceBorderBrush, VerticalAlignment = VerticalAlignment.Center };
+
+    internal static TextBlock Label(string text, double size, Brush brush, FontWeight weight) =>
+        new() { Text = text, FontSize = size, Foreground = brush, FontWeight = weight, VerticalAlignment = VerticalAlignment.Center };
+
+    /// <summary>A Windows 11 title-bar button (minimize, maximize/restore, close) drawn with the system icon font.</summary>
+    internal static Button CaptionButton(string glyph, string name, RoutedEventHandler click, bool close = false)
+    {
+        var button = new Button
+        {
+            Content = new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = 10, Foreground = Brushes.White },
+            Width = 46, Height = 34, Background = Brushes.Transparent, BorderThickness = new Thickness(0), ToolTip = name,
+            Template = CaptionTemplate(close ? Color.FromRgb(0xC4, 0x2B, 0x1C) : Color.FromArgb(40, 255, 255, 255)), Focusable = false
+        };
+        System.Windows.Automation.AutomationProperties.SetName(button, name);
+        button.Click += click;
+        return button;
+    }
+
+    private static ControlTemplate CaptionTemplate(Color hover)
     {
         var template = new ControlTemplate(typeof(Button));
         var border = new FrameworkElementFactory(typeof(Border), "chrome");
         border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(9));
-        border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
-        border.SetValue(Border.BorderBrushProperty, Brushes.Transparent);
-        border.SetValue(Border.BorderThicknessProperty, new Thickness(2));
         var content = new FrameworkElementFactory(typeof(ContentPresenter));
         content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
         content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         border.AppendChild(content);
         template.VisualTree = border;
         var over = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
-        over.Setters.Add(new Setter(UIElement.OpacityProperty, .84));
+        over.Setters.Add(new Setter(Border.BackgroundProperty, Freeze(hover), "chrome"));
+        template.Triggers.Add(over);
+        return template;
+    }
+
+    private static readonly Brush HoverOverlay = Freeze(Color.FromArgb(28, 255, 255, 255));
+    private static readonly Brush PressedOverlay = Freeze(Color.FromArgb(40, 0, 0, 0));
+
+    /// <summary>Rounded button: a light overlay on hover and a dark one when pressed, so any background (clear, gray, yellow) reacts.</summary>
+    internal static ControlTemplate RoundedTemplate()
+    {
+        var template = new ControlTemplate(typeof(Button));
+        var border = new FrameworkElementFactory(typeof(Border), "chrome");
+        border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(9));
+        border.SetValue(Border.BorderBrushProperty, Brushes.Transparent);
+        border.SetValue(Border.BorderThicknessProperty, new Thickness(2));
+        var layers = new FrameworkElementFactory(typeof(Grid));
+        var overlay = new FrameworkElementFactory(typeof(Border), "overlay");
+        overlay.SetValue(Border.CornerRadiusProperty, new CornerRadius(7));
+        overlay.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        layers.AppendChild(overlay);
+        var content = new FrameworkElementFactory(typeof(ContentPresenter));
+        content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        content.SetValue(FrameworkElement.MarginProperty, new TemplateBindingExtension(Control.PaddingProperty));
+        layers.AppendChild(content);
+        border.AppendChild(layers);
+        template.VisualTree = border;
+        var over = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        over.Setters.Add(new Setter(Border.BackgroundProperty, HoverOverlay, "overlay"));
         template.Triggers.Add(over);
         var pressed = new Trigger { Property = ButtonBase.IsPressedProperty, Value = true };
-        pressed.Setters.Add(new Setter(UIElement.OpacityProperty, .62));
+        pressed.Setters.Add(new Setter(Border.BackgroundProperty, PressedOverlay, "overlay"));
         template.Triggers.Add(pressed);
         var disabled = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
         disabled.Setters.Add(new Setter(UIElement.OpacityProperty, .38));

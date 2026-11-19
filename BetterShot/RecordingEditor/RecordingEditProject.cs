@@ -27,7 +27,8 @@ internal sealed record LoadedEditProject(
 /// </summary>
 internal static class RecordingEditProject
 {
-    internal const int CurrentVersion = 1;
+    /// <summary>Version 2 added "mutedTracks"; version 1 files read as nothing muted.</summary>
+    internal const int CurrentVersion = 2;
     internal const string SidecarSuffix = ".bettershot-edit";
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
     // Marks embed the library's annotation format, whose required properties must be written even when null.
@@ -91,7 +92,7 @@ internal static class RecordingEditProject
         string? warning = null;
         if (!sameMovie) warning = "The movie's length changed since it was edited, so its cuts were reset. Marks were kept.";
         if (preserved.Count > 0) warning = $"{preserved.Count} mark{(preserved.Count == 1 ? " was" : "s were")} made by a newer BetterShot and will be kept but not shown.";
-        var state = new RecordingEditState(timeline, marks, dto.HideMarkup ?? false);
+        var state = new RecordingEditState(timeline, marks, dto.HideMarkup ?? false) { MutedTracks = AudioTrackPlanning.FromKeys(dto.MutedTracks) };
         return new LoadedEditProject(state, new RecordingEditViewOptions(dto.MarksOnOwnRows ?? true), sameMovie ? dto.MarkedCopyFingerprint : null,
             preserved, dto.AdditionalFields, warning);
     }
@@ -103,6 +104,7 @@ internal static class RecordingEditProject
     internal static string Fingerprint(RecordingEditState state)
     {
         EditProjectDto dto = ToDto(state with { Marks = state.VisibleMarks.ToArray(), HideMarkup = false });
+        dto.Version = 1; // The file format version is not content: marked copies made by version 1 builds stay current.
         string canonical = JsonSerializer.Serialize(dto, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)))[..32];
     }
@@ -115,6 +117,7 @@ internal static class RecordingEditProject
         In = state.Timeline.InPoint,
         Out = state.Timeline.OutPoint,
         HideMarkup = state.HideMarkup ? true : null,
+        MutedTracks = AudioTrackPlanning.ToKeys(state.MutedTracks)?.ToList(),
         Marks = state.Marks.Select(mark => JsonSerializer.SerializeToElement(ToDto(mark), MarkJsonOptions)).ToList()
     };
 
@@ -165,6 +168,7 @@ internal static class RecordingEditProject
         [JsonPropertyName("out")] public double? Out { get; set; }
         [JsonPropertyName("marks")] public List<JsonElement> Marks { get; set; } = [];
         [JsonPropertyName("hideMarkup")] public bool? HideMarkup { get; set; }
+        [JsonPropertyName("mutedTracks")] public List<string>? MutedTracks { get; set; }
         [JsonPropertyName("marksOnOwnRows")] public bool? MarksOnOwnRows { get; set; }
         [JsonPropertyName("markedCopyFingerprint")] public string? MarkedCopyFingerprint { get; set; }
         [JsonExtensionData] public Dictionary<string, JsonElement>? AdditionalFields { get; set; }

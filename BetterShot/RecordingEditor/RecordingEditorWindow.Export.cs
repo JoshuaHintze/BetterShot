@@ -6,6 +6,7 @@ using Microsoft.Win32;
 using System.IO;
 using System.Threading;
 using System.Windows.Controls;
+using System.Windows.Input;
 using static BetterShot.RecordingEditor.RecordingEditorChrome;
 
 namespace BetterShot.RecordingEditor;
@@ -22,26 +23,30 @@ internal sealed partial class RecordingEditorWindow
         }
     }
 
-    private void OpenExportMenu(FrameworkElement target)
+    /// <summary>The export button: the selected card, with muted tracks left out of an MP4.</summary>
+    private async Task ExportSelectedAsync()
     {
-        ContextMenu menu = Menu();
-        menu.Items.Add(MenuItem("MP4", async (_, _) => await ExportAsync(RecordingExportKind.Mp4, null), LucideIconKind.Video,
-            tip: "The kept stretch, audio included, as an MP4."));
-        menu.Items.Add(MenuItem("MP4 without audio", async (_, _) => await ExportAsync(RecordingExportKind.Mp4WithoutAudio, null), LucideIconKind.MicOff,
-            tip: "The kept stretch as a silent MP4."));
-        menu.Items.Add(MenuItem("GIF", async (_, _) => await ExportAsync(RecordingExportKind.Gif, null), LucideIconKind.Image,
-            tip: "An endlessly looping GIF. Frame rate and size are in Settings > Recording."));
-        var timelapse = MenuItem("Timelapse", (_, _) => { }, LucideIconKind.Timer, tip: "Sped up. Audio is left out, so nothing plays back sped up.");
-        timelapse.Items.Add(MenuItem("Automatic speed (about 30 seconds long)", async (_, _) => await ExportAsync(RecordingExportKind.Timelapse, null)));
-        foreach (int speed in ExportPlanning.TimelapseSpeeds)
+        switch (_exportKind)
         {
-            int chosen = speed;
-            timelapse.Items.Add(MenuItem($"{speed}x", async (_, _) => await ExportAsync(RecordingExportKind.Timelapse, chosen)));
+            case RecordingExportKind.Gif: await ExportAsync(RecordingExportKind.Gif, null); break;
+            case RecordingExportKind.Timelapse: await ExportAsync(RecordingExportKind.Timelapse, _timelapseSpeed); break;
+            default:
+                (RecordingExportKind kind, IReadOnlyList<AudioTrackKind>? remix) = MovieAudioChoice();
+                await ExportAsync(kind, null, remix);
+                break;
         }
-        menu.Items.Add(timelapse);
-        menu.Items.Add(new Separator());
-        menu.Items.Add(MenuHeader("Drawn into the export. The recording stays as it was, so every mark stays editable."));
-        OpenBelow(menu, target);
+    }
+
+    /// <summary>An MP4 keeps the original mix, re-mixes the unmuted tracks, or has no audio, following the track mutes.</summary>
+    private (RecordingExportKind Kind, IReadOnlyList<AudioTrackKind>? Remix) MovieAudioChoice()
+    {
+        AudioOutputPlan plan = CurrentAudioPlan;
+        return plan.Mode switch
+        {
+            AudioOutputMode.Silent => (RecordingExportKind.Mp4WithoutAudio, null),
+            AudioOutputMode.Remix => (RecordingExportKind.Mp4, plan.RemixTracks),
+            _ => (RecordingExportKind.Mp4, null)
+        };
     }
 
     private OperationScope BeginOperation(string label)
@@ -52,6 +57,7 @@ internal sealed partial class RecordingEditorWindow
         _progress.Visibility = Visibility.Visible;
         _cancelOperation.Visibility = Visibility.Visible;
         SetStatus(label);
+        UpdateToolbarState();
         return scope;
     }
 
@@ -76,7 +82,7 @@ internal sealed partial class RecordingEditorWindow
         return true;
     }
 
-    private async Task ExportAsync(RecordingExportKind kind, int? timelapseSpeed)
+    private async Task ExportAsync(RecordingExportKind kind, int? timelapseSpeed, IReadOnlyList<AudioTrackKind>? remixTracks = null)
     {
         CommitTextEdit();
         Pause();
@@ -88,7 +94,7 @@ internal sealed partial class RecordingEditorWindow
             return;
         }
         if (AskExportPath(kind) is not string path) return;
-        var job = new RecordingExportJob(kind, Entry.MoviePath, path, State, info, settings.GifFps, settings.GifMaxDimension, timelapseSpeed, _context.TemporaryFolder);
+        var job = new RecordingExportJob(kind, Entry.MoviePath, path, State, info, settings.GifFps, settings.GifMaxDimension, timelapseSpeed, _context.TemporaryFolder, remixTracks);
         string label = kind switch
         {
             RecordingExportKind.Gif => "Exporting GIF",
@@ -145,7 +151,8 @@ internal sealed partial class RecordingEditorWindow
         if (!CanExport(out RecordingFrameReader reader, out VideoInfo info)) return false;
         RecordingEditState state = State;
         string copy = RecordingSharing.MarkedCopyPath(Entry.MoviePath);
-        var job = new RecordingExportJob(RecordingExportKind.Mp4, Entry.MoviePath, copy, state, info, 0, 0, null, _context.TemporaryFolder);
+        (RecordingExportKind kind, IReadOnlyList<AudioTrackKind>? remix) = MovieAudioChoice();
+        var job = new RecordingExportJob(kind, Entry.MoviePath, copy, state, info, 0, 0, null, _context.TemporaryFolder, remix);
         using OperationScope operation = BeginOperation("Updating marked copy…");
         try
         {
@@ -166,30 +173,41 @@ internal sealed partial class RecordingEditorWindow
 
     /// <summary>
     /// Writes the kept stretch (audio included, no markup) to a movie: replacing the original, or (the default) as a
-    /// trimmed copy beside it. Marks, tracking paths, and click markers move to the new timeline and stay editable.
+    /// trimmed copy beside it. When the movie allows it the samples are copied as they are (lossless, video starting
+    /// on a keyframe); otherwise the kept stretch is re-encoded precisely. The separate audio tracks are cut to match,
+    /// and marks, tracking paths, and click markers move to the new timeline and stay editable.
     /// </summary>
     private async Task ApplyTrimAsync()
     {
         CommitTextEdit();
         Pause();
-        if (!State.Timeline.HasCuts) { SetStatus("Nothing is cut yet. Cut or set in/out points first."); return; }
+        if (!State.Timeline.HasCuts) { SetStatus("Drag the yellow handles or cut a stretch out first."); return; }
         if (!CanExport(out _, out VideoInfo info)) return;
-        bool replace = _context.Settings().TrimReplacesOriginal;
+        bool replace = _replaceOriginal;
         if (replace && MessageBox.Show(this, "Replace the original recording with the trimmed one? The cut stretches are removed from the file for good. Marks stay editable.",
-                "Save trim", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+                "Trim the recording?", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         RecordingEditState state = State;
+        LosslessTrimPlan? lossless = CurrentLosslessPlan(out _);
+        Mp4MovieIndex? index = _losslessIndex;
+        IReadOnlyList<KeptRange> ranges = lossless?.Ranges ?? state.Timeline.KeptRanges;
         string folder = Path.GetDirectoryName(Entry.MoviePath)!;
         string target = replace ? Entry.MoviePath : FileNameTemplate.ResolveUniquePath(folder, Path.GetFileNameWithoutExtension(Entry.MoviePath) + " (trimmed).mp4", File.Exists);
         string temporary = Path.Combine(folder, "." + Path.GetFileNameWithoutExtension(target) + "-" + Guid.NewGuid().ToString("N")[..8] + ".partial.mp4");
-        using OperationScope operation = BeginOperation("Saving the trimmed recording…");
+        using OperationScope operation = BeginOperation(lossless is null ? "Trimming (re-encoding the kept stretch)…" : "Trimming without re-encoding…");
         try
         {
-            await TrimmedMovieRenderer.RenderAsync(Entry.MoviePath, state.Timeline.KeptRanges, temporary, info, includeAudio: info.HasAudio, new Progress<double>(ReportProgress), operation.Token);
-            double duration = await MeasureDurationAsync(temporary, state.Timeline.OutputDuration);
-            RecordingEditState trimmed = TrimRemap.Apply(state, duration);
-            IReadOnlyList<RecordingEvent> events = TrimRemap.RemapEvents(_events, state.Timeline);
-            if (replace) await ReplaceOriginalAsync(temporary, trimmed, events, duration);
-            else SaveTrimmedCopy(temporary, target, trimmed, events, duration, info);
+            var progress = new Progress<double>(ReportProgress);
+            if (lossless is not null && index is not null)
+                await Task.Run(() => Mp4Remuxer.Write(index, ranges, Entry.MoviePath, temporary, progress, operation.Token), operation.Token);
+            else
+                await TrimmedMovieRenderer.RenderAsync(Entry.MoviePath, ranges, temporary, info, includeAudio: info.HasAudio, progress, operation.Token);
+            double duration = await MeasureDurationAsync(temporary, ranges.Sum(range => range.Duration));
+            RecordingEditState actual = state with { Timeline = EditTimeline.FromKeptRanges(state.Timeline.Duration, ranges) };
+            RecordingEditState trimmed = TrimRemap.Apply(actual, duration);
+            IReadOnlyList<RecordingEvent> events = TrimRemap.RemapEvents(_events, actual.Timeline);
+            string how = lossless is null ? "re-encoded" : "copied without re-encoding";
+            if (replace) await ReplaceOriginalAsync(temporary, trimmed, events, duration, ranges, how);
+            else SaveTrimmedCopy(temporary, target, trimmed, events, duration, info, ranges, how);
         }
         catch (OperationCanceledException) { SetStatus("The trim was not saved."); }
         catch (Exception error) { SetStatus($"The trim was not saved: {error.Message}", true); }
@@ -207,21 +225,28 @@ internal sealed partial class RecordingEditorWindow
         catch (Exception) { return fallback; } // The planned length is exact to within a frame.
     }
 
-    private void SaveTrimmedCopy(string temporary, string target, RecordingEditState trimmed, IReadOnlyList<RecordingEvent> events, double duration, VideoInfo info)
+    private void SaveTrimmedCopy(string temporary, string target, RecordingEditState trimmed, IReadOnlyList<RecordingEvent> events, double duration, VideoInfo info,
+        IReadOnlyList<KeptRange> ranges, string how)
     {
         File.Move(temporary, target);
+        AudioRemixer.TrimSidecars(Entry.MoviePath, ranges, target);
         RecordingEditProject.Save(target, trimmed, _view, null, [], null);
         WriteEvents(target, events);
         var entry = new RecordingEntry(Guid.NewGuid(), target, null, DateTime.UtcNow, duration, info.Width, info.Height);
         _context.RecordingAdded(entry);
-        SetStatus($"Saved the trimmed copy beside the original as {Path.GetFileName(target)}. The original is unchanged.");
+        SetStatus($"Saved the trimmed copy ({how}) beside the original as {Path.GetFileName(target)}. The original is unchanged.");
     }
 
-    private async Task ReplaceOriginalAsync(string temporary, RecordingEditState trimmed, IReadOnlyList<RecordingEvent> events, double duration)
+    private async Task ReplaceOriginalAsync(string temporary, RecordingEditState trimmed, IReadOnlyList<RecordingEvent> events, double duration,
+        IReadOnlyList<KeptRange> ranges, string how)
     {
         ShutDownPlayer();
+        _trackPreview?.Dispose(); // Releases the separate tracks so they can be replaced.
+        _trackPreview = null;
+        _filmstrip.Attach(null, 0, 0);
         _reader = null;
         await MoveWithRetryAsync(temporary, Entry.MoviePath);
+        AudioRemixer.TrimSidecars(Entry.MoviePath, ranges, Entry.MoviePath);
         RecordingSharing.DeleteMarkedCopy(Entry.MoviePath);
         _markedCopyFingerprint = null;
         _history.Reset(trimmed);
@@ -238,9 +263,115 @@ internal sealed partial class RecordingEditorWindow
         }
         catch (Exception error) { SetStatus($"Trimmed, but the editor could not reopen the movie: {error.Message}", true); }
         OpenPlayer();
+        UpdateSubtitle();
+        LoadAudioTracks();
+        LoadLosslessIndex();
+        await AttachFilmstripAsync();
         _timeline.Fit();
         OnStateChanged();
-        SetStatus($"Replaced the original with the trimmed recording ({FormatTime(duration)}).");
+        SetStatus($"Replaced the original with the trimmed recording ({RecordingTimeText.Tenths(duration)}, {how}).");
+    }
+
+    // ---------- Sharing ----------
+
+    private string? _sharePath;
+    private bool _shareHooked;
+    private Point? _shareDragStart;
+
+    private void OpenShareMenu(FrameworkElement target)
+    {
+        ContextMenu menu = Menu();
+        menu.Items.Add(MenuHeader(State.HasRedaction ? "Shares the covered copy, never the unredacted recording." : "Shares the recording with your cuts, mutes, and markup (the marked copy)."));
+        menu.Items.Add(MenuItem("Copy the file", async (_, _) => await CopyShareFileAsync(), LucideIconKind.Copy, tip: "Paste it into a chat, an email, or a folder."));
+        menu.Items.Add(MenuItem("Share…", async (_, _) => await ShareWithWindowsAsync(), LucideIconKind.Share, tip: "Opens the Windows share sheet (Nearby sharing, Mail, and apps)."));
+        OpenBelow(menu, target);
+    }
+
+    /// <summary>Saves, brings the marked copy up to date, and returns the file that may be shared (null with a status when none may be).</summary>
+    private async Task<string?> PrepareShareFileAsync()
+    {
+        if (_history.IsDirty || NeedsMarkedCopyUpdate)
+        {
+            if (!await SaveAsync(updateMarkedCopy: true)) return null;
+        }
+        (string? path, string? note) = RecordingSharing.ResolveSharePath(Entry.MoviePath);
+        if (note is not null) SetStatus(note, path is null);
+        return path;
+    }
+
+    private async Task CopyShareFileAsync()
+    {
+        if (await PrepareShareFileAsync() is not string path) return;
+        try
+        {
+            var files = new System.Collections.Specialized.StringCollection { path };
+            Clipboard.SetFileDropList(files);
+            SetStatus($"Copied {Path.GetFileName(path)}. Paste it into a chat, an email, or a folder.");
+        }
+        catch (System.Runtime.InteropServices.ExternalException error) { SetStatus($"The clipboard is busy: {error.Message}", true); }
+    }
+
+    private async Task ShareWithWindowsAsync()
+    {
+        if (await PrepareShareFileAsync() is not string path) return;
+        try
+        {
+            IntPtr window = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            Windows.ApplicationModel.DataTransfer.DataTransferManager manager = Windows.ApplicationModel.DataTransfer.DataTransferManagerInterop.GetForWindow(window);
+            _sharePath = path;
+            if (!_shareHooked)
+            {
+                manager.DataRequested += Share_DataRequested;
+                _shareHooked = true;
+            }
+            Windows.ApplicationModel.DataTransfer.DataTransferManagerInterop.ShowShareUIForWindow(window);
+        }
+        catch (Exception error) when (error is System.Runtime.InteropServices.COMException or InvalidOperationException or TypeLoadException)
+        {
+            SetStatus($"The Windows share sheet is unavailable ({error.Message}). Use Copy the file instead.", true);
+        }
+    }
+
+    private async void Share_DataRequested(Windows.ApplicationModel.DataTransfer.DataTransferManager sender, Windows.ApplicationModel.DataTransfer.DataRequestedEventArgs args)
+    {
+        Windows.ApplicationModel.DataTransfer.DataRequestDeferral deferral = args.Request.GetDeferral();
+        try
+        {
+            if (_sharePath is not string path) { args.Request.FailWithDisplayText("Nothing to share."); return; }
+            Windows.Storage.StorageFile file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+            args.Request.Data.Properties.Title = Path.GetFileName(path);
+            args.Request.Data.SetStorageItems([file]);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
+        {
+            args.Request.FailWithDisplayText(error.Message);
+        }
+        finally { deferral.Complete(); }
+    }
+
+    /// <summary>Dragging the share button drops the shareable file (like dragging a library card).</summary>
+    private void AttachShareDrag(Button button)
+    {
+        button.PreviewMouseLeftButtonDown += (_, e) => _shareDragStart = e.GetPosition(button);
+        button.PreviewMouseLeftButtonUp += (_, _) => _shareDragStart = null;
+        button.PreviewMouseMove += (_, e) =>
+        {
+            if (_shareDragStart is not Point start || e.LeftButton != MouseButtonState.Pressed) return;
+            Vector moved = e.GetPosition(button) - start;
+            if (Math.Abs(moved.X) < SystemParameters.MinimumHorizontalDragDistance && Math.Abs(moved.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+            _shareDragStart = null;
+            if (_history.IsDirty) SaveProject();
+            if (NeedsMarkedCopyUpdate)
+            {
+                SetStatus("Updating the marked copy first. Drag again when it is ready.");
+                _ = UpdateMarkedCopyAsync();
+                return;
+            }
+            (string? path, string? note) = RecordingSharing.ResolveSharePath(Entry.MoviePath);
+            if (note is not null) SetStatus(note, path is null);
+            if (path is null) return;
+            DragDrop.DoDragDrop(button, Presentation.RecordingFiles.CreateDragData(path), DragDropEffects.Copy);
+        };
     }
 
     /// <summary>The player can hold the file for a moment after closing; retry briefly before giving up.</summary>

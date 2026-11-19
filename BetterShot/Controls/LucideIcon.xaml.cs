@@ -80,7 +80,19 @@ public enum LucideIconKind
     Rows3,
     Eye,
     EyeOff,
-    MoveHorizontal
+    MoveHorizontal,
+    Volume2,
+    VolumeX,
+    Share,
+    Film,
+    Grid3x3,
+    ZoomOut,
+    FoldHorizontal,
+    Columns2,
+    MousePointerClick,
+    Clock,
+    Signature,
+    Images
 }
 
 public partial class LucideIcon : UserControl
@@ -187,6 +199,19 @@ public partial class LucideIcon : UserControl
             case LucideIconKind.Eye: Path("M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"); Circle(12, 12, 3); break;
             case LucideIconKind.EyeOff: Path("M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"); Path("M14.084 14.158a3 3 0 0 1-4.242-4.242"); Path("M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"); Path("m2 2 20 20"); break;
             case LucideIconKind.MoveHorizontal: Path("m18 8 4 4-4 4"); Path("M2 12h20"); Path("m6 8-4 4 4 4"); break;
+            // Official Lucide 1.76.0 volume-2, volume-x, share, film, grid-3x3, zoom-out, fold-horizontal, columns-2, mouse-pointer-click, clock, signature, images.
+            case LucideIconKind.Volume2: Path("M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"); Path("M16 9a5 5 0 0 1 0 6"); Path("M19.364 18.364a9 9 0 0 0 0-12.728"); break;
+            case LucideIconKind.VolumeX: Path("M11 4.702a.7.7 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.7.7 0 0 0 11 19.298z"); Path("m16.5 14.5 5-5"); Path("m16.5 9.5 5 5"); break;
+            case LucideIconKind.Share: Path("M12 2v13"); Path("m16 6-4-4-4 4"); Path("M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"); break;
+            case LucideIconKind.Film: Rectangle(3, 3, 18, 18, 2); Path("M7 3v18"); Path("M3 7.5h4"); Path("M3 12h18"); Path("M3 16.5h4"); Path("M17 3v18"); Path("M17 7.5h4"); Path("M17 16.5h4"); break;
+            case LucideIconKind.Grid3x3: Rectangle(3, 3, 18, 18, 2); Path("M3 9h18"); Path("M3 15h18"); Path("M9 3v18"); Path("M15 3v18"); break;
+            case LucideIconKind.ZoomOut: Circle(11, 11, 8); Path("M21 21 16.65 16.65"); Path("M8 11h6"); break;
+            case LucideIconKind.FoldHorizontal: Path("M12 10V8"); Path("M12 16v-2"); Path("M12 22v-2"); Path("M12 4V2"); Path("M16 12h6"); Path("m19 15-3-3 3-3"); Path("M2 12h6"); Path("m5 15 3-3-3-3"); break;
+            case LucideIconKind.Columns2: Rectangle(3, 3, 18, 18, 2); Path("M12 3v18"); break;
+            case LucideIconKind.MousePointerClick: Path("M14 4.1 12 6"); Path("m5.1 8-2.9-.8"); Path("m6 12-1.9 2"); Path("M7.2 2.2 8 5.1"); Path("M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z"); break;
+            case LucideIconKind.Clock: Circle(12, 12, 10); Path("M12 6v6l4 2"); break;
+            case LucideIconKind.Signature: Path("m21 17-2.156-1.868A.5.5 0 0 0 18 15.5v.5a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1c0-2.545-3.991-3.97-8.5-4a1 1 0 0 0 0 5c4.153 0 4.745-11.295 5.708-13.5a2.5 2.5 0 1 1 3.31 3.284"); Path("M3 21h18"); break;
+            case LucideIconKind.Images: Path("m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"); Path("M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"); Circle(13, 7, 1); Rectangle(8, 2, 14, 14, 2); break;
         }
     }
 

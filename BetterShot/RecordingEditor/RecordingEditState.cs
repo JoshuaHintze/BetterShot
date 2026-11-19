@@ -1,9 +1,12 @@
 namespace BetterShot.RecordingEditor;
 
-/// <summary>Everything the recording editor can undo: the cut list, the marks, and whether markup is hidden.</summary>
+/// <summary>Everything the recording editor can undo: the cut list, the marks, whether markup is hidden, and muted audio tracks.</summary>
 internal sealed record RecordingEditState(EditTimeline Timeline, IReadOnlyList<VideoMark> Marks, bool HideMarkup)
 {
     internal static RecordingEditState Create(double duration) => new(EditTimeline.Create(duration), [], false);
+
+    /// <summary>Audio tracks left out of the preview, the exports, and the marked copy (the movie file keeps them).</summary>
+    internal MutedAudioTracks MutedTracks { get; init; }
 
     internal bool HasRedaction => Marks.Any(mark => mark.IsRedaction);
 
@@ -15,8 +18,8 @@ internal sealed record RecordingEditState(EditTimeline Timeline, IReadOnlyList<V
 
     internal bool HasVisibleMarks => VisibleMarks.Any();
 
-    /// <summary>True when an export differs from the original movie (cuts, in/out, or visible marks).</summary>
-    internal bool HasEdits => Timeline.HasCuts || HasVisibleMarks;
+    /// <summary>True when an export differs from the original movie (cuts, in/out, visible marks, or muted audio).</summary>
+    internal bool HasEdits => Timeline.HasCuts || HasVisibleMarks || MutedTracks != MutedAudioTracks.None;
 
     internal VideoMark? Find(Guid id) => Marks.FirstOrDefault(mark => mark.Id == id);
 
@@ -112,5 +115,6 @@ internal sealed class RecordingEditHistory
     }
 
     private static bool SameContent(RecordingEditState first, RecordingEditState second) =>
-        ReferenceEquals(first.Timeline, second.Timeline) && first.HideMarkup == second.HideMarkup && first.Marks.SequenceEqual(second.Marks);
+        ReferenceEquals(first.Timeline, second.Timeline) && first.HideMarkup == second.HideMarkup && first.MutedTracks == second.MutedTracks
+        && first.Marks.SequenceEqual(second.Marks);
 }

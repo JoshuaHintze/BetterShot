@@ -3,11 +3,23 @@ using NAudio.Wave;
 
 namespace BetterShot.Recording;
 
+/// <summary>What <see cref="AudioMixer"/> pulls from: 48 kHz interleaved stereo float, buffered by the source.</summary>
+internal interface IAudioSource : IDisposable
+{
+    bool IsMicrophone { get; }
+    Exception? Failure { get; }
+    int BufferedSamples { get; }
+    void Start();
+    int Read(Span<float> destination);
+    void Discard();
+    void TrimTo(int samples);
+}
+
 /// <summary>
 /// One WASAPI capture stream (microphone, or system audio through render-device loopback) converted to 48 kHz
 /// stereo float and buffered for <see cref="AudioMixer"/>. Capture callbacks arrive on NAudio's capture thread.
 /// </summary>
-internal sealed class AudioInput : IDisposable
+internal sealed class AudioInput : IAudioSource
 {
     internal const int OutputRate = 48_000;
     private static readonly Guid IeeeFloatSubFormat = new("00000003-0000-0010-8000-00aa00389b71");
@@ -35,13 +47,13 @@ internal sealed class AudioInput : IDisposable
         _capture.RecordingStopped += Capture_RecordingStopped;
     }
 
-    internal bool IsMicrophone { get; }
+    public bool IsMicrophone { get; }
     internal string DeviceName { get; private set; } = string.Empty;
     /// <summary>Set when the device stopped unexpectedly (unplugged, privacy toggled, driver error).</summary>
-    internal Exception? Failure { get; private set; }
+    public Exception? Failure { get; private set; }
 
     /// <summary>Stereo float samples currently buffered.</summary>
-    internal int BufferedSamples => _buffer.Count;
+    public int BufferedSamples => _buffer.Count;
 
     /// <summary>Opens the microphone (empty id = Windows default recording device). Throws <see cref="RecordingException"/>.</summary>
     internal static AudioInput OpenMicrophone(string deviceId)
@@ -90,7 +102,7 @@ internal sealed class AudioInput : IDisposable
         }
     }
 
-    internal void Start()
+    public void Start()
     {
         try { _capture.StartRecording(); }
         catch (Exception error)
@@ -102,12 +114,12 @@ internal sealed class AudioInput : IDisposable
     }
 
     /// <summary>Reads up to <paramref name="destination"/>.Length interleaved samples; returns how many were read.</summary>
-    internal int Read(Span<float> destination) => _buffer.Read(destination);
+    public int Read(Span<float> destination) => _buffer.Read(destination);
 
-    internal void Discard() => _buffer.Clear();
+    public void Discard() => _buffer.Clear();
 
     /// <summary>Bounds latency after a stall: keeps only the newest <paramref name="samples"/> samples.</summary>
-    internal void TrimTo(int samples) => _buffer.TrimTo(samples);
+    public void TrimTo(int samples) => _buffer.TrimTo(samples);
 
     private void Capture_DataAvailable(object? sender, WaveInEventArgs e)
     {

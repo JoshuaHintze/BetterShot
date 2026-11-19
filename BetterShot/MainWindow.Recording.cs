@@ -288,6 +288,7 @@ public partial class MainWindow
             throw new RecordingException(RecordingProblem.CouldNotFinish,
                 $"{RecordingException.CouldNotFinishTitle}: it could not be moved to {folder} ({FriendlyMessage(ex)}). The movie was kept at {outcome.MoviePath}.", ex);
         }
+        RecordingAudioTracks.MoveSidecars(outcome.MoviePath, finalPath);
         if (FileNameTemplate.UsesCounter(settings.RecordingFileNamePattern))
         {
             try { UpdateSettings(current => current with { FileNameCounter = current.FileNameCounter + 1 }); }
@@ -484,7 +485,7 @@ public partial class MainWindow
         // Prefer the library's current entry: a trim may have replaced the movie since a thumbnail was shown.
         RecordingEntry current = _recordingItems.FirstOrDefault(item => item.Entry.Id == entry.Id)?.Entry ?? entry;
         if (!File.Exists(current.MoviePath)) { SetStatus($"Could not open {Path.GetFileName(current.MoviePath)}: the file is missing.", true); return; }
-        try { RecordingEditorWindow.Open(current, new RecordingEditorContext(() => CurrentSettings, OnEditedRecordingChanged, OnTrimmedRecordingAdded, _recordingTempFolder)); }
+        try { RecordingEditorWindow.Open(current, new RecordingEditorContext(() => CurrentSettings, OnEditedRecordingChanged, OnTrimmedRecordingAdded, _recordingTempFolder, UpdateSettings)); }
         catch (Exception ex) { SetStatus($"Could not open the recording editor: {FriendlyMessage(ex)}", true); }
     }
 

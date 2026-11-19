@@ -15,7 +15,7 @@ internal static class TrimRemap
         var marks = new List<VideoMark>();
         foreach (VideoMark mark in state.Marks)
             if (Remap(mark, timeline, trimmedDuration) is VideoMark moved) marks.Add(moved);
-        return new RecordingEditState(EditTimeline.Create(trimmedDuration), marks, state.HideMarkup);
+        return new RecordingEditState(EditTimeline.Create(trimmedDuration), marks, state.HideMarkup) { MutedTracks = state.MutedTracks };
     }
 
     internal static VideoMark? Remap(VideoMark mark, EditTimeline timeline, double trimmedDuration)
@@ -92,7 +92,7 @@ internal static class RecordingSharing
         bool current = File.Exists(copy) && project.MarkedCopyFingerprint == RecordingEditProject.Fingerprint(state);
         if (current) return (copy, null);
         if (state.HasRedaction || unknownMarks)
-            return (null, "This recording has a redaction, so only its covered copy can be shared. Open it in the editor and choose Update marked copy.");
+            return (null, "This recording has a redaction, so only its covered copy can be shared. Open it in the editor and choose Done or Share to update its covered copy.");
         return (moviePath, "The marked copy is out of date, so the original recording was shared.");
     }
 
