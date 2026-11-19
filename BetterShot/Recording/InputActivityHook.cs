@@ -14,6 +14,10 @@ internal sealed class InputActivityHook : IDisposable
     private const int WmKeyDown = 0x0100, WmSysKeyDown = 0x0104;
     private const int WmLButtonDown = 0x0201, WmRButtonDown = 0x0204, WmMButtonDown = 0x0207;
     private const int VkShift = 0x10, VkControl = 0x11, VkMenu = 0x12, VkLWin = 0x5B, VkRWin = 0x5C;
+    private const int VkLShift = 0xA0, VkLControl = 0xA2, VkRMenu = 0xA5;
+    private const byte KeyPressed = 0x80;
+    /// <summary>ToUnicodeEx flag (Windows 10 1607+): do not change the keyboard state, so pending dead keys survive.</summary>
+    private const uint ToUnicodeKeepKeyboardState = 0x4;
     private readonly HookProc _mouseCallback;
     private readonly HookProc _keyboardCallback;
     private readonly Action<int, int> _onClick;
@@ -56,7 +60,10 @@ internal sealed class InputActivityHook : IDisposable
         if (code >= 0 && _keyboardHook != IntPtr.Zero && wParam.ToInt32() is WmKeyDown or WmSysKeyDown)
         {
             int key = Marshal.ReadInt32(lParam);
-            string? combo = KeystrokeFormatter.Format(key, IsDown(VkControl), IsDown(VkMenu), IsDown(VkShift), IsDown(VkLWin) || IsDown(VkRWin));
+            int scanCode = Marshal.ReadInt32(lParam, 4); // KBDLLHOOKSTRUCT.scanCode
+            bool shift = IsDown(VkShift);
+            string? combo = KeystrokeFormatter.Format(key, IsDown(VkControl), IsDown(VkMenu), shift, IsDown(VkLWin) || IsDown(VkRWin),
+                () => TypesCharacterWithAltGr(key, scanCode, shift));
             if (combo is not null)
             {
                 try { _onKeyCombo(combo); }
@@ -67,6 +74,32 @@ internal sealed class InputActivityHook : IDisposable
     }
 
     private static bool IsDown(int virtualKey) => (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+
+    /// <summary>
+    /// True when the key with Ctrl+Alt (AltGr), plus Shift if held, types a printable character or a dead key on the
+    /// foreground window's keyboard layout. Uses a private keyboard state and leaves the system dead-key state untouched.
+    /// </summary>
+    private static bool TypesCharacterWithAltGr(int virtualKey, int scanCode, bool shift)
+    {
+        try
+        {
+            var state = new byte[256];
+            state[VkControl] = state[VkLControl] = KeyPressed;
+            state[VkMenu] = state[VkRMenu] = KeyPressed;
+            if (shift) state[VkShift] = state[VkLShift] = KeyPressed;
+            IntPtr layout = GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero));
+            var buffer = new char[8];
+            int count = ToUnicodeEx((uint)virtualKey, (uint)scanCode, state, buffer, buffer.Length, ToUnicodeKeepKeyboardState, layout);
+            if (count < 0) return true; // A dead key: the start of a typed character.
+            for (int index = 0; index < Math.Min(count, buffer.Length); index++)
+                if (!char.IsControl(buffer[index])) return true;
+            return false;
+        }
+        catch (Exception)
+        {
+            return true; // If the layout cannot be checked, err on the side of not showing what may be typed text.
+        }
+    }
 
     public void Dispose()
     {
@@ -89,4 +122,13 @@ internal sealed class InputActivityHook : IDisposable
     private static extern short GetAsyncKeyState(int virtualKey);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr GetModuleHandle(string? moduleName);
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr window, IntPtr processId);
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetKeyboardLayout(uint threadId);
+    [DllImport("user32.dll")]
+    private static extern int ToUnicodeEx(uint virtualKey, uint scanCode, byte[] keyState,
+        [Out, MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 4)] char[] buffer, int bufferSize, uint flags, IntPtr layout);
 }

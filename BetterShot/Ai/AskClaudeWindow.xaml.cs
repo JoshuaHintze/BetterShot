@@ -1,4 +1,5 @@
 using BetterShot.Controls;
+using BetterShot.Editing;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Automation;
@@ -14,6 +15,8 @@ namespace BetterShot.Ai;
 /// <summary>
 /// "Ask about this capture": preset or free-text questions about a rendered capture, answered by Claude with
 /// streaming, follow-ups, and copy. Nothing is sent until the user clicks a preset or sends a question.
+/// When opened for a live capture, the preview follows edits until a conversation starts, and the image is rendered
+/// again right before the first question of each conversation, so Claude sees the capture as it is when asked.
 /// </summary>
 public partial class AskClaudeWindow : Window
 {
@@ -22,9 +25,12 @@ public partial class AskClaudeWindow : Window
     private static readonly Brush QuestionBrush = FrozenBrush(0xF0, 0xF1, 0xF3);
     private static readonly Brush MutedBrush = FrozenBrush(0x8F, 0x92, 0x99);
 
-    private readonly BitmapSource _image;
+    private readonly Func<BitmapSource>? _renderCurrent;
+    private readonly CaptureDocument? _liveDocument;
     private readonly AskClaudeConversation _conversation = new();
     private readonly DispatcherTimer _renderTimer = new(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(60) };
+    private readonly DispatcherTimer _previewRefreshTimer = new(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(150) };
+    private BitmapSource _image;
     private readonly DispatcherTimer _copiedTimer = new() { Interval = TimeSpan.FromSeconds(1.6) };
     private CancellationTokenSource? _requestCancellation;
     private string? _imagePngBase64;
@@ -34,10 +40,14 @@ public partial class AskClaudeWindow : Window
     private string _lastAnswer = string.Empty;
     private bool _closing;
 
-    internal AskClaudeWindow(BitmapSource image, string title)
+    internal AskClaudeWindow(BitmapSource image, string title) : this(image, null, null, title) { }
+
+    private AskClaudeWindow(BitmapSource image, Func<BitmapSource>? renderCurrent, CaptureDocument? liveDocument, string title)
     {
         ArgumentNullException.ThrowIfNull(image);
         _image = image;
+        _renderCurrent = renderCurrent;
+        _liveDocument = liveDocument;
         InitializeComponent();
         PreviewImage.Source = image;
         CaptureTitleText.Text = title;
@@ -52,7 +62,9 @@ public partial class AskClaudeWindow : Window
         _renderTimer.Tick += (_, _) => { _renderTimer.Stop(); RenderStreamingAnswer(); };
         _copiedTimer.Tick += (_, _) => { _copiedTimer.Stop(); CopyAnswerText.Text = "Copy answer"; CopyIcon.Icon = LucideIconKind.Copy; };
         Closing += (_, _) => { _closing = true; _requestCancellation?.Cancel(); };
-        Closed += (_, _) => { _renderTimer.Stop(); _copiedTimer.Stop(); };
+        Closed += (_, _) => { _renderTimer.Stop(); _copiedTimer.Stop(); _previewRefreshTimer.Stop(); if (_liveDocument is not null) _liveDocument.Changed -= LiveDocument_Changed; };
+        _previewRefreshTimer.Tick += (_, _) => { _previewRefreshTimer.Stop(); RefreshPreviewBeforeConversation(); };
+        if (_liveDocument is not null) _liveDocument.Changed += LiveDocument_Changed;
         Loaded += (_, _) => QuestionBox.Focus();
         PreviewKeyDown += Window_PreviewKeyDown;
         UpdateState();
@@ -66,7 +78,30 @@ public partial class AskClaudeWindow : Window
     public static AskClaudeWindow Show(Window? owner, BitmapSource image, string title)
     {
         ArgumentNullException.ThrowIfNull(image);
-        var window = new AskClaudeWindow(image, string.IsNullOrWhiteSpace(title) ? string.Empty : title);
+        return ShowWindow(owner, new AskClaudeWindow(image, CleanTitle(title)));
+    }
+
+    /// <summary>
+    /// Opens Ask Claude for a capture that may still change: <paramref name="renderCurrent"/> is called again right before
+    /// the first question of each conversation (and on New conversation), so the sent image matches what is on screen.
+    /// </summary>
+    internal static AskClaudeWindow Show(Window? owner, Func<BitmapSource> renderCurrent, string title)
+    {
+        ArgumentNullException.ThrowIfNull(renderCurrent);
+        return ShowWindow(owner, new AskClaudeWindow(renderCurrent(), renderCurrent, null, CleanTitle(title)));
+    }
+
+    /// <summary>Opens Ask Claude for a live capture document; the preview also follows its edits until a conversation starts.</summary>
+    internal static AskClaudeWindow Show(Window? owner, CaptureDocument document, string title)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return ShowWindow(owner, new AskClaudeWindow(document.Render(), document.Render, document, CleanTitle(title)));
+    }
+
+    private static string CleanTitle(string title) => string.IsNullOrWhiteSpace(title) ? string.Empty : title;
+
+    private static AskClaudeWindow ShowWindow(Window? owner, AskClaudeWindow window)
+    {
         if (owner is { IsVisible: true, WindowState: not WindowState.Minimized } && owner.ActualWidth >= window.Width && owner.ActualHeight >= window.Height)
         {
             window.WindowStartupLocation = WindowStartupLocation.Manual;
@@ -80,6 +115,7 @@ public partial class AskClaudeWindow : Window
     }
 
     internal string LastAnswerForTest => _lastAnswer;
+    internal BitmapSource PreviewForTest => _image;
     internal bool IsBusyForTest => _requestCancellation is not null;
     internal string ErrorForTest => ErrorBanner.Visibility == Visibility.Visible ? ErrorText.Text : string.Empty;
     internal string ConversationTextForTest => new TextRange(AnswerView.Document.ContentStart, AnswerView.Document.ContentEnd).Text;
@@ -188,8 +224,42 @@ public partial class AskClaudeWindow : Window
         }
     }
 
-    /// <summary>Runs on the first ask only, on the UI thread (WPF resizing), right before sending.</summary>
-    private string EncodeImage() => _imagePngBase64 ??= ClaudeImage.ToPngBase64(_image);
+    /// <summary>
+    /// Runs on the first ask of a conversation only, on the UI thread (WPF resizing), right before sending. A live capture
+    /// is rendered again here so edits made after the window opened are included.
+    /// </summary>
+    private string EncodeImage()
+    {
+        if (_renderCurrent is not null)
+        {
+            _previewRefreshTimer.Stop();
+            ShowCurrentRender();
+        }
+        return _imagePngBase64 ??= ClaudeImage.ToPngBase64(_image);
+    }
+
+    private void LiveDocument_Changed(object? sender, EventArgs e)
+    {
+        if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(() => LiveDocument_Changed(sender, e)); return; }
+        if (_closing || !_conversation.IsEmpty) return;
+        _previewRefreshTimer.Stop();
+        _previewRefreshTimer.Start();
+    }
+
+    /// <summary>Follows edits only while no conversation has started; once asked, the preview shows what was sent.</summary>
+    private void RefreshPreviewBeforeConversation()
+    {
+        if (_closing || _renderCurrent is null || !_conversation.IsEmpty) return;
+        ShowCurrentRender();
+    }
+
+    private void ShowCurrentRender()
+    {
+        if (_renderCurrent is null) return;
+        _image = _renderCurrent();
+        _imagePngBase64 = null;
+        PreviewImage.Source = _image;
+    }
 
     private void RenderStreamingAnswer()
     {
@@ -250,6 +320,8 @@ public partial class AskClaudeWindow : Window
         _requestCancellation?.Cancel();
         _conversation.Reset();
         _lastAnswer = string.Empty;
+        _previewRefreshTimer.Stop();
+        ShowCurrentRender();
         AnswerView.Document = CreateDocument();
         HideError();
         SetStatus(string.Empty);

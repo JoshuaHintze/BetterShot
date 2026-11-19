@@ -75,9 +75,8 @@ internal sealed class ScrollingCaptureSession
         for (int step = 0; step < MaximumSteps; step++)
         {
             if (_stop.IsCancellationRequested) return ScrollingStopReason.UserStopped;
-            bool scrolled = automationFallback
-                ? await Task.Run(() => ScrollInput.TryScrollWithAutomation(centerX, centerY, notches))
-                : ScrollInput.SendWheel(centerX, centerY, notches);
+            bool usedAutomation = automationFallback;
+            bool scrolled = await ScrollAsync(usedAutomation, centerX, centerY, notches);
             if (!scrolled && !automationFallback) automationFallback = true;
             if (!await DelayUnlessStoppedAsync(ScrollSettleDelay)) return ScrollingStopReason.UserStopped;
             byte[]? frame = await GrabSettledAsync();
@@ -100,13 +99,25 @@ internal sealed class ScrollingCaptureSession
                     if (unchanged >= 2) return ScrollingStopReason.EndOfContent;
                     break;
                 case StitchStatus.NoMatch:
-                    // A scroll larger than the visible area loses the overlap; scroll less and stop if it happens again.
-                    if (notches > 1) { notches = Math.Max(1, notches / 3); continue; }
-                    return ScrollingStopReason.LostTrack;
+                    // A scroll larger than the visible area loses the overlap. The stitcher still compares against the
+                    // last stitched frame, so scroll back to it, let it settle, and retry with a smaller step.
+                    if (RetryNotchesAfterLostOverlap(notches) is not int fewer) return ScrollingStopReason.LostTrack;
+                    if (scrolled) await ScrollAsync(usedAutomation, centerX, centerY, -notches);
+                    if (!await DelayUnlessStoppedAsync(ScrollSettleDelay) || await GrabSettledAsync() is null) return ScrollingStopReason.UserStopped;
+                    notches = fewer;
+                    break;
             }
         }
         return ScrollingStopReason.StepLimit;
     }
+
+    /// <summary>Positive notches scroll down, negative notches scroll back up, using the same input path either way.</summary>
+    private static Task<bool> ScrollAsync(bool useAutomation, int x, int y, int notches) => useAutomation
+        ? Task.Run(() => ScrollInput.TryScrollWithAutomation(x, y, notches))
+        : Task.FromResult(ScrollInput.SendWheel(x, y, notches));
+
+    /// <summary>The smaller step to retry with after the overlap was lost, or null when even one notch lost it.</summary>
+    internal static int? RetryNotchesAfterLostOverlap(int notches) => notches > 1 ? Math.Max(1, notches / 3) : null;
 
     /// <summary>Aims each step at about 45% of the visible height so consecutive frames keep a large overlap.</summary>
     private int AdaptNotches(int notches, int shift)

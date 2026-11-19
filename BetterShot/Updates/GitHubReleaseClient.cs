@@ -66,7 +66,7 @@ internal sealed class GitHubReleaseClient
         if (dto.Draft || dto.Prerelease) return null;
         if (!SemanticVersion.TryParse(dto.TagName, out SemanticVersion version)) return null;
         var assets = (dto.Assets ?? [])
-            .Where(asset => !string.IsNullOrWhiteSpace(asset.Name) && IsHttps(asset.BrowserDownloadUrl))
+            .Where(asset => !string.IsNullOrWhiteSpace(asset.Name) && UpdateDownloader.IsAllowedAssetUrl(asset.BrowserDownloadUrl))
             .Select(asset => new ReleaseAsset(asset.Name!, asset.BrowserDownloadUrl!, asset.Size))
             .ToArray();
         return new ReleaseInfo(version, dto.TagName ?? string.Empty, string.IsNullOrWhiteSpace(dto.Name) ? $"BetterShot {version}" : dto.Name!,

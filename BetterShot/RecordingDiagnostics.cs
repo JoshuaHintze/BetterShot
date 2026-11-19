@@ -144,6 +144,10 @@ internal static class RecordingDiagnostics
         Check(KeystrokeFormatter.Format(0x4B, false, false, false, false) is null && KeystrokeFormatter.Format(0x4B, false, false, true, false) is null, "Plain typing or Shift+letter would be shown.");
         Check(KeystrokeFormatter.Format(0x11, true, false, false, false) is null, "A lone modifier would be shown.");
         Check(KeystrokeFormatter.Format(0x0D, false, false, false, true) == "Win+Enter" && KeystrokeFormatter.Format(0x73, false, true, false, false) == "Alt+F4", "Special keys are formatted incorrectly.");
+        Check(KeystrokeFormatter.Format(0x51, true, true, false, false, () => true) is null && KeystrokeFormatter.Format(0x37, true, true, true, false, () => true) is null, "AltGr typing (Ctrl+Alt producing a character) would be shown.");
+        Check(KeystrokeFormatter.Format(0x44, true, true, false, false, () => false) == "Ctrl+Alt+D", "A Ctrl+Alt shortcut that types nothing was hidden.");
+        bool askedLayout = false;
+        Check(KeystrokeFormatter.Format(0x4B, true, false, true, false, () => askedLayout = true) == "Ctrl+Shift+K" && KeystrokeFormatter.Format(0x44, true, true, false, true, () => askedLayout = true) == "Win+Ctrl+Alt+D" && !askedLayout, "The AltGr check ran for a combination AltGr cannot produce.");
     }
 
     private static void VerifyStateMachine()

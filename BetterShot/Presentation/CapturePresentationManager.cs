@@ -100,9 +100,12 @@ public sealed class CapturePresentationManager : IDisposable
         editor.Show();
     }
 
-    /// <summary>Opens Ask Claude with the rendered capture (annotations included). Nothing is sent until the user asks.</summary>
+    /// <summary>
+    /// Opens Ask Claude with the live capture (annotations included, re-rendered before the first question so later edits
+    /// are sent). Nothing is sent until the user asks.
+    /// </summary>
     internal AskClaudeWindow AskClaude(CaptureDocument document, Window? owner = null) =>
-        AskClaudeWindow.Show(owner, document.Render(), AskClaudeTitle(document));
+        AskClaudeWindow.Show(owner, document, AskClaudeTitle(document));
 
     internal static string AskClaudeTitle(CaptureDocument document)
     {

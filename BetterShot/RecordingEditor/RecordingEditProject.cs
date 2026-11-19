@@ -1,4 +1,5 @@
 using BetterShot.Persistence;
+using BetterShot.Recording;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -58,9 +59,7 @@ internal static class RecordingEditProject
     {
         string path = SidecarPath(moviePath);
         string json = Serialize(state, view, markedCopyFingerprint, preservedMarks, unknownFields);
-        if (File.Exists(path)) File.SetAttributes(path, FileAttributes.Normal);
-        File.WriteAllText(path, json);
-        File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.Hidden);
+        HiddenSidecarFile.WriteAllText(path, json);
     }
 
     internal static string Serialize(RecordingEditState state, RecordingEditViewOptions view, string? markedCopyFingerprint,

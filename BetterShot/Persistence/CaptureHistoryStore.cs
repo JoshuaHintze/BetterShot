@@ -19,6 +19,10 @@ internal sealed class CaptureHistoryStore
     private readonly HashSet<Guid> _expiredDuringLastPurge = [];
     private CaptureSettings _settings = CaptureSettings.Default;
     private Dictionary<string, JsonElement>? _additionalSettingsFields;
+    private static readonly string[] PriorDataFiles = ["ocr-index.json", "recordings.json", "ask-claude-key.bin"];
+    private static readonly string[] PriorDataFolders = ["RecordingsInProgress", "MarkedCopies"];
+    // The installed app keeps these beside the History folder (%LOCALAPPDATA%\BetterShot).
+    private static readonly string[] PriorAppDataFiles = ["ask-claude-key.bin", "ocr-index.json", "editor-styles.json"];
 
     internal CaptureHistoryStore(string root)
     {
@@ -494,7 +498,14 @@ internal sealed class CaptureHistoryStore
 
     private void LoadSettings()
     {
-        if (!File.Exists(_settingsPath)) return;
+        if (!TryLoadSavedSettings())
+            _settings = CaptureSettings.Default with { OnboardingCompleted = HasPriorBetterShotData() };
+    }
+
+    /// <summary>Returns false when the safe defaults must be used (no file, unreadable, corrupt, or invalid retention).</summary>
+    private bool TryLoadSavedSettings()
+    {
+        if (!File.Exists(_settingsPath)) return false;
         try
         {
             HistorySettingsDto? settings = JsonSerializer.Deserialize<HistorySettingsDto>(
@@ -503,6 +514,7 @@ internal sealed class CaptureHistoryStore
             {
                 _settings = CaptureSettingsMapper.FromDto(settings);
                 _additionalSettingsFields = settings.AdditionalFields;
+                return true;
             }
         }
         catch (JsonException)
@@ -512,6 +524,30 @@ internal sealed class CaptureHistoryStore
         catch (IOException)
         {
             // Keep the safe default if settings cannot currently be read.
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Earlier builds only wrote settings.json after a setting changed, so a missing or unusable settings file does not
+    /// mean a new install. Any data an earlier run left behind (the constructor creates the folder itself, so the folder
+    /// alone proves nothing) marks the user as existing so first-run setup is not shown again.
+    /// </summary>
+    private bool HasPriorBetterShotData()
+    {
+        try
+        {
+            if (File.Exists(_settingsPath)) return true;
+            if (Directory.EnumerateFiles(_root, "*.capture", SearchOption.TopDirectoryOnly).Any()) return true;
+            if (PriorDataFiles.Any(name => File.Exists(Path.Combine(_root, name)))) return true;
+            if (PriorDataFolders.Any(name => Directory.Exists(Path.Combine(_root, name)))) return true;
+            string? appDataFolder = Path.GetDirectoryName(_root);
+            return appDataFolder is not null
+                && PriorAppDataFiles.Any(name => File.Exists(Path.Combine(appDataFolder, name)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 

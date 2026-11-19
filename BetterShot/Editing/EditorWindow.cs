@@ -331,7 +331,7 @@ public sealed partial class EditorWindow : Window
     private void AskClaude_Click(object sender, RoutedEventArgs e)
     {
         CommitPendingEdits();
-        BetterShot.Ai.AskClaudeWindow.Show(this, _document.Render(), Title);
+        BetterShot.Ai.AskClaudeWindow.Show(this, _document, Title);
     }
 
     private void OnKeyDown(object sender, KeyEventArgs e)

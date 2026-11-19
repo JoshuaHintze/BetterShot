@@ -16,6 +16,7 @@ internal static class UpdateDiagnostics
     private const string InstallerName = "BetterShot-0.3.0-Setup-x64.exe";
     private const string InstallerUrl = "https://github.com/JoshuaHintze/BetterShot/releases/download/v0.3.0/" + InstallerName;
     private const string ChecksumUrl = InstallerUrl + ".sha256";
+    private const string AssetHostUrl = "https://objects.githubusercontent.com/github-production-release-asset/" + InstallerName;
 
     internal static async Task<string> RunAsync(string fixtureRoot)
     {
@@ -23,8 +24,10 @@ internal static class UpdateDiagnostics
         VerifyReleaseParsing();
         VerifyPolicy();
         VerifySidecarParsing();
+        VerifyAssetUrlPolicy();
         await VerifyClientAndDownloadsAsync(fixtureRoot);
-        return "semantic version precedence, release JSON parsing, no-release/draft/prerelease handling, skip-version and daily-check rules, .sha256 sidecar parsing, and hash-verified installer download via an injected HTTP handler";
+        await VerifyRedirectsAndLaunchCheckAsync(fixtureRoot);
+        return "semantic version precedence, release JSON parsing, no-release/draft/prerelease handling, skip-version and daily-check rules, .sha256 sidecar parsing, hash-verified installer download via an injected HTTP handler, BetterShot-release-only asset URLs, GitHub-only redirects, and re-verification before launch";
     }
 
     private static void VerifySemanticVersions()
@@ -50,6 +53,7 @@ internal static class UpdateDiagnostics
         Check(release.Version.ToString() == "0.3.0" && release.Tag == "v0.3.0" && release.DisplayNotes.StartsWith("## Fixes", StringComparison.Ordinal), "Release fields were parsed incorrectly.");
         Check(release.Installer?.Name == InstallerName && release.InstallerChecksum?.DownloadUrl == ChecksumUrl, "The installer or checksum asset was not found.");
         Check(release.Assets.All(asset => asset.DownloadUrl.StartsWith("https://", StringComparison.Ordinal)), "A non-HTTPS asset was accepted.");
+        Check(release.Assets.All(asset => UpdateDownloader.IsAllowedAssetUrl(asset.DownloadUrl)) && release.Assets.Count == 2, "An asset outside BetterShot's GitHub releases was accepted.");
         ReleaseInfo? empty = GitHubReleaseClient.ParseRelease(ReleaseJson("v0.3.1", "", draft: false, prerelease: false));
         Check(empty?.DisplayNotes == ReleaseInfo.NoReleaseNotes, "Empty release notes did not fall back to \"No release notes\".");
         Check(GitHubReleaseClient.ParseRelease(ReleaseJson("v0.4.0", "x", draft: true, prerelease: false)) is null, "A draft release was offered.");
@@ -81,6 +85,32 @@ internal static class UpdateDiagnostics
         Check(UpdateDownloader.ParseSha256Sidecar(hash, InstallerName) == hash.ToUpperInvariant(), "A bare hash was not accepted.");
         Check(UpdateDownloader.ParseSha256Sidecar($"{hash}  BetterShot-0.2.0-Setup-x64.exe", InstallerName) is null, "A checksum for a different file was accepted.");
         Check(UpdateDownloader.ParseSha256Sidecar("not a hash", InstallerName) is null && UpdateDownloader.ParseSha256Sidecar("", InstallerName) is null, "A malformed sidecar was accepted.");
+    }
+
+    private static void VerifyAssetUrlPolicy()
+    {
+        Check(UpdateDownloader.IsAllowedAssetUrl(InstallerUrl) && UpdateDownloader.IsAllowedAssetUrl(ChecksumUrl), "A BetterShot release asset URL was rejected.");
+        string[] rejected =
+        [
+            "http://github.com/JoshuaHintze/BetterShot/releases/download/v0.3.0/" + InstallerName,
+            "https://evil.example.com/JoshuaHintze/BetterShot/releases/download/v0.3.0/" + InstallerName,
+            "https://github.com.evil.example.com/JoshuaHintze/BetterShot/releases/download/v0.3.0/" + InstallerName,
+            "https://objects.githubusercontent.com/JoshuaHintze/BetterShot/releases/download/v0.3.0/" + InstallerName,
+            "https://github.com/SomeoneElse/BetterShot/releases/download/v0.3.0/" + InstallerName,
+            "https://github.com/JoshuaHintze/BetterShot/archive/v0.3.0.zip",
+            "https://github.com/JoshuaHintze/BetterShot/releases/download/../../../SomeoneElse/x/releases/download/" + InstallerName,
+            "https://github.com:8443/JoshuaHintze/BetterShot/releases/download/v0.3.0/" + InstallerName,
+            "https://user@github.com/JoshuaHintze/BetterShot/releases/download/v0.3.0/" + InstallerName,
+            "not a url"
+        ];
+        foreach (string url in rejected)
+            Check(!UpdateDownloader.IsAllowedAssetUrl(url), $"The asset URL {url} was accepted.");
+        Check(UpdateDownloader.IsAllowedRedirectTarget(new Uri(AssetHostUrl))
+            && UpdateDownloader.IsAllowedRedirectTarget(new Uri("https://release-assets.githubusercontent.com/x"))
+            && UpdateDownloader.IsAllowedRedirectTarget(new Uri(InstallerUrl)), "A GitHub release download host was rejected as a redirect target.");
+        Check(!UpdateDownloader.IsAllowedRedirectTarget(new Uri("http://objects.githubusercontent.com/x"))
+            && !UpdateDownloader.IsAllowedRedirectTarget(new Uri("https://evil.example.com/x"))
+            && !UpdateDownloader.IsAllowedRedirectTarget(new Uri("https://api.github.com/x")), "A redirect away from GitHub's download hosts was allowed.");
     }
 
     private static async Task VerifyClientAndDownloadsAsync(string root)
@@ -121,6 +151,80 @@ internal static class UpdateDiagnostics
         Check(!Directory.Exists(badRoot) || Directory.GetFiles(badRoot).Length == 0, "A rejected installer was left on disk.");
     }
 
+    private static async Task VerifyRedirectsAndLaunchCheckAsync(string root)
+    {
+        // Not a PE file, so the launch check exercises the unsigned path (hash still required).
+        byte[] installer = Encoding.ASCII.GetBytes("fake installer payload for redirect diagnostics");
+        string goodHash = Convert.ToHexString(SHA256.HashData(installer));
+        var handler = new FakeHandler();
+        using HttpClient client = GitHubReleaseClient.CreateHttpClient(handler);
+        ReleaseInfo release = GitHubReleaseClient.ParseRelease(ReleaseJson("v0.3.0", "notes", false, false))!;
+        handler.Responses[ChecksumUrl] = () => Redirect(AssetHostUrl + ".sha256");
+        handler.Responses[AssetHostUrl + ".sha256"] = () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($"{goodHash}  {InstallerName}\r\n") };
+        handler.Responses[InstallerUrl] = () => Redirect(AssetHostUrl);
+        handler.Responses[AssetHostUrl] = () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(installer) };
+
+        string redirectRoot = Path.Combine(root, "redirect");
+        var downloader = new UpdateDownloader(client, redirectRoot);
+        string path = await downloader.DownloadVerifiedInstallerAsync(release, null, CancellationToken.None);
+        Check(File.ReadAllBytes(path).SequenceEqual(installer), "A redirect to GitHub's asset host was not followed.");
+
+        using (FileStream verified = downloader.OpenVerifiedInstallerForLaunch(path))
+        {
+            Check(verified.Name == Path.GetFullPath(path), "The launch check returned a different file.");
+            bool blockedWrite = false;
+            try { using FileStream writer = new(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite); }
+            catch (IOException) { blockedWrite = true; }
+            catch (UnauthorizedAccessException) { blockedWrite = true; }
+            Check(blockedWrite, "The installer could be replaced while it was being launched.");
+        }
+        File.WriteAllBytes(path, Encoding.ASCII.GetBytes("swapped installer"));
+        Check(await ThrowsInvalidDataAsync(() => Task.FromResult(downloader.OpenVerifiedInstallerForLaunch(path))), "An installer changed after verification would have been started.");
+        string stranger = Path.Combine(redirectRoot, "unverified.exe");
+        File.WriteAllBytes(stranger, installer);
+        Check(await ThrowsInvalidDataAsync(() => Task.FromResult(downloader.OpenVerifiedInstallerForLaunch(stranger))), "A file BetterShot never verified would have been started.");
+
+        handler.Responses[InstallerUrl] = () => Redirect("https://evil.example.com/" + InstallerName);
+        handler.Responses["https://evil.example.com/" + InstallerName] = () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(installer) };
+        string offHostRoot = Path.Combine(root, "redirect-off-host");
+        Check(await ThrowsInvalidDataAsync(() => new UpdateDownloader(client, offHostRoot).DownloadVerifiedInstallerAsync(release, null, CancellationToken.None)), "A redirect away from GitHub was followed.");
+        Check(!handler.Requested.Contains("https://evil.example.com/" + InstallerName), "The off-GitHub redirect target was requested.");
+        Check(!Directory.Exists(offHostRoot) || Directory.GetFiles(offHostRoot).Length == 0, "A download redirected away from GitHub left a file on disk.");
+
+        handler.Responses[InstallerUrl] = () => Redirect(AssetHostUrl.Replace("https://", "http://", StringComparison.Ordinal));
+        Check(await ThrowsInvalidDataAsync(() => new UpdateDownloader(client, offHostRoot).DownloadVerifiedInstallerAsync(release, null, CancellationToken.None)), "A redirect to plain HTTP was followed.");
+
+        handler.Responses[InstallerUrl] = () => Redirect(InstallerUrl);
+        bool loopStopped = false;
+        try { await new UpdateDownloader(client, offHostRoot).DownloadVerifiedInstallerAsync(release, null, CancellationToken.None); }
+        catch (HttpRequestException) { loopStopped = true; }
+        Check(loopStopped, "A redirect loop was not stopped.");
+
+        var foreignAssets = new ReleaseInfo(release.Version, release.Tag, release.Name, release.Notes, release.PageUrl,
+            [new ReleaseAsset(InstallerName, "https://evil.example.com/" + InstallerName, 1), new ReleaseAsset(InstallerName + ".sha256", ChecksumUrl, 1)]);
+        handler.Requested.Clear();
+        Check(await ThrowsInvalidDataAsync(() => new UpdateDownloader(client, offHostRoot).DownloadVerifiedInstallerAsync(foreignAssets, null, CancellationToken.None)), "An installer outside BetterShot's GitHub releases was downloaded.");
+        Check(handler.Requested.Count == 0, "A rejected release asset was still requested.");
+    }
+
+    private static async Task<bool> ThrowsInvalidDataAsync<T>(Func<Task<T>> action)
+    {
+        try
+        {
+            T result = await action();
+            (result as IDisposable)?.Dispose();
+            return false;
+        }
+        catch (InvalidDataException) { return true; }
+    }
+
+    private static HttpResponseMessage Redirect(string location)
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.Found);
+        response.Headers.Location = new Uri(location);
+        return response;
+    }
+
     private static HttpResponseMessage Json(string json) =>
         new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
 
@@ -135,7 +239,8 @@ internal static class UpdateDiagnostics
           "assets": [
             { "name": "{{InstallerName}}", "browser_download_url": "{{InstallerUrl}}", "size": 41 },
             { "name": "{{InstallerName}}.sha256", "browser_download_url": "{{ChecksumUrl}}", "size": 100 },
-            { "name": "insecure.zip", "browser_download_url": "http://example.com/insecure.zip", "size": 1 }
+            { "name": "insecure.zip", "browser_download_url": "http://example.com/insecure.zip", "size": 1 },
+            { "name": "mirror.zip", "browser_download_url": "https://example.com/JoshuaHintze/BetterShot/releases/download/v0.3.0/mirror.zip", "size": 1 }
           ]
         }
         """;
@@ -145,12 +250,14 @@ internal static class UpdateDiagnostics
         internal Dictionary<string, Func<HttpResponseMessage>> Responses { get; } = new(StringComparer.Ordinal);
         internal string? LastUserAgent { get; private set; }
         internal string? LastAuthorization { get; private set; }
+        internal List<string> Requested { get; } = [];
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             string url = request.RequestUri?.ToString() ?? string.Empty;
             LastUserAgent = request.Headers.UserAgent.ToString();
             LastAuthorization = request.Headers.Authorization?.ToString();
+            Requested.Add(url);
             HttpResponseMessage response = Responses.TryGetValue(url, out Func<HttpResponseMessage>? create)
                 ? create()
                 : new HttpResponseMessage(HttpStatusCode.NotFound);

@@ -1,3 +1,4 @@
+using BetterShot.Editing;
 using BetterShot.Persistence;
 using System.IO;
 using System.Net;
@@ -43,7 +44,7 @@ internal static class AiDiagnostics
         VerifyKeyStore(Path.Combine(runRoot, "keys"));
         await VerifySettingsPanelAsync(Path.Combine(runRoot, "panel", "History"), directory);
         await VerifyWindowAsync(directory);
-        App.WriteTestResult(Path.Combine(directory, "ai-test.txt"), "PASS: Ask Claude request JSON and headers, SSE parsing (split chunks, CRLF, split UTF-8, comments, error events), error messages (no key, no response, no text, 401/403/404/400/413/429/5xx/529, overloaded), timeouts and cancellation, multi-turn history with image only in the first turn, 1568 px downscale, presets, AiModel settings round trip and unknown-field preservation, DPAPI key storage outside settings.json, Settings panel, and window send/follow-up/no-key/cancel-on-close, all without network access");
+        App.WriteTestResult(Path.Combine(directory, "ai-test.txt"), "PASS: Ask Claude request JSON and headers, SSE parsing (split chunks, CRLF, split UTF-8, comments, error events), error messages (no key, no response, no text, 401/403/404/400/413/429/5xx/529, overloaded), timeouts and cancellation, multi-turn history with image only in the first turn, 1568 px downscale, presets, AiModel settings round trip and unknown-field preservation, DPAPI key storage outside settings.json, Settings panel, and window send/follow-up/no-key/cancel-on-close/live capture edits before the first question, all without network access");
     }
 
     // ---------- Request shape ----------
@@ -390,6 +391,40 @@ internal static class AiDiagnostics
         closing.Close();
         await Task.WhenAny(pending, Task.Delay(3000));
         Check(pending.IsCompleted && hanging.SawCancellation, "Closing the window did not cancel the in-flight request.");
+
+        await VerifyLiveDocumentWindowAsync();
+    }
+
+    /// <summary>Edits made after Ask Claude opened (before the first question) must reach the preview and the sent image.</summary>
+    private static async Task VerifyLiveDocumentWindowAsync()
+    {
+        var handler = new FakeHandler((_, _) => Task.FromResult(SseResponse(StandardEvents("Cropped."), 9)));
+        AskClaudeEnvironment.ClientFactory = () => new AnthropicClient(handler);
+        var document = new CaptureDocument(SampleBitmap(2000, 1100));
+        AskClaudeWindow window = AskClaudeWindow.Show(null, document, "Live capture");
+        try
+        {
+            await SettleAsync(window);
+            document.SetCrop(new Rect(0, 0, 800, 600));
+            BitmapSource edited = document.Render();
+            Check(edited.PixelWidth != 2000 || edited.PixelHeight != 1100, "The diagnostic crop did not change the rendered capture.");
+            for (int attempt = 0; attempt < 100 && window.PreviewForTest.PixelWidth != edited.PixelWidth; attempt++) await Task.Delay(20);
+            Check(window.PreviewForTest.PixelWidth == edited.PixelWidth && window.PreviewForTest.PixelHeight == edited.PixelHeight, "The preview did not follow an edit made before asking.");
+
+            await window.AskForTest("Describe");
+            await SettleAsync(window);
+            Check(handler.Requests.Count == 1, "The live-capture window did not send exactly one request.");
+            JsonArray content = JsonNode.Parse(handler.Requests[0].Body)!["messages"]![0]!["content"]!.AsArray();
+            BitmapFrame sent = BitmapDecoder.Create(new MemoryStream(Convert.FromBase64String(content[0]!["source"]!["data"]!.GetValue<string>())), BitmapCreateOptions.None, BitmapCacheOption.OnLoad).Frames[0];
+            (int expectedWidth, int expectedHeight) = ClaudeImage.FitLongEdge(edited.PixelWidth, edited.PixelHeight);
+            Check(sent.PixelWidth == expectedWidth && sent.PixelHeight == expectedHeight, $"Ask Claude sent the image as it was when opened ({sent.PixelWidth}x{sent.PixelHeight}), not the edited capture ({expectedWidth}x{expectedHeight}).");
+
+            document.SetCrop(new Rect(0, 0, 400, 300));
+            await Task.Delay(400);
+            await SettleAsync(window);
+            Check(window.PreviewForTest.PixelWidth == edited.PixelWidth, "The preview changed after the conversation started, so it no longer shows what was sent.");
+        }
+        finally { window.Close(); }
     }
 
     // ---------- Helpers ----------

@@ -62,9 +62,7 @@ internal sealed class RecordingEventLog
     internal string WriteSidecar(string moviePath)
     {
         string path = SidecarPath(moviePath);
-        if (File.Exists(path)) File.SetAttributes(path, FileAttributes.Normal);
-        File.WriteAllText(path, Serialize(Snapshot()));
-        File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.Hidden);
+        HiddenSidecarFile.WriteAllText(path, Serialize(Snapshot()));
         return path;
     }
 

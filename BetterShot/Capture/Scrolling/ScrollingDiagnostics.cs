@@ -23,7 +23,7 @@ internal static class ScrollingDiagnostics
         VerifyCaretBlinkIsNoChange(page);
         VerifyMaxHeight(page);
         VerifyComposeWithoutScrolling(page);
-        return "scroll stitching with sticky header/footer, uneven steps, blank stretch, end-of-content, no-scroll, lost overlap, caret blink, and max height";
+        return "scroll stitching with sticky header/footer, uneven steps, blank stretch, end-of-content, no-scroll, lost overlap and recovery after scrolling back, caret blink, and max height";
     }
 
     private static void VerifyStitchWithStickyBands(byte[] page)
@@ -71,6 +71,12 @@ internal static class ScrollingDiagnostics
         // Jumping further than the visible content leaves no overlap to match.
         Check(stitcher.AddFrame(Viewport(page, 1500)).Status == StitchStatus.NoMatch, "A frame without overlap was stitched.");
         Check(stitcher.TotalAppendedRows == 0, "A failed match appended rows.");
+        // The session then scrolls back to the last stitched frame and retries with a smaller step.
+        Check(ScrollingCaptureSession.RetryNotchesAfterLostOverlap(9) == 3 && ScrollingCaptureSession.RetryNotchesAfterLostOverlap(2) == 1
+            && ScrollingCaptureSession.RetryNotchesAfterLostOverlap(1) is null, "Lost overlap did not retry with fewer notches, or retried forever.");
+        Check(stitcher.AddFrame(Viewport(page, 0)).Status == StitchStatus.NoChange, "Scrolling back to the last stitched frame was not recognized.");
+        StitchStepResult retried = stitcher.AddFrame(Viewport(page, 150));
+        Check(retried.Status == StitchStatus.Appended && retried.Shift == 150, $"The smaller retry after lost overlap was {retried.Status} with shift {retried.Shift}, expected Appended with 150.");
     }
 
     private static void VerifyCaretBlinkIsNoChange(byte[] page)

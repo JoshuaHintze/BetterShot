@@ -21,7 +21,7 @@ public partial class MainWindow
     private static readonly TimeSpan FirstBackgroundCheckDelay = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan BackgroundCheckPollInterval = TimeSpan.FromHours(1);
     private static readonly Lazy<HttpClient> UpdateApiClient = new(() => GitHubReleaseClient.CreateHttpClient());
-    private static readonly Lazy<HttpClient> UpdateDownloadClient = new(CreateUpdateDownloadClient);
+    private static readonly Lazy<HttpClient> UpdateDownloadClient = new(() => UpdateDownloader.CreateHttpClient());
     private DispatcherTimer? _updateTimer;
     private bool _checkingForUpdates;
     private UpdateWindow? _updateWindow;
@@ -130,7 +130,7 @@ public partial class MainWindow
             ShowActivated = activate
         };
         window.SkipRequested += (_, _) => SkipUpdate(release);
-        window.InstallRequested += (_, path) => LaunchInstallerAndExit(path);
+        window.InstallRequested += (_, path) => LaunchInstallerAndExit(downloader, path);
         window.Closed += (_, _) => _updateWindow = null;
         _updateWindow = window;
         window.Show();
@@ -143,25 +143,22 @@ public partial class MainWindow
         UpdateStatusText.Text = $"BetterShot {version} will not be offered again. Use Check for updates to see it anyway.";
     }
 
-    /// <summary>Runs only after the user clicked Install now on a hash-verified installer. BetterShot exits so setup can replace it.</summary>
-    private void LaunchInstallerAndExit(string installerPath)
+    /// <summary>
+    /// Runs only after the user clicked Install now on a hash-verified installer. The hash (and signature, if signed) is
+    /// checked again while the file is held open against changes, then BetterShot exits so setup can replace it.
+    /// </summary>
+    private void LaunchInstallerAndExit(UpdateDownloader downloader, string installerPath)
     {
         try
         {
-            using Process? installer = Process.Start(new ProcessStartInfo { FileName = installerPath, UseShellExecute = true });
+            using FileStream verified = downloader.OpenVerifiedInstallerForLaunch(installerPath);
+            using Process? installer = Process.Start(new ProcessStartInfo { FileName = verified.Name, UseShellExecute = true });
         }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or FileNotFoundException)
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or InvalidDataException or IOException or UnauthorizedAccessException)
         {
             SetStatus($"Could not start the installer: {FriendlyMessage(ex)}", error: true, persistent: true);
             return;
         }
         ExitApplication();
-    }
-
-    private static HttpClient CreateUpdateDownloadClient()
-    {
-        var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(GitHubReleaseClient.UserAgent);
-        return client;
     }
 }

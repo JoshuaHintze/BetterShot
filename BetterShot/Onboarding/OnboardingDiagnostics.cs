@@ -12,8 +12,9 @@ internal static class OnboardingDiagnostics
     {
         VerifyNewInstallShowsSetup(Path.Combine(root, "new"));
         VerifyExistingUserSkipsSetup(Path.Combine(root, "existing"));
+        VerifyUserWithoutSettingsFileDetection(Path.Combine(root, "no-settings"));
         VerifyExtrasRoundTripAndPreserveUnknownFields(Path.Combine(root, "roundtrip"));
-        return "first-run flag (new install shows setup, existing settings skip it, completion persists), scrolling hotkey, update preferences, and unknown-field preservation";
+        return "first-run flag (new install shows setup, existing settings or prior captures without settings skip it, completion persists), scrolling hotkey, update preferences, and unknown-field preservation";
     }
 
     private static void VerifyNewInstallShowsSetup(string root)
@@ -31,6 +32,25 @@ internal static class OnboardingDiagnostics
         File.WriteAllText(Path.Combine(root, "settings.json"), "{ \"RetentionDays\": 14, \"ReplaceScreenshotShortcut\": true }");
         CaptureSettings settings = new CaptureHistoryStore(root).Settings;
         Check(settings.OnboardingCompleted && settings.RetentionDays == 14, "An existing user from an earlier build would be shown first-run setup.");
+    }
+
+    /// <summary>Earlier builds wrote settings.json only after a change, so prior data alone must mark an existing user.</summary>
+    private static void VerifyUserWithoutSettingsFileDetection(string root)
+    {
+        string emptyRoot = Path.Combine(root, "empty", "History");
+        Check(!new CaptureHistoryStore(emptyRoot).Settings.OnboardingCompleted, "An empty history without settings would skip first-run setup.");
+        Check(!new CaptureHistoryStore(emptyRoot).Settings.OnboardingCompleted, "The history folder the store created itself counted as an existing user.");
+
+        string capturesRoot = Path.Combine(root, "captures", "History");
+        Directory.CreateDirectory(capturesRoot);
+        File.WriteAllText(Path.Combine(capturesRoot, Guid.NewGuid().ToString("N") + ".capture"), "earlier capture");
+        Check(new CaptureHistoryStore(capturesRoot).Settings.OnboardingCompleted, "An existing user with captures but no settings file would be shown first-run setup.");
+
+        string invalidRoot = Path.Combine(root, "invalid", "History");
+        Directory.CreateDirectory(invalidRoot);
+        File.WriteAllText(Path.Combine(invalidRoot, "recordings.json"), "[]");
+        File.WriteAllText(Path.Combine(invalidRoot, "settings.json"), "{ \"RetentionDays\": 0 }");
+        Check(new CaptureHistoryStore(invalidRoot).Settings.OnboardingCompleted, "An existing user whose settings fell back to defaults would be shown first-run setup.");
     }
 
     private static void VerifyExtrasRoundTripAndPreserveUnknownFields(string root)

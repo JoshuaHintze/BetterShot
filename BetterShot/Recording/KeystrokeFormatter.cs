@@ -4,15 +4,22 @@ namespace BetterShot.Recording;
 
 /// <summary>
 /// Decides which keystrokes are shown and logged while recording. Only shortcut combinations that include Ctrl, Alt,
-/// or Win are shown (e.g. "Ctrl+Shift+K"); plain typing and Shift+letter are never shown or logged.
+/// or Win are shown (e.g. "Ctrl+Shift+K"); plain typing and Shift+letter are never shown or logged. AltGr reaches the
+/// hook as Ctrl+Alt, so a Ctrl+Alt(+Shift) key that types a character on the current layout (for example AltGr+Q for
+/// "@" on a German keyboard) is typing too and is never shown or logged.
 /// </summary>
 internal static class KeystrokeFormatter
 {
     private const int VkBack = 0x08, VkTab = 0x09, VkReturn = 0x0D, VkEscape = 0x1B;
 
-    internal static string? Format(int virtualKey, bool control, bool alt, bool shift, bool windows)
+    /// <param name="typesCharacterWithCtrlAlt">
+    /// Asked only for Ctrl+Alt(+Shift) without Win: whether the key produces a printable character (AltGr typing) on the
+    /// current keyboard layout. Null treats every combination as a shortcut.
+    /// </param>
+    internal static string? Format(int virtualKey, bool control, bool alt, bool shift, bool windows, Func<bool>? typesCharacterWithCtrlAlt = null)
     {
         if (HotkeyBinding.IsModifierKey(virtualKey) || !(control || alt || windows)) return null;
+        if (control && alt && !windows && typesCharacterWithCtrlAlt?.Invoke() == true) return null;
         string? key = KeyLabel(virtualKey);
         if (key is null) return null;
         var parts = new List<string>(5);

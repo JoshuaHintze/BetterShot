@@ -18,10 +18,10 @@ internal static class ScrollInput
     private const uint MouseEventAbsolute = 0x8000;
     private const uint MouseEventVirtualDesk = 0x4000;
 
-    /// <summary>Sends <paramref name="notches"/> downward wheel notches at the physical-pixel point.</summary>
+    /// <summary>Sends wheel notches at the physical-pixel point: positive scrolls down, negative scrolls back up.</summary>
     internal static bool SendWheel(int x, int y, int notches)
     {
-        if (notches <= 0) return true;
+        if (notches == 0) return true;
         if (!NativeMethods.GetCursorPos(out NativeMethods.Point original)) original = new NativeMethods.Point { X = x, Y = y };
         Input[] inputs =
         [
@@ -32,7 +32,10 @@ internal static class ScrollInput
         return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Input>()) == inputs.Length;
     }
 
-    /// <summary>Scrolls the nearest UI Automation scroll container under the point by small increments. Returns false if none supports it.</summary>
+    /// <summary>
+    /// Scrolls the nearest UI Automation scroll container under the point by small increments (negative scrolls back up).
+    /// Returns false if none supports it.
+    /// </summary>
     internal static bool TryScrollWithAutomation(int x, int y, int increments)
     {
         try
@@ -44,7 +47,8 @@ internal static class ScrollInput
                 if (element.TryGetCurrentPattern(ScrollPattern.Pattern, out object pattern) &&
                     pattern is ScrollPattern scroll && scroll.Current.VerticallyScrollable)
                 {
-                    for (int step = 0; step < Math.Max(1, increments); step++) scroll.ScrollVertical(ScrollAmount.SmallIncrement);
+                    ScrollAmount direction = increments < 0 ? ScrollAmount.SmallDecrement : ScrollAmount.SmallIncrement;
+                    for (int step = 0; step < Math.Max(1, Math.Abs(increments)); step++) scroll.ScrollVertical(direction);
                     return true;
                 }
                 element = walker.GetParent(element);
