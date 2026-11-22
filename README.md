@@ -2,6 +2,14 @@
 
 BetterShot is a compact Windows screenshot utility built with WPF on .NET 10. It captures an area, a window, or a display, automatically copies the capture to the clipboard for immediate paste, and leaves a persistent thumbnail at the lower left of that display. Click the thumbnail to annotate the same editable capture, drag its image into an app that accepts file attachments, or hover it for edit, copy, save, dismiss, and permanent delete actions. The main window stays out of the way after capture and remains available from the notification area.
 
+## Photo Editor After Capture
+<img width="1481" height="898" alt="image" src="https://github.com/user-attachments/assets/0545dc26-bb94-4c6e-b4a4-f1e4157cbaea" />
+
+## Video Editor After Capture
+<img width="1264" height="804" alt="image" src="https://github.com/user-attachments/assets/686db559-47ec-440f-ae74-d04e196d2b07" />
+
+
+
 ## Build and run
 
 Install the .NET 10 SDK on Windows, then run:
