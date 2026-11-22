@@ -9,12 +9,12 @@ namespace BetterShot.Editing;
 /// <summary>Header ("Mark up", Copy Text, Ask Claude, Copy, Done), the zoom pill, and where the tool pill and inspector sit.</summary>
 public sealed partial class EditorSurface
 {
-    private const double ToolbarGap = 24;
+    private const double ToolbarGap = 14;
     private readonly StackPanel _headerLeft = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     private readonly StackPanel _headerRight = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
     private readonly Border _headerToolbarSlot = new() { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly Border _floatingToolbarSlot = new();
-    private readonly TextBlock _titleText = new() { Text = "Mark up", FontSize = 24, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 2) };
+    private readonly TextBlock _titleText = new() { Text = "Mark up", FontSize = 18, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 0, 1) };
     private Grid _canvasArea = null!;
     private Button? _libraryButton;
     private Button? _fitButton;
@@ -32,15 +32,15 @@ public sealed partial class EditorSurface
 
     private UIElement BuildHeader()
     {
-        var header = new Grid { Margin = new Thickness(14, 0, 14, 0) };
+        var header = new Grid { Margin = new Thickness(8, 0, 8, 0) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition());
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         if (_libraryControls)
         {
-            Button back = IconButton(LucideIconKind.ChevronLeft, "Back to the library", (_, _) => { CommitPendingEdits(); BackRequested?.Invoke(this, EventArgs.Empty); }, 40, 40, 22);
-            _libraryButton = IconButton(LucideIconKind.PanelLeft, "Hide the library", (_, _) => LibraryToggleRequested?.Invoke(this, EventArgs.Empty), 40, 40, 20);
+            Button back = IconButton(LucideIconKind.ChevronLeft, "Back to the library", (_, _) => { CommitPendingEdits(); BackRequested?.Invoke(this, EventArgs.Empty); }, 32, 32, 18);
+            _libraryButton = IconButton(LucideIconKind.PanelLeft, "Hide the library", (_, _) => LibraryToggleRequested?.Invoke(this, EventArgs.Empty), 32, 32, 18);
             _headerLeft.Children.Add(back);
             _headerLeft.Children.Add(_libraryButton);
         }
@@ -50,20 +50,20 @@ public sealed partial class EditorSurface
         Grid.SetColumn(_headerToolbarSlot, 1);
         header.Children.Add(_headerToolbarSlot);
 
-        _inspectorButton = IconButton(LucideIconKind.SlidersHorizontal, "Hide inspector (I)", (_, _) => ToggleInspector(), 40, 40, 19);
+        _inspectorButton = IconButton(LucideIconKind.SlidersHorizontal, "Hide inspector (I)", (_, _) => ToggleInspector(), 32, 32, 18);
         _headerRight.Children.Add(_inspectorButton);
         _headerRight.Children.Add(BuildOcrButton());
-        Button ask = IconButton(LucideIconKind.Sparkles, "Ask Claude about this image", AskClaude_Click, 42, 40, 21);
+        Button ask = IconButton(LucideIconKind.Sparkles, "Ask Claude about this image", AskClaude_Click, 32, 32, 18);
         ask.Foreground = Brush("#FFD400");
         _headerRight.Children.Add(ask);
-        if (!_libraryControls) _headerRight.Children.Add(IconButton(LucideIconKind.Save, "Save as… (Ctrl+S)", Save_Click, 40, 40, 19));
+        if (!_libraryControls) _headerRight.Children.Add(IconButton(LucideIconKind.Save, "Save as… (Ctrl+S)", Save_Click, 32, 32, 18));
         Button copy = IconTextButton(LucideIconKind.Copy, "Copy", "Copy the finished image (Ctrl+C)", Copy_Click, 0);
-        copy.Background = Brushes.Transparent; copy.Height = 42; copy.FontSize = 16;
+        copy.Background = Brushes.Transparent; copy.Height = 32; copy.FontSize = 14;
         if (copy.Content is StackPanel { Children: [LucideIcon copyIcon, TextBlock copyLabel] }) { _copyIcon = copyIcon; _copyLabel = copyLabel; }
         _headerRight.Children.Add(copy);
-        _doneButton = IconTextButton(LucideIconKind.Check, "Done", "Done (Ctrl+Enter)", (_, _) => Done(), 104);
-        _doneButton.Background = Brush("#FFD400"); _doneButton.Foreground = Brushes.Black; _doneButton.Height = 44; _doneButton.FontSize = 16;
-        _doneButton.Margin = new Thickness(10, 0, 0, 0); _doneButton.Template = ButtonTemplate(12);
+        _doneButton = IconTextButton(LucideIconKind.Check, "Done", "Done (Ctrl+Enter)", (_, _) => Done(), 82);
+        _doneButton.Background = Brush("#FFD400"); _doneButton.Foreground = Brushes.Black; _doneButton.Height = 32; _doneButton.FontSize = 14;
+        _doneButton.Margin = new Thickness(6, 0, 0, 0); _doneButton.Template = ButtonTemplate(9);
         _headerRight.Children.Add(_doneButton);
         Grid.SetColumn(_headerRight, 2);
         header.Children.Add(_headerRight);
@@ -80,9 +80,9 @@ public sealed partial class EditorSurface
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(_dimensionsLabel);
         row.Children.Add(Separator());
-        row.Children.Add(IconButton(LucideIconKind.ZoomOut, "Zoom out (Ctrl+wheel)", (_, _) => SetZoom(_zoom / 1.2), 34, 34, 18));
+        row.Children.Add(IconButton(LucideIconKind.ZoomOut, "Zoom out (Ctrl+wheel)", (_, _) => SetZoom(_zoom / 1.2), 28, 28, 16));
         row.Children.Add(_zoomLabel);
-        row.Children.Add(IconButton(LucideIconKind.ZoomIn, "Zoom in (Ctrl+wheel)", (_, _) => SetZoom(_zoom * 1.2), 34, 34, 18));
+        row.Children.Add(IconButton(LucideIconKind.ZoomIn, "Zoom in (Ctrl+wheel)", (_, _) => SetZoom(_zoom * 1.2), 28, 28, 16));
         row.Children.Add(Separator());
         _fitButton = SegmentButton("Fit", "Fit to window (0)", () => { _fit = true; FitImage(); });
         _actualSizeButton = SegmentButton("100%", "Actual size", () => SetZoom(1));
@@ -91,19 +91,19 @@ public sealed partial class EditorSurface
         row.Children.Add(segments);
         return new Border
         {
-            Child = row, CornerRadius = new CornerRadius(22), Background = Brush("#E81C1D20"), BorderBrush = Brush("#34363A"), BorderThickness = new Thickness(1),
-            Padding = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 18),
+            Child = row, CornerRadius = new CornerRadius(17), Background = Brush("#E81C1D20"), BorderBrush = Brush("#34363A"), BorderThickness = new Thickness(1),
+            Padding = new Thickness(3), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 10),
             Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 18, Opacity = .45, ShadowDepth = 3, Direction = 270 }
         };
     }
 
     private Button SegmentButton(string text, string tip, Action click)
     {
-        var label = new TextBlock { Text = text, FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-        var button = new Button { Content = label, ToolTip = tip, Height = 34, MinWidth = 54, Padding = new Thickness(12, 0, 12, 0), Background = Brushes.Transparent, Foreground = Brushes.White, BorderThickness = new Thickness(0), Cursor = Cursors.Hand, HorizontalContentAlignment = HorizontalAlignment.Center };
+        var label = new TextBlock { Text = text, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var button = new Button { Content = label, ToolTip = tip, Height = 28, MinWidth = 46, Padding = new Thickness(9, 0, 9, 0), Background = Brushes.Transparent, Foreground = Brushes.White, BorderThickness = new Thickness(0), Cursor = Cursors.Hand, HorizontalContentAlignment = HorizontalAlignment.Center };
         label.SetBinding(TextBlock.ForegroundProperty, new System.Windows.Data.Binding(nameof(Button.Foreground)) { Source = button });
         System.Windows.Automation.AutomationProperties.SetName(button, tip);
-        button.Template = ButtonTemplate(17);
+        button.Template = ButtonTemplate(14);
         button.Click += (_, _) => click();
         return button;
     }
@@ -195,7 +195,7 @@ public sealed partial class EditorSurface
         if (_canvasArea is null) return;
         bool floating = _inspectorFloatSlot.Child is not null;
         double left = floating ? InspectorWidth + _inspectorFloatSlot.Margin.Left + 20 : 28;
-        _scroller.Padding = new Thickness(left, 14, 28, 76);
+        _scroller.Padding = new Thickness(left, 10, 24, 52);
         if (floating) _inspectorCard.MaxHeight = Math.Max(160, _canvasArea.ActualHeight - _inspectorFloatSlot.Margin.Top - _inspectorFloatSlot.Margin.Bottom);
         else _inspectorCard.ClearValue(MaxHeightProperty);
         _status.MaxWidth = Math.Max(0, _canvasArea.ActualWidth / 2 - 250);

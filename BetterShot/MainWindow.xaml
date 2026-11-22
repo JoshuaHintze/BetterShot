@@ -1,6 +1,6 @@
-<Window x:Class="BetterShot.MainWindow" x:Name="Root" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:BetterShot.Controls" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework" Title="BetterShot" Width="1100" Height="900" MinWidth="1000" MinHeight="680" WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize" Background="#121214" Foreground="{StaticResource TextBrush}" FontFamily="Segoe UI" FontSize="14" Icon="Assets/BetterShot.ico" PreviewKeyDown="Window_PreviewKeyDown" SizeChanged="Window_SizeChanged">
+<Window x:Class="BetterShot.MainWindow" x:Name="Root" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:BetterShot.Controls" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework" Title="BetterShot" Width="1500" Height="900" MinWidth="1000" MinHeight="680" WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize" Background="#121214" Foreground="{StaticResource TextBrush}" FontFamily="Segoe UI" FontSize="14" Icon="Assets/BetterShot.ico" PreviewKeyDown="Window_PreviewKeyDown" SizeChanged="Window_SizeChanged">
   <shell:WindowChrome.WindowChrome>
-    <shell:WindowChrome CaptionHeight="56" ResizeBorderThickness="6" CornerRadius="0" GlassFrameThickness="0" UseAeroCaptionButtons="False" />
+    <shell:WindowChrome CaptionHeight="40" ResizeBorderThickness="6" CornerRadius="0" GlassFrameThickness="0" UseAeroCaptionButtons="False" />
   </shell:WindowChrome.WindowChrome>
   <Window.Resources>
     <!-- Window caption buttons: round, borderless, and centred on the header row they sit in (see AlignCaptionButtons). -->
@@ -68,73 +68,6 @@
         <Setter.Value>
           <ControlTemplate TargetType="ListBoxItem">
             <ContentPresenter />
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="DarkComboBoxItem" TargetType="ComboBoxItem">
-      <Setter Property="Foreground" Value="#E7E8EB" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Padding" Value="12,8" />
-      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ComboBoxItem">
-            <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}">
-              <ContentPresenter />
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsHighlighted" Value="True">
-                <Setter TargetName="ItemBorder" Property="Background" Value="#383B42" />
-                <Setter Property="Foreground" Value="#FFFFFF" />
-              </Trigger>
-              <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="ItemBorder" Property="Background" Value="#4A4323" />
-                <Setter Property="Foreground" Value="#FFE477" />
-              </Trigger>
-              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45" /></Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="DarkComboBox" TargetType="ComboBox">
-      <Setter Property="Foreground" Value="#F0F1F3" />
-      <Setter Property="Background" Value="#24262A" />
-      <Setter Property="BorderBrush" Value="#484B53" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="Padding" Value="12,0,38,0" />
-      <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboBoxItem}" />
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ComboBox">
-            <Grid>
-              <ToggleButton x:Name="DropDownToggle" Focusable="False" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Background="Transparent" BorderThickness="0">
-                <ToggleButton.Template>
-                  <ControlTemplate TargetType="ToggleButton">
-                    <Border x:Name="SelectorBorder" Background="{Binding Background, RelativeSource={RelativeSource AncestorType=ComboBox}}" BorderBrush="{Binding BorderBrush, RelativeSource={RelativeSource AncestorType=ComboBox}}" BorderThickness="{Binding BorderThickness, RelativeSource={RelativeSource AncestorType=ComboBox}}" CornerRadius="7">
-                      <Grid>
-                        <ContentPresenter Margin="{Binding Padding, RelativeSource={RelativeSource AncestorType=ComboBox}}" VerticalAlignment="Center" HorizontalAlignment="Left" Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}" ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}" TextElement.Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ComboBox}}" />
-                        <Path Data="M 0 0 L 5 5 L 10 0" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ComboBox}}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,13,0" />
-                      </Grid>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                      <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SelectorBorder" Property="BorderBrush" Value="#747984" /></Trigger>
-                      <Trigger Property="IsChecked" Value="True"><Setter TargetName="SelectorBorder" Property="BorderBrush" Value="#FFD84A" /></Trigger>
-                    </ControlTemplate.Triggers>
-                  </ControlTemplate>
-                </ToggleButton.Template>
-              </ToggleButton>
-              <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
-                <Border Background="#202226" BorderBrush="#50535B" BorderThickness="1" CornerRadius="7" Padding="4" Margin="0,4,0,0">
-                  <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto"><ItemsPresenter /></ScrollViewer>
-                </Border>
-              </Popup>
-            </Grid>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter Property="BorderBrush" Value="#FFD84A" /></Trigger>
-              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45" /></Trigger>
-            </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
       </Setter>
@@ -301,7 +234,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ListBoxItem">
-            <Border x:Name="RowChrome" Background="Transparent" BorderBrush="Transparent" BorderThickness="1.5" CornerRadius="14" Padding="10,9">
+            <Border x:Name="RowChrome" Background="Transparent" BorderBrush="Transparent" BorderThickness="1.5" CornerRadius="8" Padding="6,4">
               <ContentPresenter />
             </Border>
             <ControlTemplate.Triggers>
@@ -323,16 +256,16 @@
     <DataTemplate x:Key="CaptureRowTemplate">
       <Grid>
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="70" />
+          <ColumnDefinition Width="52" />
           <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-        <Border Width="64" Height="54" CornerRadius="9" BorderBrush="#33FFFFFF" BorderThickness="1" Background="#111214" HorizontalAlignment="Left">
+        <Border Width="48" Height="36" CornerRadius="5" BorderBrush="#33FFFFFF" BorderThickness="1" Background="#111214" HorizontalAlignment="Left">
           <Border.Effect><DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.4" /></Border.Effect>
-          <Rectangle RadiusX="8" RadiusY="8">
+          <Rectangle RadiusX="4" RadiusY="4">
             <Rectangle.Fill><ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" AlignmentY="Top" /></Rectangle.Fill>
           </Rectangle>
         </Border>
-        <Grid Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+        <Grid Grid.Column="1" Margin="4,0,0,0" VerticalAlignment="Center">
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -341,20 +274,30 @@
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
-          <TextBlock Text="{Binding DisplayName}" FontSize="16" FontWeight="SemiBold" Foreground="#F4F4F5" TextTrimming="CharacterEllipsis" />
-          <TextBlock Grid.Column="1" Text="{Binding AgeText}" FontSize="14" Foreground="#9A9CA2" Margin="10,1,0,0" />
-          <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,5,0,0">
-            <TextBlock Text="{Binding DimensionsText}" FontSize="14" Foreground="#A3A5AB" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-            <Border Background="#2D2E32" CornerRadius="6" Padding="7,1,7,2" Margin="9,0,0,0" VerticalAlignment="Center" Visibility="{Binding HasText, Converter={StaticResource BoolToVisibility}}">
-              <TextBlock Text="Text" FontSize="13" Foreground="#C9CBD0" />
+          <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="#F4F4F5" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayName}">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock">
+                <Setter Property="Text" Value="{Binding DisplayName}" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding DayGroup}" Value="Today"><Setter Property="Text" Value="{Binding Timestamp, StringFormat={}{0:T}}" /></DataTrigger>
+                  <DataTrigger Binding="{Binding DayGroup}" Value="Yesterday"><Setter Property="Text" Value="{Binding Timestamp, StringFormat={}{0:T}}" /></DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+          <TextBlock Grid.Column="1" Text="{Binding AgeText}" FontSize="12" Foreground="#9A9CA2" Margin="4,0,0,0" />
+          <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,2,0,0">
+            <TextBlock Text="{Binding DimensionsText}" FontSize="12" Foreground="#A3A5AB" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <Border Background="#2D2E32" CornerRadius="6" Padding="3,0" Margin="4,0,0,0" VerticalAlignment="Center" Visibility="{Binding HasText, Converter={StaticResource BoolToVisibility}}">
+              <TextBlock Text="Text" FontSize="11" Foreground="#C9CBD0" />
             </Border>
-            <Border Background="#3A3417" CornerRadius="6" Padding="6,1,7,2" Margin="6,0,0,0" VerticalAlignment="Center" Visibility="{Binding HasMarkup, Converter={StaticResource BoolToVisibility}}">
+            <Border Background="#3A3417" CornerRadius="6" Padding="3,0" Margin="6,0,0,0" VerticalAlignment="Center" Visibility="{Binding HasMarkup, Converter={StaticResource BoolToVisibility}}">
               <StackPanel Orientation="Horizontal">
                 <controls:LucideIcon Icon="Pencil" Width="11" Height="11" Foreground="#FFD84A" Margin="0,1,4,0" VerticalAlignment="Center" />
-                <TextBlock Text="Markup" FontSize="13" Foreground="#FFD84A" />
+                <TextBlock Text="Markup" FontSize="11" Foreground="#FFD84A" />
               </StackPanel>
             </Border>
-          </StackPanel>
+          </WrapPanel>
         </Grid>
       </Grid>
     </DataTemplate>
@@ -394,7 +337,7 @@
           <RowDefinition Height="*" />
           <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <Grid x:Name="LibraryHeader" Margin="22,26,16,0">
+        <Grid x:Name="LibraryHeader" Margin="12,12,10,0">
           <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
             <Button x:Name="ImagesTabButton" Style="{StaticResource LibraryTab}" Content="Images" Click="ImagesTab_Click" AutomationProperties.Name="Images" />
             <Button x:Name="VideosTabButton" Style="{StaticResource LibraryTab}" Content="Videos" Margin="20,0,0,0" Click="VideosTab_Click" AutomationProperties.Name="Videos" />
@@ -408,15 +351,15 @@
             </Button>
           </StackPanel>
         </Grid>
-        <Grid Grid.Row="1" Margin="24,10,20,6">
+        <Grid Grid.Row="1" Margin="13,5,10,3">
           <StackPanel x:Name="SaveLocationRow" Orientation="Horizontal">
             <Ellipse x:Name="SaveLocationDot" Width="8" Height="8" Fill="#34C759" VerticalAlignment="Center" Margin="0,1,10,0" />
-            <TextBlock x:Name="SaveLocationText" Text="Saving to Pictures › BetterShot" Foreground="#C4C6CB" FontSize="15" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="SaveLocationText" Text="Saving to Pictures › BetterShot" Foreground="#C4C6CB" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
           </StackPanel>
           <TextBlock x:Name="StatusText" Text="" Foreground="#A5A7AD" FontSize="13" Background="#19191C" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
         </Grid>
 
-        <Grid Grid.Row="2" Margin="12,6,10,0">
+        <Grid Grid.Row="2" Margin="6,3,6,0">
           <Grid x:Name="ImagesPane">
             <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="300" Margin="12,0">
               <Border Width="64" Height="64" CornerRadius="32" Background="#242318" BorderBrush="#464021" BorderThickness="1" Margin="0,0,0,16">
@@ -433,9 +376,9 @@
                 <GroupStyle>
                   <GroupStyle.HeaderTemplate>
                     <DataTemplate>
-                      <StackPanel Orientation="Horizontal" Margin="12,14,0,8">
-                        <TextBlock Text="{Binding Name}" FontSize="20" FontWeight="SemiBold" Foreground="#F4F4F5" />
-                        <TextBlock Text="{Binding ItemCount}" FontSize="20" Foreground="#8E9097" Margin="10,0,0,0" />
+                      <StackPanel Orientation="Horizontal" Margin="7,8,0,4">
+                        <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="#F4F4F5" />
+                        <TextBlock Text="{Binding ItemCount}" FontSize="14" Foreground="#8E9097" Margin="10,0,0,0" />
                       </StackPanel>
                     </DataTemplate>
                   </GroupStyle.HeaderTemplate>
@@ -518,27 +461,27 @@
           </Grid>
         </Grid>
 
-        <Grid Grid.Row="3" Margin="14,10,14,14">
+        <Grid Grid.Row="3" Margin="8,6,8,8">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
-          <Border x:Name="SearchFrame" Height="54" CornerRadius="27" Background="#202124" BorderBrush="#323337" BorderThickness="1" Cursor="IBeam">
+          <Border x:Name="SearchFrame" Height="36" CornerRadius="18" Background="#202124" BorderBrush="#323337" BorderThickness="1" Cursor="IBeam">
             <Grid>
-              <controls:LucideIcon Icon="Search" Width="20" Height="20" Foreground="#A3A5AB" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20,0,0,0" IsHitTestVisible="False" />
-              <TextBlock x:Name="SearchPlaceholder" Text="Search names and text" Foreground="#8E9097" FontSize="16" Margin="52,0,34,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsHitTestVisible="False" />
-              <TextBox x:Name="SearchBox" Style="{StaticResource SearchTextBox}" FontSize="16" Margin="50,0,34,0" VerticalAlignment="Center" TextChanged="SearchBox_TextChanged" PreviewKeyDown="SearchBox_PreviewKeyDown" ToolTip="Search by time, date, typed markup, and text inside images (Ctrl+F)" AutomationProperties.Name="Search names and text" />
+              <controls:LucideIcon Icon="Search" Width="16" Height="16" Foreground="#A3A5AB" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0,0,0" IsHitTestVisible="False" />
+              <TextBlock x:Name="SearchPlaceholder" Text="Search names and text" Foreground="#8E9097" FontSize="13" Margin="32,0,24,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsHitTestVisible="False" />
+              <TextBox x:Name="SearchBox" Style="{StaticResource SearchTextBox}" FontSize="13" Margin="30,0,24,0" VerticalAlignment="Center" TextChanged="SearchBox_TextChanged" PreviewKeyDown="SearchBox_PreviewKeyDown" ToolTip="Search by time, date, typed markup, and text inside images (Ctrl+F)" AutomationProperties.Name="Search names and text" />
               <Button x:Name="ClearSearchButton" HorizontalAlignment="Right" VerticalAlignment="Center" Width="26" Height="26" Margin="0,0,12,0" Padding="6" Background="Transparent" BorderThickness="0" Visibility="Collapsed" Click="ClearSearch_Click" ToolTip="Clear search" AutomationProperties.Name="Clear search">
                 <controls:LucideIcon Icon="X" Width="12" Height="12" />
               </Button>
             </Grid>
           </Border>
-          <Button x:Name="AddCaptureButton" Grid.Column="1" Width="58" Height="58" Margin="12,0,0,0" Click="AddCapture_Click" ToolTip="Capture or record" AutomationProperties.Name="New capture" Cursor="Hand">
+          <Button x:Name="AddCaptureButton" Grid.Column="1" Width="38" Height="38" Margin="6,0,0,0" Click="AddCapture_Click" ToolTip="Capture or record" AutomationProperties.Name="New capture" Cursor="Hand">
             <Button.Template>
               <ControlTemplate TargetType="Button">
                 <Grid>
                   <Ellipse x:Name="Disc" Fill="#FFD400" />
-                  <controls:LucideIcon Icon="Plus" Width="26" Height="26" Foreground="#141414" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  <controls:LucideIcon Icon="Plus" Width="18" Height="18" Foreground="#141414" HorizontalAlignment="Center" VerticalAlignment="Center" />
                   <Ellipse x:Name="Ring" Stroke="Transparent" StrokeThickness="2" />
                 </Grid>
                 <ControlTemplate.Triggers>
@@ -797,6 +740,14 @@
           <TextBlock Text="When off, each capture is saved straight to the save folder." Style="{StaticResource SettingHint}" Margin="24,6,0,0" />
           <CheckBox x:Name="OpenEditorCheckBox" Style="{StaticResource SettingToggle}" Content="Open editor after capture" Checked="AfterCaptureToggle_Changed" Unchecked="AfterCaptureToggle_Changed" />
           <CheckBox x:Name="PlaySoundCheckBox" Style="{StaticResource SettingToggle}" Content="Play capture sound" Checked="AfterCaptureToggle_Changed" Unchecked="AfterCaptureToggle_Changed" />
+          <Grid Margin="24,8,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <ComboBox x:Name="ScreenshotSoundComboBox" Style="{StaticResource DarkComboBox}" Height="34" SelectionChanged="SoundCombo_SelectionChanged" AutomationProperties.Name="Screenshot sound">
+              <ComboBoxItem Content="None" Tag="none" /><ComboBoxItem Content="Shutter" Tag="shutter" /><ComboBoxItem Content="Soft chime" Tag="soft-chime" /><ComboBoxItem Content="Up" Tag="up" /><ComboBoxItem Content="Down" Tag="down" /><ComboBoxItem Content="Giggity" Tag="giggity" /><ComboBoxItem Content="Custom sound…" Tag="custom" />
+            </ComboBox>
+            <Button Grid.Column="1" Tag="screenshot" Style="{StaticResource QuietButton}" Margin="8,0,0,0" Click="PreviewSound_Click">Preview</Button>
+            <Button Grid.Column="2" Tag="screenshot" Style="{StaticResource QuietButton}" Margin="8,0,0,0" Click="BrowseSound_Click">Browse…</Button>
+          </Grid>
           <Grid Margin="0,16,0,0">
             <TextBlock Text="Auto-dismiss thumbnails" Style="{StaticResource SettingLabel}" />
             <ComboBox x:Name="AutoDismissComboBox" Style="{StaticResource DarkComboBox}" Width="130" Height="34" HorizontalAlignment="Right" SelectionChanged="AutoDismissCombo_SelectionChanged" AutomationProperties.Name="Auto-dismiss thumbnails">
@@ -883,13 +834,33 @@
                 <ComboBoxItem Content="60 fps" Tag="60" />
               </ComboBox>
             </Grid>
+            <TextBlock Text="Sound effects" Style="{StaticResource SettingLabel}" Margin="0,18,0,0" />
+            <Grid Margin="0,8,0,0">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="42" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <TextBlock Text="Start" Style="{StaticResource SettingLabel}" VerticalAlignment="Center" />
+              <ComboBox x:Name="RecordingStartSoundComboBox" Grid.Column="1" Style="{StaticResource DarkComboBox}" Height="34" SelectionChanged="SoundCombo_SelectionChanged" AutomationProperties.Name="Recording start sound">
+                <ComboBoxItem Content="None" Tag="none" /><ComboBoxItem Content="Shutter" Tag="shutter" /><ComboBoxItem Content="Soft chime" Tag="soft-chime" /><ComboBoxItem Content="Up" Tag="up" /><ComboBoxItem Content="Down" Tag="down" /><ComboBoxItem Content="Giggity" Tag="giggity" /><ComboBoxItem Content="Custom sound…" Tag="custom" />
+              </ComboBox>
+              <Button Grid.Column="2" Tag="start" Style="{StaticResource QuietButton}" Margin="8,0,0,0" Click="PreviewSound_Click">Preview</Button>
+              <Button Grid.Column="3" Tag="start" Style="{StaticResource QuietButton}" Margin="8,0,0,0" Click="BrowseSound_Click">Browse…</Button>
+            </Grid>
+            <Grid Margin="0,8,0,0">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="42" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <TextBlock Text="Stop" Style="{StaticResource SettingLabel}" VerticalAlignment="Center" />
+              <ComboBox x:Name="RecordingStopSoundComboBox" Grid.Column="1" Style="{StaticResource DarkComboBox}" Height="34" SelectionChanged="SoundCombo_SelectionChanged" AutomationProperties.Name="Recording stop sound">
+                <ComboBoxItem Content="None" Tag="none" /><ComboBoxItem Content="Shutter" Tag="shutter" /><ComboBoxItem Content="Soft chime" Tag="soft-chime" /><ComboBoxItem Content="Up" Tag="up" /><ComboBoxItem Content="Down" Tag="down" /><ComboBoxItem Content="Giggity" Tag="giggity" /><ComboBoxItem Content="Custom sound…" Tag="custom" />
+              </ComboBox>
+              <Button Grid.Column="2" Tag="stop" Style="{StaticResource QuietButton}" Margin="8,0,0,0" Click="PreviewSound_Click">Preview</Button>
+              <Button Grid.Column="3" Tag="stop" Style="{StaticResource QuietButton}" Margin="8,0,0,0" Click="BrowseSound_Click">Browse…</Button>
+            </Grid>
+            <TextBlock Text="Start finishes before capture begins; stop plays after the recorder finishes." Style="{StaticResource SettingHint}" Margin="0,6,0,0" />
             <CheckBox x:Name="RecordMicrophoneCheckBox" Style="{StaticResource SettingToggle}" Content="Record microphone" Margin="0,16,0,0" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
             <ComboBox x:Name="MicrophoneComboBox" Style="{StaticResource DarkComboBox}" Height="34" Margin="42,10,0,0" SelectionChanged="RecordingDevice_SelectionChanged" AutomationProperties.Name="Microphone" />
             <CheckBox x:Name="RecordSystemAudioCheckBox" Style="{StaticResource SettingToggle}" Content="Record system audio" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
             <TextBlock Text="Sound playing on your default output device, mixed with the microphone into one track." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
             <CheckBox x:Name="RecordCameraCheckBox" Style="{StaticResource SettingToggle}" Content="Record webcam" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
             <ComboBox x:Name="CameraComboBox" Style="{StaticResource DarkComboBox}" Height="34" Margin="42,10,0,0" SelectionChanged="RecordingDevice_SelectionChanged" AutomationProperties.Name="Camera" />
-            <TextBlock Text="Saved beside the screen recording with a &quot;-camera&quot; suffix." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
+            <TextBlock Text="Saved as a separate camera video. Use the Camera lane to show it as picture-in-picture." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />
             <CheckBox x:Name="HighlightClicksCheckBox" Style="{StaticResource SettingToggle}" Content="Highlight mouse clicks" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
             <CheckBox x:Name="ShowKeystrokesCheckBox" Style="{StaticResource SettingToggle}" Content="Show keystrokes" Checked="RecordingToggle_Changed" Unchecked="RecordingToggle_Changed" />
             <TextBlock Text="Shows shortcuts such as Ctrl+Shift+K. Ordinary typing is never shown or saved." Style="{StaticResource SettingHint}" Margin="42,6,0,0" />

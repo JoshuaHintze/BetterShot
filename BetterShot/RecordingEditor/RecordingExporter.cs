@@ -18,7 +18,9 @@ internal sealed record RecordingExportJob(
     int GifMaxDimension,
     int? TimelapseSpeed,
     string TemporaryFolder,
-    IReadOnlyList<Recording.AudioTrackKind>? RemixTracks = null);
+    IReadOnlyList<Recording.AudioTrackKind>? RemixTracks = null,
+    CameraSource? Camera = null,
+    Mp4ExportPreset Mp4Preset = Mp4ExportPreset.Original);
 
 /// <summary>Renders the frame at a source time with the visible marks burned in, using the screenshot editor's renderer.</summary>
 internal static class MarkCompositor
@@ -32,6 +34,33 @@ internal static class MarkCompositor
         var items = state.VisibleMarksAt(time).Select(mark => mark.ShapeAt(time)).ToList();
         if (state.BlursWholePictureAt(time)) items.Add(WholePictureBlur(document.CanvasRect));
         return DocumentRenderer.Render(document, items, null, compose: false);
+    }
+
+    /// <summary>Draws the camera over the screen using the same centered aspect-fill square/circle as the player.</summary>
+    internal static BitmapSource ComposeCamera(BitmapSource frame, BitmapSource camera, CameraEdit edit)
+    {
+        Rect target = edit.Placement.ToPixels(frame.PixelWidth, frame.PixelHeight);
+        var visual = new DrawingVisual();
+        using (DrawingContext drawing = visual.RenderOpen())
+        {
+            drawing.DrawImage(frame, new Rect(0, 0, frame.PixelWidth, frame.PixelHeight));
+            Geometry clip = edit.Shape == CameraShape.Circle
+                ? new EllipseGeometry(target)
+                : new RectangleGeometry(target);
+            drawing.PushClip(clip);
+            var brush = new ImageBrush(camera)
+            {
+                Stretch = Stretch.UniformToFill,
+                AlignmentX = AlignmentX.Center,
+                AlignmentY = AlignmentY.Center
+            };
+            drawing.DrawRectangle(brush, null, target);
+            drawing.Pop();
+        }
+        var rendered = new RenderTargetBitmap(frame.PixelWidth, frame.PixelHeight, 96, 96, PixelFormats.Pbgra32);
+        rendered.Render(visual);
+        rendered.Freeze();
+        return rendered;
     }
 
     /// <summary>A blur redaction over the whole frame, coarse enough to hide text at any recording size.</summary>
@@ -53,6 +82,8 @@ internal static class RecordingExporter
     internal static async Task<string?> ExportAsync(RecordingExportJob job, RecordingFrameReader reader, Dispatcher renderer, IProgress<double> progress, CancellationToken cancellation)
     {
         if (job.State.Timeline.KeptRanges.Count == 0) throw new InvalidOperationException("Nothing is kept, so there is nothing to export.");
+        if (!string.IsNullOrWhiteSpace(job.Camera?.Path) && !job.Camera.IsAvailable)
+            throw new InvalidOperationException("The camera video is missing, so the export was stopped instead of silently leaving out the camera picture.");
         string folder = Path.GetDirectoryName(Path.GetFullPath(job.OutputPath)) ?? job.TemporaryFolder;
         Directory.CreateDirectory(folder);
         string temporary = Path.Combine(folder, "." + Path.GetFileNameWithoutExtension(job.OutputPath) + "-" + Guid.NewGuid().ToString("N")[..8] + ".partial" + Path.GetExtension(job.OutputPath));
@@ -79,11 +110,12 @@ internal static class RecordingExporter
     private static async Task<string?> WriteMovieAsync(RecordingExportJob job, RecordingFrameReader reader, Dispatcher renderer, string output, IProgress<double> progress, CancellationToken cancellation)
     {
         RecordingEditState state = job.State;
+        Mp4ExportPlan plan = ExportPlanning.PlanMp4(job.Mp4Preset, job.Info.Width, job.Info.Height, job.Info.FrameRate);
         if (job.Kind == RecordingExportKind.Mp4 && job.RemixTracks is { Count: > 0 } tracks) return await WriteRemixedMovieAsync(job, tracks, reader, renderer, output, progress, cancellation);
         bool includeAudio = job.Kind == RecordingExportKind.Mp4 && job.Info.HasAudio;
-        if (!state.HasVisibleMarks)
+        if (!state.HasVisibleMarks && !HasCamera(job))
         {
-            await TrimmedMovieRenderer.RenderAsync(job.MoviePath, state.Timeline.KeptRanges, output, job.Info, includeAudio, progress, cancellation);
+            await TrimmedMovieRenderer.RenderAsync(job.MoviePath, state.Timeline.KeptRanges, output, plan, includeAudio, progress, cancellation);
             return null;
         }
         string? warning = null;
@@ -96,7 +128,7 @@ internal static class RecordingExporter
                 warning = $"The audio could not be included ({error.Message}).";
             }
         }
-        await EncodeMarkedFramesAsync(job, reader, renderer, output, audio, progress, cancellation);
+        await EncodeMarkedFramesAsync(job, reader, renderer, output, audio, plan, progress, cancellation);
         return warning;
     }
 
@@ -108,6 +140,7 @@ internal static class RecordingExporter
         Dispatcher renderer, string output, IProgress<double> progress, CancellationToken cancellation)
     {
         RecordingEditState state = job.State;
+        Mp4ExportPlan plan = ExportPlanning.PlanMp4(job.Mp4Preset, job.Info.Width, job.Info.Height, job.Info.FrameRate);
         Directory.CreateDirectory(job.TemporaryFolder);
         string remix = Path.Combine(job.TemporaryFolder, "remix-" + Guid.NewGuid().ToString("N") + ".wav");
         try
@@ -115,27 +148,33 @@ internal static class RecordingExporter
             string[] sources = tracks.Select(kind => Recording.RecordingAudioTracks.SidecarPath(job.MoviePath, kind)).ToArray();
             IReadOnlyList<KeptRange> ranges = state.Timeline.KeptRanges;
             await Task.Run(() => AudioRemixer.WriteKeptMix(sources, ranges, remix, cancellation), cancellation);
-            if (!state.HasVisibleMarks)
+            if (!state.HasVisibleMarks && !HasCamera(job))
             {
-                await TrimmedMovieRenderer.RenderAsync(job.MoviePath, ranges, output, job.Info, includeAudio: true, progress, cancellation, remix);
+                await TrimmedMovieRenderer.RenderAsync(job.MoviePath, ranges, output, plan, includeAudio: true, progress, cancellation, remix);
                 return null;
             }
             KeptAudio audio = KeptAudio.FromWave(remix, [new KeptRange(0, state.Timeline.OutputDuration, 0)], deleteOnDispose: false);
-            await EncodeMarkedFramesAsync(job, reader, renderer, output, audio, progress, cancellation);
+            await EncodeMarkedFramesAsync(job, reader, renderer, output, audio, plan, progress, cancellation);
             return null;
         }
         finally { KeptAudio.TryDelete(remix); }
     }
 
     private static async Task EncodeMarkedFramesAsync(RecordingExportJob job, RecordingFrameReader reader, Dispatcher renderer, string output, KeptAudio? audio,
-        IProgress<double> progress, CancellationToken cancellation)
+        Mp4ExportPlan plan, IProgress<double> progress, CancellationToken cancellation)
     {
         RecordingEditState state = job.State;
         using (audio)
         {
-            IReadOnlyList<double> times = ExportPlanning.FrameTimes(state.Timeline, job.Info.FrameRate);
-            var frames = new MarkedFrameSource(reader, renderer, state, times, job.Info.Width, job.Info.Height);
-            await FrameMovieEncoder.EncodeAsync(output, job.Info.Width, job.Info.Height, job.Info.FrameRate, times.Count, frames.RenderAsync, audio, progress, cancellation);
+            IReadOnlyList<double> times = ExportPlanning.FrameTimes(state.Timeline, plan.FrameRate);
+            using var frames = await MarkedFrameSource.CreateAsync(job, reader, renderer, times, cancellation);
+            async Task<DecodedFrame> RenderScaledAsync(int index, CancellationToken token)
+            {
+                DecodedFrame frame = await frames.RenderAsync(index, token);
+                if (frame.Width == plan.Width && frame.Height == plan.Height) return frame;
+                return await renderer.InvokeAsync(() => DecodedFrame.FromBitmapSource(Scale(frame.ToBitmapSource(), plan.Width, plan.Height)), DispatcherPriority.Background).Task;
+            }
+            await FrameMovieEncoder.EncodeAsync(output, plan, times.Count, RenderScaledAsync, audio, progress, cancellation);
         }
     }
 
@@ -143,7 +182,7 @@ internal static class RecordingExporter
     {
         int speed = ExportPlanning.TimelapseSpeed(job.State.Timeline.OutputDuration, job.TimelapseSpeed);
         IReadOnlyList<double> times = ExportPlanning.FrameTimes(job.State.Timeline, ExportPlanning.TimelapseFrameRate, speed);
-        var frames = new MarkedFrameSource(reader, renderer, job.State, times, job.Info.Width, job.Info.Height);
+        using var frames = await MarkedFrameSource.CreateAsync(job, reader, renderer, times, cancellation);
         await FrameMovieEncoder.EncodeAsync(output, job.Info.Width, job.Info.Height, ExportPlanning.TimelapseFrameRate, times.Count, frames.RenderAsync, null, progress, cancellation);
         return null;
     }
@@ -154,7 +193,7 @@ internal static class RecordingExporter
         if (ExportPlanning.IsTooShortForGif(job.State.Timeline, frameRate)) throw new InvalidOperationException("Selection is too short for a GIF.");
         IReadOnlyList<double> times = ExportPlanning.FrameTimes(job.State.Timeline, frameRate);
         (int width, int height) = ExportPlanning.FitWithin(job.Info.Width, job.Info.Height, ExportPlanning.NormalizeGifMaxDimension(job.GifMaxDimension));
-        var frames = new MarkedFrameSource(reader, renderer, job.State, times, job.Info.Width, job.Info.Height);
+        using var frames = await MarkedFrameSource.CreateAsync(job, reader, renderer, times, cancellation);
         var palettized = new List<BitmapSource>(times.Count);
         for (int index = 0; index < times.Count; index++)
         {
@@ -181,8 +220,10 @@ internal static class RecordingExporter
         return scaled;
     }
 
+    private static bool HasCamera(RecordingExportJob job) => job.Camera is { IsAvailable: true } && job.State.Camera.Visible;
+
     /// <summary>Decodes source frames in small batches and burns in the marks of each frame's time on the UI thread.</summary>
-    private sealed class MarkedFrameSource
+    private sealed class MarkedFrameSource : IDisposable
     {
         private readonly RecordingFrameReader _reader;
         private readonly Dispatcher _renderer;
@@ -190,9 +231,12 @@ internal static class RecordingExporter
         private readonly IReadOnlyList<double> _times;
         private readonly int _width;
         private readonly int _height;
+        private readonly CameraSource? _camera;
+        private readonly RecordingFrameReader? _cameraReader;
         private readonly Dictionary<int, DecodedFrame> _ready = [];
 
-        internal MarkedFrameSource(RecordingFrameReader reader, Dispatcher renderer, RecordingEditState state, IReadOnlyList<double> times, int width, int height)
+        private MarkedFrameSource(RecordingFrameReader reader, Dispatcher renderer, RecordingEditState state, IReadOnlyList<double> times, int width, int height,
+            CameraSource? camera, RecordingFrameReader? cameraReader)
         {
             _reader = reader;
             _renderer = renderer;
@@ -200,6 +244,24 @@ internal static class RecordingExporter
             _times = times;
             _width = width;
             _height = height;
+            _camera = camera;
+            _cameraReader = cameraReader;
+        }
+
+        internal static async Task<MarkedFrameSource> CreateAsync(RecordingExportJob job, RecordingFrameReader reader, Dispatcher renderer,
+            IReadOnlyList<double> times, CancellationToken cancellation)
+        {
+            RecordingFrameReader? cameraReader = null;
+            if (HasCamera(job))
+            {
+                cancellation.ThrowIfCancellationRequested();
+                try { cameraReader = await RecordingFrameReader.OpenAsync(job.Camera!.Path!); }
+                catch (Exception error) when (error is not OperationCanceledException)
+                {
+                    throw new InvalidOperationException($"The camera video could not be opened, so the export was stopped ({error.Message}).", error);
+                }
+            }
+            return new MarkedFrameSource(reader, renderer, job.State, times, job.Info.Width, job.Info.Height, job.Camera, cameraReader);
         }
 
         internal async Task<DecodedFrame> RenderAsync(int index, CancellationToken cancellation)
@@ -211,18 +273,49 @@ internal static class RecordingExporter
                 double[] batch = _times.Skip(index).Take(count).ToArray();
                 // The encoder asks for frames on a media worker thread; the reader was created on the UI thread, so call it there.
                 IReadOnlyList<DecodedFrame> decoded = await _renderer.InvokeAsync(() => _reader.ReadAsync(batch, _width, _height, cancellation)).Task.Unwrap();
+                IReadOnlyDictionary<int, DecodedFrame> cameras = await ReadCameraBatchAsync(batch, cancellation);
                 for (int offset = 0; offset < decoded.Count; offset++)
-                    _ready[index + offset] = await ComposeAsync(decoded[offset], batch[offset]);
+                    _ready[index + offset] = await ComposeAsync(decoded[offset], batch[offset], cameras.GetValueOrDefault(offset));
                 frame = _ready[index];
             }
             _ready.Remove(index);
             return frame;
         }
 
-        private async Task<DecodedFrame> ComposeAsync(DecodedFrame frame, double time)
+        private async Task<IReadOnlyDictionary<int, DecodedFrame>> ReadCameraBatchAsync(IReadOnlyList<double> screenTimes, CancellationToken cancellation)
         {
-            if (!MarkCompositor.HasMarkupAt(_state, time)) return frame;
-            return await _renderer.InvokeAsync(() => DecodedFrame.FromBitmapSource(MarkCompositor.Compose(frame.ToBitmapSource(), _state, time)), DispatcherPriority.Background).Task;
+            if (_camera is null || _cameraReader is null) return new Dictionary<int, DecodedFrame>();
+            int[] offsets = screenTimes.Select((time, offset) => (time, offset))
+                .Where(item => _camera.IsVisibleAt(item.time, _state.Camera)
+                    && _camera.CameraTimeAt(item.time, _cameraReader.Info.Duration) is not null)
+                .Select(item => item.offset).ToArray();
+            if (offsets.Length == 0) return new Dictionary<int, DecodedFrame>();
+            double[] cameraTimes = offsets.Select(offset => _camera.CameraTimeAt(screenTimes[offset], _cameraReader.Info.Duration)!.Value).ToArray();
+            try
+            {
+                IReadOnlyList<DecodedFrame> frames = await _renderer.InvokeAsync(() => _cameraReader.ReadAsync(cameraTimes,
+                    _cameraReader.Info.Width, _cameraReader.Info.Height, cancellation)).Task.Unwrap();
+                return offsets.Select((offset, index) => (offset, frame: frames[index])).ToDictionary(item => item.offset, item => item.frame);
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                throw new InvalidOperationException($"A camera frame could not be decoded, so the export was stopped ({error.Message}).", error);
+            }
         }
+
+        private async Task<DecodedFrame> ComposeAsync(DecodedFrame frame, double time, DecodedFrame? camera)
+        {
+            bool marks = MarkCompositor.HasMarkupAt(_state, time);
+            if (camera is null && !marks) return frame;
+            return await _renderer.InvokeAsync(() =>
+            {
+                BitmapSource composed = frame.ToBitmapSource();
+                if (camera is not null) composed = MarkCompositor.ComposeCamera(composed, camera.ToBitmapSource(), _state.Camera);
+                if (marks) composed = MarkCompositor.Compose(composed, _state, time);
+                return DecodedFrame.FromBitmapSource(composed);
+            }, DispatcherPriority.Background).Task;
+        }
+
+        public void Dispose() => _cameraReader?.Dispose();
     }
 }

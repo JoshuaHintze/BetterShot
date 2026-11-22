@@ -48,7 +48,7 @@ public sealed partial class EditorSurface
     private Border CreateToast() => new()
     {
         Child = _toastText, Background = Brush("#F0232427"), BorderBrush = Brush("#45474B"), BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 8, 14, 8), Margin = new Thickness(0, 0, 0, 82),
+        CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 8, 14, 8), Margin = new Thickness(0, 0, 0, 58),
         HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false, Opacity = 0,
         Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 16, Opacity = .5, ShadowDepth = 3 }
     };
@@ -67,18 +67,18 @@ public sealed partial class EditorSurface
     private FrameworkElement BuildOcrButton()
     {
         var label = new StackPanel { Orientation = Orientation.Horizontal };
-        label.Children.Add(new LucideIcon { Icon = LucideIconKind.ScanText, Width = 19, Height = 19, Foreground = Brushes.White, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center });
-        _ocrLabel = new TextBlock { Text = "Copy Text", FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        label.Children.Add(new LucideIcon { Icon = LucideIconKind.ScanText, Width = 18, Height = 18, Foreground = Brushes.White, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+        _ocrLabel = new TextBlock { Text = "Copy Text", FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         label.Children.Add(_ocrLabel);
-        var main = new Button { Content = label, Height = 42, Padding = new Thickness(12, 0, 4, 0), Background = Brushes.Transparent, Foreground = Brushes.White, BorderThickness = new Thickness(0), Cursor = Cursors.Hand, ToolTip = "Copy all text (Ctrl+Shift+C)" };
+        var main = new Button { Content = label, Height = 32, Padding = new Thickness(9, 0, 3, 0), Background = Brushes.Transparent, Foreground = Brushes.White, BorderThickness = new Thickness(0), Cursor = Cursors.Hand, ToolTip = "Copy all text (Ctrl+Shift+C)" };
         main.Template = ButtonTemplate(10);
         System.Windows.Automation.AutomationProperties.SetName(main, "Copy all text");
         main.Click += (_, _) => _ = CopyAllTextAsync();
-        Button chevron = IconButton(LucideIconKind.ChevronDown, "Text options", (_, _) => { }, 26, 42, 14);
+        Button chevron = IconButton(LucideIconKind.ChevronDown, "Text options", (_, _) => { }, 24, 32, 13);
         chevron.Margin = new Thickness(0);
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(main); row.Children.Add(chevron);
-        var chrome = new Border { Child = row, Margin = new Thickness(4, 0, 4, 0) };
+        var chrome = new Border { Child = row, Margin = new Thickness(2, 0, 2, 0) };
         chevron.Click += (_, _) => OpenOcrMenu(chrome);
         return chrome;
     }

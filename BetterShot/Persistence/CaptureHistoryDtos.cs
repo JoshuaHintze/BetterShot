@@ -89,7 +89,15 @@ internal sealed partial class HistorySettingsDto
     public bool? CopyToClipboard { get; set; }
     public bool? ShowThumbnail { get; set; }
     public bool? OpenEditorAfterCapture { get; set; }
+    public bool? EditorLibraryVisible { get; set; }
+    public bool? EditorLibraryNarrowVisible { get; set; }
     public bool? PlayCaptureSound { get; set; }
+    public string? ScreenshotSound { get; set; }
+    public string? ScreenshotCustomSoundPath { get; set; }
+    public string? RecordingStartSound { get; set; }
+    public string? RecordingStartCustomSoundPath { get; set; }
+    public string? RecordingStopSound { get; set; }
+    public string? RecordingStopCustomSoundPath { get; set; }
     public int? ThumbnailAutoDismissSeconds { get; set; }
     public string? SaveFolder { get; set; }
     public bool? AutoSave { get; set; }
@@ -126,6 +134,7 @@ internal sealed partial class HistorySettingsDto
     // Phase 7 recording editor options. Optional; missing means the defaults.
     public int? GifFps { get; set; }
     public int? GifMaxDimension { get; set; }
+    public string? Mp4ExportPreset { get; set; }
     public bool? KeepMarkedCopy { get; set; }
     public bool? TrimReplacesOriginal { get; set; }
 

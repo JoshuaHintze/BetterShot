@@ -15,7 +15,7 @@ internal static class TrimRemap
         var marks = new List<VideoMark>();
         foreach (VideoMark mark in state.Marks)
             if (Remap(mark, timeline, trimmedDuration) is VideoMark moved) marks.Add(moved);
-        return new RecordingEditState(EditTimeline.Create(trimmedDuration), marks, state.HideMarkup) { MutedTracks = state.MutedTracks };
+        return new RecordingEditState(EditTimeline.Create(trimmedDuration), marks, state.HideMarkup) { MutedTracks = state.MutedTracks, Camera = state.Camera };
     }
 
     internal static VideoMark? Remap(VideoMark mark, EditTimeline timeline, double trimmedDuration)
@@ -71,14 +71,30 @@ internal static class RecordingSharing
     }
 
     /// <summary>A redaction always needs a covered copy; other edits only when "Keep a marked copy for sharing" is on.</summary>
-    internal static bool NeedsMarkedCopy(RecordingEditState state, bool keepMarkedCopy) =>
-        state.HasRedaction || keepMarkedCopy && state.HasEdits;
+    internal static bool NeedsMarkedCopy(RecordingEditState state, bool keepMarkedCopy, bool hasCamera = false) =>
+        state.HasRedaction || hasCamera && state.Camera.Visible || keepMarkedCopy && state.HasEdits;
+
+    internal static string SharingFingerprint(string moviePath, RecordingEditState state, CameraSource? camera = null)
+    {
+        string fingerprint = RecordingEditProject.Fingerprint(state);
+        CameraSource source = camera ?? CameraSourceResolver.Resolve(moviePath);
+        if (!source.IsAvailable || !state.Camera.Visible) return fingerprint;
+        var file = new FileInfo(source.Path!);
+        string changes = string.Join(';', source.VisibilityChanges.Select(change => $"{change.SourceTime:R}:{change.Visible}"));
+        return $"{fingerprint}|camera-v2:{file.Length}:{file.LastWriteTimeUtc.Ticks}:{source.StartOffsetSeconds:R}:{changes}";
+    }
 
     /// <summary>The file to share for a drag, or null with a reason when only an up-to-date covered copy may be shared.</summary>
-    internal static (string? Path, string? Note) ResolveSharePath(string moviePath)
+    internal static (string? Path, string? Note) ResolveSharePath(string moviePath, string? cameraPath = null)
     {
+        CameraSource camera = CameraSourceResolver.Resolve(moviePath, cameraPath);
         string sidecar = RecordingEditProject.SidecarPath(moviePath);
-        if (!File.Exists(sidecar)) return (moviePath, null);
+        if (!File.Exists(sidecar))
+        {
+            if (camera.IsAvailable)
+                return (null, "This recording has a camera picture. Open it in the editor and choose Share to prepare its shareable copy.");
+            return (moviePath, null);
+        }
         LoadedEditProject project = RecordingEditProject.Load(moviePath, double.NaN);
         if (project.Warning is not null && project.PreservedMarks.Count == 0 && project.State.Marks.Count == 0 && !project.State.Timeline.HasCuts)
         {
@@ -87,41 +103,16 @@ internal static class RecordingSharing
         }
         RecordingEditState state = project.State;
         bool unknownMarks = project.PreservedMarks.Count > 0;
-        if (!NeedsMarkedCopy(state, KeepMarkedCopy) && !unknownMarks) return (moviePath, null);
+        bool hasCamera = camera.IsAvailable;
+        if (!NeedsMarkedCopy(state, KeepMarkedCopy, hasCamera) && !unknownMarks) return (moviePath, null);
         string copy = MarkedCopyPath(moviePath);
-        bool current = File.Exists(copy) && project.MarkedCopyFingerprint == RecordingEditProject.Fingerprint(state);
+        bool current = File.Exists(copy) && project.MarkedCopyFingerprint == SharingFingerprint(moviePath, state, camera);
         if (current) return (copy, null);
         if (state.HasRedaction || unknownMarks)
-            return (null, "This recording has a redaction, so only its covered copy can be shared. Open it in the editor and choose Done or Share to update its covered copy.");
-        return (moviePath, "The marked copy is out of date, so the original recording was shared.");
-    }
-
-    /// <summary>The visible edited version saved beside the recording when the user chooses Done ("Name (edited).mp4").</summary>
-    internal static string EditedCopyPath(string moviePath)
-    {
-        string full = Path.GetFullPath(moviePath);
-        return Path.Combine(Path.GetDirectoryName(full) ?? string.Empty, Path.GetFileNameWithoutExtension(full) + " (edited)" + Path.GetExtension(full));
-    }
-
-    /// <summary>
-    /// Copies the rendered marked copy beside the recording so the edits are in a file the user can find and play.
-    /// The original stays untouched (its cuts and marks remain editable); each Done replaces the previous edited file.
-    /// </summary>
-    internal static string PublishEditedCopy(string moviePath)
-    {
-        string target = EditedCopyPath(moviePath);
-        string temporary = target + ".partial";
-        File.Copy(MarkedCopyPath(moviePath), temporary, overwrite: true);
-        File.Move(temporary, target, overwrite: true);
-        return target;
-    }
-
-    /// <summary>Removes the visible edited file once the recording no longer has edits to show.</summary>
-    internal static void DeleteEditedCopy(string moviePath)
-    {
-        try { string edited = EditedCopyPath(moviePath); if (File.Exists(edited)) File.Delete(edited); }
-        catch (IOException) { } // In use (playing elsewhere); it is replaced on the next Done.
-        catch (UnauthorizedAccessException) { }
+            return (null, "This recording has a redaction, so only its covered copy can be shared. Open it in the editor and choose Share to update its covered copy.");
+        if (hasCamera && state.Camera.Visible)
+            return (null, "Open the recording and choose Share to prepare a copy with the current camera layout.");
+        return (null, "Open the recording and choose Share to prepare a copy with your saved edits.");
     }
 
     internal static void DeleteMarkedCopy(string moviePath)

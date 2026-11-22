@@ -22,6 +22,7 @@
     <Resource Include="Assets\BetterShot.ico" />
     <Resource Include="Assets\Cursors\Grab.cur" />
     <Resource Include="Assets\Cursors\Grabbing.cur" />
+    <Content Include="Assets\Sounds\giggity.mp3" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="ThirdPartyNotices\Lucide-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="ThirdPartyNotices\NAudio-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="ThirdPartyNotices\Microsoft-Windows-SDK-NET-NOTICE.txt" CopyToOutputDirectory="PreserveNewest" />

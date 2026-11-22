@@ -81,6 +81,7 @@ public partial class MainWindow
             ShowThumbnailCheckBox.IsChecked = settings.ShowThumbnail;
             OpenEditorCheckBox.IsChecked = settings.OpenEditorAfterCapture;
             PlaySoundCheckBox.IsChecked = settings.PlayCaptureSound;
+            LoadSoundSettingsIntoControls();
             SelectTagged(AutoDismissComboBox, settings.ThumbnailAutoDismissSeconds.ToString(CultureInfo.InvariantCulture));
             SaveFolderText.Text = settings.EffectiveSaveFolder;
             SaveFolderText.ToolTip = settings.EffectiveSaveFolder;
@@ -244,7 +245,7 @@ public partial class MainWindow
             case HotkeyAction.Area: _ = CaptureAsync(CaptureMode.Area); break;
             case HotkeyAction.Window: _ = CaptureAsync(CaptureMode.Window); break;
             case HotkeyAction.Fullscreen: _ = CaptureAsync(CaptureMode.Fullscreen); break;
-            case HotkeyAction.Library: ShowAndActivate(); break;
+            case HotkeyAction.Library: OpenLibrary(); break;
             case HotkeyAction.Record: ToggleRecordingFromShortcut(); break;
             case HotkeyAction.Scrolling: _ = ScrollingCaptureAsync(); break;
         }

@@ -14,9 +14,11 @@ namespace BetterShot.RecordingEditor;
 /// </summary>
 internal sealed partial class RecordingEditorWindow
 {
-    private const double LabelColumnWidth = 156;
+    // Markup is the widest label row: icon + full name + hide/fold controls. Keep enough room that the
+    // controls never squeeze the accessible label to "Mark" at the minimum editor width.
+    private const double LabelColumnWidth = 152;
     private readonly Canvas _trackLabels = new() { Width = LabelColumnWidth, ClipToBounds = true };
-    private readonly PillSlider _zoomSlider = new("Timeline zoom") { Width = 150, ShowFill = false };
+    private readonly PillSlider _zoomSlider = new("Timeline zoom") { Width = 112, ShowFill = false };
     private Button? _selectModeButton, _splitModeButton, _undoButton, _redoButton, _deleteButton, _snapButton, _rowsButton;
     private bool _syncingZoom;
 
@@ -43,7 +45,7 @@ internal sealed partial class RecordingEditorWindow
 
     private UIElement BuildTimelineToolbar()
     {
-        var bar = new Grid { Height = 46, Margin = new Thickness(14, 2, 14, 0) };
+        var bar = new Grid { Height = 38, Margin = new Thickness(10, 1, 10, 0) };
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         bar.ColumnDefinitions.Add(new ColumnDefinition());
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -66,7 +68,7 @@ internal sealed partial class RecordingEditorWindow
         left.Children.Add(_deleteButton);
         bar.Children.Add(left);
 
-        var middle = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 14, 0) };
+        var middle = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0) };
         _status.MaxWidth = 900;
         middle.Children.Add(_progress);
         middle.Children.Add(_cancelOperation);
@@ -108,30 +110,46 @@ internal sealed partial class RecordingEditorWindow
             TimelineAudioLane audio = _audioLanes[lane];
             Button mute = FlatIconButton(audio.Muted ? LucideIconKind.VolumeX : LucideIconKind.Volume2, MuteTip(audio), (_, _) => ToggleTrackMute(audio.Key), 30, 16);
             mute.Tag = audio.Key;
-            mute.Height = 28;
+            mute.Height = 22;
+            mute.Padding = new Thickness(0);
             AddTrackLabel(audio.Icon, audio.Label, RecordingTimeline.AudioTop(lane), RecordingTimeline.AudioHeight, mute);
         }
-        AddTrackLabel(LucideIconKind.MousePointerClick, "Events", RecordingTimeline.EventsTop(_audioLanes.Count), RecordingTimeline.EventsHeight, null);
-        var markupTools = new StackPanel { Orientation = Orientation.Horizontal };
+        if (HasCamera)
+        {
+            var cameraTools = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            _cameraVisibilityButton = FlatIconButton(LucideIconKind.Eye, "Hide camera picture-in-picture", (_, _) => ToggleCameraVisibility(), 28, 15);
+            _cameraVisibilityButton.Height = 22;
+            _cameraVisibilityButton.Padding = new Thickness(0);
+            _cameraShapeButton = FlatIconButton(LucideIconKind.Circle, "Camera shape: circle or square", (sender, _) => OpenCameraShapeMenu((FrameworkElement)sender), 28, 15);
+            _cameraShapeButton.Height = 22;
+            _cameraShapeButton.Padding = new Thickness(0);
+            cameraTools.Children.Add(_cameraVisibilityButton);
+            cameraTools.Children.Add(_cameraShapeButton);
+            AddTrackLabel(LucideIconKind.Camera, "Camera", RecordingTimeline.CameraTop(_audioLanes.Count), RecordingTimeline.CameraHeight, cameraTools);
+        }
+        AddTrackLabel(LucideIconKind.MousePointerClick, "Events", RecordingTimeline.EventsTop(_audioLanes.Count, HasCamera), RecordingTimeline.EventsHeight, null);
+        var markupTools = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         _hideMarkupButton = FlatIconButton(LucideIconKind.Eye, "Hide markup in the player and the export (redactions stay covered)", (_, _) => ToggleHideMarkup(), 28, 15);
-        _hideMarkupButton.Height = 26;
+        _hideMarkupButton.Height = 22;
+        _hideMarkupButton.Padding = new Thickness(0);
         _rowsButton = FlatIconButton(LucideIconKind.Rows3, "Show every mark on its own row", (_, _) => ToggleMarkRows(), 28, 15);
-        _rowsButton.Height = 26;
+        _rowsButton.Height = 22;
+        _rowsButton.Padding = new Thickness(0);
         markupTools.Children.Add(_hideMarkupButton);
         markupTools.Children.Add(_rowsButton);
-        AddTrackLabel(LucideIconKind.Pencil, "Markup", RecordingTimeline.MarksTop(_audioLanes.Count), RecordingTimeline.RowHeight, markupTools);
+        AddTrackLabel(LucideIconKind.Pencil, "Markup", RecordingTimeline.MarksTop(_audioLanes.Count, HasCamera), RecordingTimeline.RowHeight, markupTools);
         UpdateTrackLabels();
     }
 
     private void AddTrackLabel(LucideIconKind icon, string text, double top, double height, UIElement? trailing)
     {
-        var row = new Grid { Width = LabelColumnWidth - 18, Height = Math.Max(height, 26) };
+        var row = new Grid { Width = LabelColumnWidth - 18, Height = Math.Max(height, 22) };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition());
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.Children.Add(new LucideIcon { Icon = icon, Width = 17, Height = 17, Foreground = Brush("#D4D6DB"), VerticalAlignment = VerticalAlignment.Center });
-        TextBlock name = Label(text, 15, Brushes.White, FontWeights.Normal);
-        name.Margin = new Thickness(10, 0, 0, 0);
+        row.Children.Add(new LucideIcon { Icon = icon, Width = 15, Height = 15, Foreground = Brush("#D4D6DB"), VerticalAlignment = VerticalAlignment.Center });
+        TextBlock name = Label(text, 13, Brushes.White, FontWeights.Normal);
+        name.Margin = new Thickness(8, 0, 0, 0);
         Grid.SetColumn(name, 1);
         row.Children.Add(name);
         if (trailing is not null)
@@ -203,7 +221,7 @@ internal sealed partial class RecordingEditorWindow
 
     private UIElement BuildTimelineGrip()
     {
-        var grip = new Thumb { Cursor = Cursors.SizeNS, ToolTip = "Drag to resize the timeline. Double-click for the default height.", Height = 14 };
+        var grip = new Thumb { Cursor = Cursors.SizeNS, ToolTip = "Drag to resize the timeline. Double-click for the default height.", Height = 10 };
         var template = new ControlTemplate(typeof(Thumb));
         var area = new FrameworkElementFactory(typeof(Border));
         area.SetValue(Border.BackgroundProperty, Brushes.Transparent);
@@ -216,7 +234,7 @@ internal sealed partial class RecordingEditorWindow
         template.VisualTree = area;
         grip.Template = template;
         grip.DragDelta += (_, e) => _timelineRow.Height = new GridLength(Math.Clamp(_timelineRow.Height.Value - e.VerticalChange, MinimumTimelineHeight, MaximumTimelineHeight));
-        grip.MouseDoubleClick += (_, _) => _timelineRow.Height = new GridLength(DefaultTimelineHeight);
+        grip.MouseDoubleClick += (_, _) => _timelineRow.Height = new GridLength(DefaultTimelineHeight + (HasCamera ? RecordingTimeline.CameraHeight + RecordingTimeline.LaneGap : 0));
         return grip;
     }
 

@@ -78,15 +78,29 @@ internal static class RecordingEditorText
 /// <summary>Rough output sizes for the export cards ("About 5.6 MB").</summary>
 internal static class ExportEstimate
 {
-    internal const double AudioBytesPerSecond = 192_000 / 8.0;
     /// <summary>Screen recordings palettize well; measured GIFs of desktop content land near this many bytes per pixel per frame.</summary>
     internal const double GifBytesPerPixel = 0.08;
 
-    /// <summary>The kept seconds at the source's own data rate (exports encode at the recorder's bitrate), less the audio when it is left out.</summary>
-    internal static long Mp4Bytes(double keptSeconds, double sourceBytesPerSecond, bool sourceHasAudio, bool includeAudio)
+    internal static long Mp4Bytes(double keptSeconds, Mp4ExportPlan plan, bool includeAudio) => plan.EstimateBytes(keptSeconds, includeAudio);
+
+    // A variable-rate encoder often needs fewer bits for desktop content than its configured target.
+    // Use the observed screen bitrate at the selected pixel rate and the encoder budget as two estimates.
+    internal static string Mp4Range(double seconds, Mp4ExportPlan plan, bool includeAudio, VideoInfo? source, long? fileBytes)
     {
-        double rate = sourceBytesPerSecond - (sourceHasAudio && !includeAudio ? AudioBytesPerSecond : 0);
-        return (long)Math.Round(Math.Max(0, keptSeconds) * Math.Max(0, rate));
+        long budget = Mp4Bytes(seconds, plan, includeAudio);
+        if (source is null || source.Duration <= 0 || source.Width <= 0 || source.Height <= 0 || fileBytes is not > 0)
+            return About(budget);
+        double sourceBitsPerSecond = fileBytes.Value * 8 / source.Duration;
+        double screenRate = Math.Max(0, sourceBitsPerSecond - (source.HasAudio ? plan.AudioBitrate : 0));
+        double pixelRatio = (plan.Width * (double)plan.Height) / (source.Width * (double)source.Height);
+        double adjustedRate = screenRate * pixelRatio * plan.FrameRate / Math.Max(1, source.FrameRate);
+        long observed = (long)Math.Round(seconds * (adjustedRate + (includeAudio ? plan.AudioBitrate : 0)) / 8);
+        if (observed <= 0 || observed >= budget * .95) return About(budget);
+        string low = RecordingEditorText.Size(observed), high = RecordingEditorText.Size(budget);
+        if (low == high) return About(budget);
+        int unit = low.LastIndexOf(' ');
+        if (unit >= 0 && high.EndsWith(low[unit..], StringComparison.Ordinal)) low = low[..unit];
+        return $"Est. {low}–{high}";
     }
 
     internal static long GifBytes(double keptSeconds, int framesPerSecond, int width, int height) =>

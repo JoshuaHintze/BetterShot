@@ -27,7 +27,7 @@ internal sealed record RecordingEditorContext(
 /// </summary>
 internal sealed partial class RecordingEditorWindow : Window, IRecordingTimelineHost
 {
-    private const double DefaultTimelineHeight = 262, MinimumTimelineHeight = 160, MaximumTimelineHeight = 620;
+    private const double DefaultTimelineHeight = 218, MinimumTimelineHeight = 140, MaximumTimelineHeight = 520;
     private static readonly List<RecordingEditorWindow> OpenEditors = [];
 
     private readonly RecordingEditorContext _context;
@@ -51,6 +51,7 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
     private bool _splitMode;
     private bool _snapping = true;
     private bool _closingConfirmed;
+    private bool _closingFlowActive;
 
     private RecordingEditorWindow(RecordingEntry entry, RecordingEditorContext context)
     {
@@ -65,7 +66,7 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
         _cancelOperation.Margin = new Thickness(0, 0, 10, 0);
         _cancelOperation.Visibility = Visibility.Collapsed;
         Title = "BetterShot Recording Editor - " + Path.GetFileName(entry.MoviePath);
-        Width = 1280; Height = 860; MinWidth = 1000; MinHeight = 680;
+        Width = 1280; Height = 820; MinWidth = 960; MinHeight = 640;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = WindowBrush; Foreground = Brushes.White;
         FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"); FontSize = 14;
@@ -79,7 +80,7 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
         SizeChanged += (_, _) => UpdateResponsiveLayout();
         Loaded += async (_, _) => await OpenRecordingAsync();
         Closing += Editor_Closing;
-        Closed += (_, _) => { OpenEditors.Remove(this); ShutDownPlayer(); DisposeAudio(); };
+        Closed += (_, _) => { OpenEditors.Remove(this); ShutDownPlayer(); DisposeAudio(); _reader?.Dispose(); _reader = null; };
     }
 
     internal RecordingEntry Entry { get; private set; }
@@ -202,7 +203,7 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
         _inspectorPanel = BuildInspector();
         _contentGrid.Children.Add(player);
         _contentGrid.Children.Add(_inspectorPanel);
-        _contentGrid.Margin = new Thickness(14, 2, 14, 0);
+        _contentGrid.Margin = new Thickness(12, 0, 12, 0);
         Grid.SetRow(_contentGrid, 1);
         root.Children.Add(_contentGrid);
         UpdateResponsiveLayout();
@@ -211,7 +212,7 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
         Grid.SetRow(grip, 2);
         root.Children.Add(grip);
         UIElement timeline = BuildTimelinePanel();
-        if (timeline is FrameworkElement frame) frame.Margin = new Thickness(14, 0, 14, 14);
+        if (timeline is FrameworkElement frame) frame.Margin = new Thickness(12, 0, 12, 12);
         Grid.SetRow(timeline, 3);
         root.Children.Add(timeline);
         return root;
@@ -249,6 +250,7 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
         _timeline.Fit();
         OnStateChanged();
         if (_loaded.Warning is string warning) SetStatus(warning, true);
+        else if (HasCamera) SetStatus("Use the pointer in the top toolbar to move the camera. The Camera lane controls its shape and visibility.");
         else if (_reader is not null) SetStatus("Space plays. B is split mode, I and O set in and out, Q and W delete to the playhead. Press ? for every shortcut.");
     }
 
@@ -283,6 +285,7 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
         try
         {
             RecordingEditProject.Save(Entry.MoviePath, State, _view, _markedCopyFingerprint, _loaded.PreservedMarks, _loaded.UnknownFields);
+            _loaded = _loaded with { View = _view };
             _history.MarkSaved();
             UpdateTitle();
             return true;
@@ -294,75 +297,38 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
         }
     }
 
-    /// <summary>
-    /// Saves the project. Leaving the editor (<paramref name="updateMarkedCopy"/>) also refreshes the marked copy that
-    /// dragging shares; Ctrl+S only saves (Done or Share update the marked copy).
-    /// </summary>
-    private async Task<bool> SaveAsync(bool updateMarkedCopy)
+    private bool SaveEditableProject()
     {
         CommitTextEdit();
-        if (!SaveProject()) return false;
-        if (updateMarkedCopy && NeedsMarkedCopyUpdate) return await UpdateMarkedCopyAsync();
-        UpdateToolbarState();
-        SetStatus(NeedsMarkedCopyUpdate
-            ? "Saved. Choose Done or Share so dragging this recording shares the edited version."
-            : "Saved. The recording stays as it was, so every cut and mark stays editable.");
+        if ((_history.IsDirty || _view != _loaded.View) && !SaveProject()) return false;
+        SetStatus("Recording project saved.");
         return true;
     }
 
-    private async void Editor_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    private void Editor_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         if (_closingConfirmed) return;
-        CommitTextEdit();
-        if (_operation is not null)
+        if (_closingFlowActive) { e.Cancel = true; return; }
+        _closingFlowActive = true;
+        try
         {
-            if (MessageBox.Show(this, "An export or tracking run is still going. Stop it and close the editor?", "BetterShot", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+            if (_operation is not null)
             {
-                e.Cancel = true;
-                return;
+                if (MessageBox.Show(this, "Stop the current export or tracking run and close the editor?", "BetterShot",
+                    MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+                _operation.Cancel();
             }
-            _operation.Cancel();
+            // Window.Close, Alt+F4 and Done all persist just the JSON. Only an explicit output action renders media.
+            e.Cancel = !SaveEditableProject();
         }
-        if (!_history.IsDirty) return;
-        MessageBoxResult answer = MessageBox.Show(this,
-            "You have cuts or marks that are not saved.\n\nYes saves them, No leaves without saving, Cancel keeps editing.",
-            "Leave without saving?", MessageBoxButton.YesNoCancel, MessageBoxImage.Question, MessageBoxResult.Cancel);
-        if (answer == MessageBoxResult.No) return;
-        e.Cancel = true;
-        if (answer != MessageBoxResult.Yes) return;
-        if (!await SaveAsync(updateMarkedCopy: true)) return;
-        _closingConfirmed = true;
-        Close();
+        finally { _closingFlowActive = false; }
     }
 
-    private async void Done_Click(object sender, RoutedEventArgs e)
-    {
-        CommitTextEdit();
-        if (State.HasEdits)
-        {
-            Pause();
-            MessageBoxResult answer = MessageBox.Show(this,
-                "Replace the original recording with your edited version?\n\n" +
-                "Yes: replace the original. Your markup, cuts, and redactions become part of the video for good and can't be changed later.\n\n" +
-                "No: keep the original as it is and save the edited version beside it as \"(edited)\". You can keep changing the markup.\n\n" +
-                "Cancel: keep editing.",
-                "Save your edits", MessageBoxButton.YesNoCancel, MessageBoxImage.Question, MessageBoxResult.Yes);
-            if (answer == MessageBoxResult.Cancel) return;
-            if (answer == MessageBoxResult.Yes)
-            {
-                if (!SaveProject() || !await ReplaceOriginalWithEditsAsync()) return;
-                _closingConfirmed = true;
-                Close();
-                return;
-            }
-        }
-        if (_history.IsDirty || NeedsMarkedCopyUpdate)
-        {
-            if (!await SaveAsync(updateMarkedCopy: true)) return;
-        }
-        _closingConfirmed = true;
-        Close();
-    }
+    private void Done_Click(object sender, RoutedEventArgs e) => Close();
 
     // ---------- State changes ----------
 
@@ -429,7 +395,7 @@ internal sealed partial class RecordingEditorWindow : Window, IRecordingTimeline
             case RecordingEditorCommand.ToggleLoop: ToggleLoop(); break;
             case RecordingEditorCommand.Undo: UndoEdit(); break;
             case RecordingEditorCommand.Redo: RedoEdit(); break;
-            case RecordingEditorCommand.Save: _ = SaveAsync(updateMarkedCopy: false); break;
+            case RecordingEditorCommand.Save: SaveEditableProject(); break;
             case RecordingEditorCommand.Escape: EscapePressed(); break;
             case RecordingEditorCommand.ShowShortcuts: ShowShortcutSheet(); break;
         }

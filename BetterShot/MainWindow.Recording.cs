@@ -227,6 +227,7 @@ public partial class MainWindow
         _recordingEvents = new RecordingEventLog();
         _recordingStartedLocal = DateTime.Now;
         SetStatus("Starting recording…", persistent: true);
+        await SoundEffects.PlayAsync(settings.RecordingStartSound, settings.RecordingStartCustomSoundPath, waitForFinish: true);
         _recorder = await ScreenRecorder.StartAsync(target, options, moviePath, cameraPath, _recordingEvents);
         _recorder.SourceClosed += (_, _) => Dispatcher.BeginInvoke(() =>
         {
@@ -298,6 +299,7 @@ public partial class MainWindow
             RecordingOutcome outcome = await recorder.StopAsync();
             RecordingEntry entry = FinalizeRecording(outcome);
             _recordingState.TryMove(RecordingState.Completed);
+            _ = SoundEffects.PlayAsync(_recordingSettings.RecordingStopSound, _recordingSettings.RecordingStopCustomSoundPath);
             RestoreHiddenWindows();
             PresentRecording(entry, outcome.Warning);
         }
@@ -509,6 +511,7 @@ public partial class MainWindow
 
     private void CleanupRecording()
     {
+        SoundEffects.Shutdown();
         TearDownLiveRecordingUi();
         RecordingThumbnailWindow.CloseAll();
         if (_recorder is ScreenRecorder recorder && _recordingState.TryMove(RecordingState.Stopping))
@@ -599,7 +602,7 @@ public partial class MainWindow
         if (Math.Abs(current.X - _recordingCardPointerDown.X) < SystemParameters.MinimumHorizontalDragDistance &&
             Math.Abs(current.Y - _recordingCardPointerDown.Y) < SystemParameters.MinimumVerticalDragDistance) return;
         if (!File.Exists(item.Entry.MoviePath)) return;
-        (string? share, string? note) = RecordingFiles.SharePath(item.Entry.MoviePath);
+        (string? share, string? note) = RecordingFiles.SharePath(item.Entry);
         if (note is not null) SetStatus(note, share is null);
         if (share is null) return;
         try { DragDrop.DoDragDrop((DependencyObject)sender, RecordingFiles.CreateDragData(share), DragDropEffects.Copy); }

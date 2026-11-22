@@ -27,8 +27,8 @@ internal sealed record LoadedEditProject(
 /// </summary>
 internal static class RecordingEditProject
 {
-    /// <summary>Version 2 added "mutedTracks"; version 1 files read as nothing muted.</summary>
-    internal const int CurrentVersion = 2;
+    /// <summary>Version 3 added undoable camera placement, visibility, and shape.</summary>
+    internal const int CurrentVersion = 3;
     internal const string SidecarSuffix = ".bettershot-edit";
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
     // Marks embed the library's annotation format, whose required properties must be written even when null.
@@ -92,7 +92,11 @@ internal static class RecordingEditProject
         string? warning = null;
         if (!sameMovie) warning = "The movie's length changed since it was edited, so its cuts were reset. Marks were kept.";
         if (preserved.Count > 0) warning = $"{preserved.Count} mark{(preserved.Count == 1 ? " was" : "s were")} made by a newer BetterShot and will be kept but not shown.";
-        var state = new RecordingEditState(timeline, marks, dto.HideMarkup ?? false) { MutedTracks = AudioTrackPlanning.FromKeys(dto.MutedTracks) };
+        var state = new RecordingEditState(timeline, marks, dto.HideMarkup ?? false)
+        {
+            MutedTracks = AudioTrackPlanning.FromKeys(dto.MutedTracks),
+            Camera = ReadCamera(dto.Camera)
+        };
         return new LoadedEditProject(state, new RecordingEditViewOptions(dto.MarksOnOwnRows ?? true), sameMovie ? dto.MarkedCopyFingerprint : null,
             preserved, dto.AdditionalFields, warning);
     }
@@ -118,8 +122,25 @@ internal static class RecordingEditProject
         Out = state.Timeline.OutPoint,
         HideMarkup = state.HideMarkup ? true : null,
         MutedTracks = AudioTrackPlanning.ToKeys(state.MutedTracks)?.ToList(),
+        // Omit the untouched default so old marked-copy fingerprints remain valid.
+        Camera = state.Camera == CameraEdit.Default ? null : ToDto(state.Camera),
         Marks = state.Marks.Select(mark => JsonSerializer.SerializeToElement(ToDto(mark), MarkJsonOptions)).ToList()
     };
+
+    private static CameraDto ToDto(CameraEdit camera) => new()
+    {
+        Visible = camera.Visible,
+        Shape = camera.Shape == CameraShape.Square ? "square" : "circle",
+        X = camera.Placement.X, Y = camera.Placement.Y, Size = camera.Placement.Size
+    };
+
+    private static CameraEdit ReadCamera(CameraDto? dto)
+    {
+        if (dto is null) return CameraEdit.Default;
+        CameraShape shape = string.Equals(dto.Shape, "square", StringComparison.OrdinalIgnoreCase) ? CameraShape.Square : CameraShape.Circle;
+        return new CameraEdit(dto.Visible ?? true, shape,
+            new CameraPlacement(dto.X ?? CameraPlacement.Default.X, dto.Y ?? CameraPlacement.Default.Y, dto.Size ?? CameraPlacement.Default.Size).Clamp());
+    }
 
     private static MarkDto ToDto(VideoMark mark) => new()
     {
@@ -169,9 +190,19 @@ internal static class RecordingEditProject
         [JsonPropertyName("marks")] public List<JsonElement> Marks { get; set; } = [];
         [JsonPropertyName("hideMarkup")] public bool? HideMarkup { get; set; }
         [JsonPropertyName("mutedTracks")] public List<string>? MutedTracks { get; set; }
+        [JsonPropertyName("camera")] public CameraDto? Camera { get; set; }
         [JsonPropertyName("marksOnOwnRows")] public bool? MarksOnOwnRows { get; set; }
         [JsonPropertyName("markedCopyFingerprint")] public string? MarkedCopyFingerprint { get; set; }
         [JsonExtensionData] public Dictionary<string, JsonElement>? AdditionalFields { get; set; }
+    }
+
+    private sealed class CameraDto
+    {
+        [JsonPropertyName("visible")] public bool? Visible { get; set; }
+        [JsonPropertyName("shape")] public string? Shape { get; set; }
+        [JsonPropertyName("x")] public double? X { get; set; }
+        [JsonPropertyName("y")] public double? Y { get; set; }
+        [JsonPropertyName("size")] public double? Size { get; set; }
     }
 
     private sealed class SegmentDto

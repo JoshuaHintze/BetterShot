@@ -18,7 +18,7 @@ namespace BetterShot.RecordingEditor;
 /// </summary>
 internal sealed partial class RecordingEditorWindow
 {
-    private const double HeaderHeight = 64;
+    private const double HeaderHeight = 52;
 
     /// <summary>A pill button and the tools it switches between (the first is the default).</summary>
     private sealed record ToolGroup(string Name, (VideoMarkTool Tool, LucideIconKind Icon, string Label)[] Members)
@@ -82,12 +82,13 @@ internal sealed partial class RecordingEditorWindow
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var title = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(20, 0, 12, 0) };
-        TextBlock heading = Label("Screen recording", 19, Brushes.White, FontWeights.SemiBold);
+        var title = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 10, 0) };
+        TextBlock heading = Label("Screen recording", 16, Brushes.White, FontWeights.SemiBold);
         heading.ToolTip = Path.GetFileName(Entry.MoviePath);
         title.Children.Add(heading);
         _subtitle.TextTrimming = TextTrimming.CharacterEllipsis;
-        _subtitle.Margin = new Thickness(0, 2, 0, 0);
+        _subtitle.FontSize = 11.5;
+        _subtitle.Margin = new Thickness(0, 1, 0, 0);
         title.Children.Add(_subtitle);
         bar.Children.Add(title);
 
@@ -111,8 +112,9 @@ internal sealed partial class RecordingEditorWindow
         foreach (ToolGroup group in _toolGroups)
         {
             ToolGroup current = group;
-            Button button = FlatIconButton(group.Members[0].Icon, group.Members[0].Label, (sender, _) => ToolGroupClicked(current, (FrameworkElement)sender), 40, 19);
-            button.Height = 36;
+            Button button = FlatIconButton(group.Members[0].Icon, group.Members[0].Label, (sender, _) => ToolGroupClicked(current, (FrameworkElement)sender), 34, 16);
+            button.Height = 32;
+            button.Padding = new Thickness(0);
             if (group.Members.Length > 1)
             {
                 var icon = (UIElement)button.Content;
@@ -123,16 +125,16 @@ internal sealed partial class RecordingEditorWindow
             group.Button = button;
             row.Children.Add(button);
         }
-        _followButton = FlatIconButton(LucideIconKind.Crosshair, "Follow: moves the selected redaction with what it covers as the recording plays", (sender, _) => OpenFollowMenu((FrameworkElement)sender), 40, 18);
-        _followButton.Height = 36;
+        _followButton = FlatIconButton(LucideIconKind.Crosshair, "Follow: moves the selected redaction with what it covers as the recording plays", (sender, _) => OpenFollowMenu((FrameworkElement)sender), 34, 16);
+        _followButton.Height = 32;
         _followButton.Visibility = Visibility.Collapsed;
         row.Children.Add(_followButton);
-        row.Children.Add(VerticalRule(22));
+        row.Children.Add(VerticalRule(18));
         row.Children.Add(BuildWidthButton());
         var pill = new Border
         {
             Background = SurfaceBrush, BorderBrush = SurfaceBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(5, 4, 5, 4), Child = row, VerticalAlignment = VerticalAlignment.Center
+            Padding = new Thickness(4, 2, 4, 2), Child = row, VerticalAlignment = VerticalAlignment.Center
         };
         WindowChrome.SetIsHitTestVisibleInChrome(pill, true);
         return pill;
@@ -141,31 +143,34 @@ internal sealed partial class RecordingEditorWindow
     /// <summary>The icon plus a small triangle in the bottom-right corner that marks a group with more tools.</summary>
     private static UIElement WithCornerTriangle(UIElement icon)
     {
-        var grid = new Grid { Width = 26, Height = 26 };
+        var grid = new Grid { Width = 22, Height = 22 };
         if (icon is FrameworkElement element) { element.HorizontalAlignment = HorizontalAlignment.Center; element.VerticalAlignment = VerticalAlignment.Center; }
         grid.Children.Add(icon);
         var triangle = new Polygon
         {
-            Points = [new Point(5, 0), new Point(5, 5), new Point(0, 5)], Fill = MutedText, Width = 5, Height = 5,
-            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -3, -2)
+            Points = [new Point(5, 0), new Point(5, 5), new Point(0, 5)], Width = 5, Height = 5,
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -1, -1)
         };
+        if (icon is Control control)
+            triangle.SetBinding(Polygon.FillProperty, new System.Windows.Data.Binding(nameof(Control.Foreground)) { Source = control });
+        else triangle.Fill = MutedText;
         grid.Children.Add(triangle);
         return grid;
     }
 
     private Button BuildWidthButton()
     {
-        _widthSwatch = new Border { Width = 18, Height = 3, CornerRadius = new CornerRadius(1.5), Background = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
-        _widthLabel = new TextBlock { FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, Margin = new Thickness(8, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
-        var chevron = new LucideIcon { Icon = LucideIconKind.ChevronDown, Width = 14, Height = 14, Foreground = MutedText };
+        _widthSwatch = new Border { Width = 15, Height = 3, CornerRadius = new CornerRadius(1.5), Background = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
+        _widthLabel = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, Margin = new Thickness(6, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
+        var chevron = new LucideIcon { Icon = LucideIconKind.ChevronDown, Width = 12, Height = 12, Foreground = MutedText };
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(_widthSwatch);
         row.Children.Add(_widthLabel);
         row.Children.Add(chevron);
         _widthButton = new Button
         {
-            Content = row, ToolTip = "Line width, color, text size, and redaction style for new marks and the selected mark", Height = 36,
-            Padding = new Thickness(10, 0, 8, 0), Background = Brushes.Transparent, Foreground = Brushes.White, BorderThickness = new Thickness(0), Cursor = Cursors.Hand
+            Content = row, ToolTip = "Line width, color, text size, and redaction style for new marks and the selected mark", Height = 30,
+            Padding = new Thickness(7, 0, 6, 0), Background = Brushes.Transparent, Foreground = Brushes.White, BorderThickness = new Thickness(0), Cursor = Cursors.Hand
         };
         _widthButton.Template = RoundedTemplate();
         System.Windows.Automation.AutomationProperties.SetName(_widthButton, "Style");
@@ -219,25 +224,25 @@ internal sealed partial class RecordingEditorWindow
     private UIElement BuildHeaderActions()
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
-        Button folder = IconButton(LucideIconKind.Folder, "Show in File Explorer", (_, _) => ShowInExplorer(), 42, 40, 19);
+        Button folder = IconButton(LucideIconKind.Folder, "Show in File Explorer", (_, _) => ShowInExplorer(), 34, 32, 16);
         folder.Background = SurfaceBrush;
         row.Children.Add(folder);
-        Button share = IconButton(LucideIconKind.Share, "Share the marked copy: copy the file, or share it with Windows (drag this button into an app to drop the file)", (sender, _) => OpenShareMenu((FrameworkElement)sender), 42, 40, 19);
+        Button share = IconButton(LucideIconKind.Share, "Share the marked copy: copy the file, or share it with Windows (drag this button into an app to drop the file)", (sender, _) => OpenShareMenu((FrameworkElement)sender), 34, 32, 16);
         share.Background = SurfaceBrush;
-        share.Margin = new Thickness(8, 0, 2, 0);
+        share.Margin = new Thickness(5, 0, 1, 0);
         AttachShareDrag(share);
         row.Children.Add(share);
-        row.Children.Add(VerticalRule(26));
-        _revertButton = TextButton("Revert", "Put the recording back the way it was", (_, _) => RevertRecording(), null, 40);
+        row.Children.Add(VerticalRule(20));
+        _revertButton = TextButton("Revert", "Put the recording back the way it was", (_, _) => RevertRecording(), null, 32);
         _revertButton.Background = Brushes.Transparent;
-        _revertButton.FontSize = 16;
+        _revertButton.FontSize = 13;
         row.Children.Add(_revertButton);
-        Button done = TextButton("Done", "Save and close: asks whether to replace the original or save an \"(edited)\" copy beside it", Done_Click, LucideIconKind.Check, 42);
+        Button done = TextButton("Done", "Save the editable project and close", Done_Click, LucideIconKind.Check, 34);
         done.Background = ActiveBrush;
         done.Foreground = Brushes.Black;
-        done.FontSize = 16;
-        done.Padding = new Thickness(16, 4, 18, 4);
-        done.Margin = new Thickness(8, 0, 4, 0);
+        done.FontSize = 13;
+        done.Padding = new Thickness(11, 3, 12, 3);
+        done.Margin = new Thickness(5, 0, 2, 0);
         row.Children.Add(done);
         WindowChrome.SetIsHitTestVisibleInChrome(row, true);
         return row;
@@ -255,11 +260,14 @@ internal sealed partial class RecordingEditorWindow
     }
 
     /// <summary>"Today at 1:20 PM · 0:13 · 2278 × 1008 · 29 fps · 5.6 MB".</summary>
+    private long? _sourceFileBytes;
+
     private void UpdateSubtitle()
     {
         long? bytes = null;
         try { bytes = new FileInfo(Entry.MoviePath).Length; }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException) { } // The size is informational.
+        _sourceFileBytes = bytes;
         _subtitle.Text = RecordingEditorText.Subtitle(Entry.CreatedUtc.ToLocalTime(), DateTime.Now, _info?.Duration ?? Entry.DurationSeconds,
             _info?.Width ?? Entry.Width, _info?.Height ?? Entry.Height, _info?.FrameRate ?? 0, bytes, CultureInfo.CurrentCulture);
         _subtitle.ToolTip = Entry.MoviePath;

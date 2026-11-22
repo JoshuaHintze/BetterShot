@@ -1,3 +1,4 @@
+using System.Windows.Controls;
 using BetterShot.Editing;
 using BetterShot.Persistence;
 using BetterShot.Recording;
@@ -18,7 +19,7 @@ namespace BetterShot.RecordingEditor;
 /// speed, NV12 conversion, burned-in redactions, and (when Windows media editing is available) real encodes of a
 /// synthetic clip. Uses isolated fixture folders only; no private desktop content is recorded.
 /// </summary>
-internal static class RecordingEditorDiagnostics
+internal static partial class RecordingEditorDiagnostics
 {
     internal static async Task RunAsync(string? output)
     {
@@ -219,7 +220,7 @@ internal static class RecordingEditorDiagnostics
         RecordingEditState muted = old.State with { MutedTracks = MutedAudioTracks.Microphone };
         string json = RecordingEditProject.Serialize(muted, old.View, null, [], null);
         JsonNode node = JsonNode.Parse(json)!;
-        Check(node["version"]!.GetValue<int>() == 2 && node["mutedTracks"]![0]!.GetValue<string>() == "mic", "Mutes were not written as version 2.");
+        Check(node["version"]!.GetValue<int>() == RecordingEditProject.CurrentVersion && node["mutedTracks"]![0]!.GetValue<string>() == "mic", "Mutes were not written in the current format.");
         Check(RecordingEditProject.Deserialize(json, 10).State.MutedTracks == MutedAudioTracks.Microphone, "Mutes did not round-trip.");
         Check(JsonNode.Parse(RecordingEditProject.Serialize(old.State, old.View, null, [], null))!["mutedTracks"] is null, "An unmuted project wrote mutedTracks.");
         Check(RecordingEditProject.Fingerprint(muted) != RecordingEditProject.Fingerprint(old.State), "The marked-copy fingerprint ignored a muted track.");
@@ -246,7 +247,13 @@ internal static class RecordingEditorDiagnostics
 
     private static void VerifyEstimatesAndText()
     {
-        Check(ExportEstimate.Mp4Bytes(10, 100_000, true, true) == 1_000_000 && ExportEstimate.Mp4Bytes(10, 100_000, true, false) == 760_000, "MP4 estimate is wrong.");
+        Mp4ExportPlan mp4Plan = ExportPlanning.PlanMp4(Mp4ExportPreset.P1080, 3840, 2160, 60);
+        Check(mp4Plan.Width == 1920 && mp4Plan.Height == 1080 && mp4Plan.FrameRate == 60, "1080p MP4 planning is wrong.");
+        Check(ExportPlanning.PlanMp4(Mp4ExportPreset.P1080, 1080, 1920, 60) is { Width: 1080, Height: 1920 }, "Portrait MP4 planning is wrong.");
+        Check(ExportPlanning.PlanMp4(Mp4ExportPreset.P720, 640, 360, 60) is { Width: 640, Height: 360 }, "MP4 planning upscaled a small source.");
+        Check(ExportPlanning.PlanMp4(Mp4ExportPreset.P480, 1920, 1080, 60) is { Width: 854, Height: 480, FrameRate: 30 }, "480p MP4 planning is wrong.");
+        Check(ExportEstimate.Mp4Bytes(10, mp4Plan, true) == mp4Plan.EstimateBytes(10, true)
+            && ExportEstimate.Mp4Bytes(10, mp4Plan, false) == mp4Plan.EstimateBytes(10, false), "MP4 estimate is wrong.");
         Check(ExportEstimate.GifBytes(10, 10, 100, 50) == 40_000, "GIF estimate is wrong.");
         Check(ExportEstimate.TimelapseBytes(40, 4, 1920, 1080) == 7_776_000, "Timelapse estimate is wrong.");
         Check(ExportEstimate.About(5_872_025) == "About 5.6 MB" && RecordingEditorText.Size(640 * 1024) == "640 KB" && RecordingEditorText.Size(3L * 1024 * 1024 * 1024 / 2) == "1.5 GB", "Sizes are formatted wrong.");
@@ -508,7 +515,7 @@ internal static class RecordingEditorDiagnostics
         RecordingEditProject.Save(movie, redacted, new RecordingEditViewOptions(), "stale", [], null);
         Check(RecordingSharing.ResolveSharePath(movie).Path is null, "A stale covered copy was shared.");
         RecordingEditProject.Save(movie, cutOnly, new RecordingEditViewOptions(), "stale", [], null);
-        Check(RecordingSharing.ResolveSharePath(movie) is (string original, string) && original == movie, "A stale marked copy without redaction should fall back to the original with a note.");
+        Check(RecordingSharing.ResolveSharePath(movie) is (null, string), "Sharing an edited recording must wait for the current copy.");
         RecordingSharing.DeleteMarkedCopy(movie);
         Check(!File.Exists(copy) && !Directory.Exists(Path.GetDirectoryName(copy)), "The marked copy was not deleted.");
     }
@@ -516,16 +523,16 @@ internal static class RecordingEditorDiagnostics
     private static void VerifySettings(string root)
     {
         CaptureSettings defaults = CaptureSettings.Default;
-        Check(defaults.GifFps == 12 && defaults.GifMaxDimension == 960 && defaults.KeepMarkedCopy && !defaults.TrimReplacesOriginal, "Recording editor defaults changed.");
+        Check(defaults.GifFps == 12 && defaults.GifMaxDimension == 960 && defaults.Mp4ExportPreset == Mp4ExportPreset.Original && defaults.KeepMarkedCopy && !defaults.TrimReplacesOriginal, "Recording editor defaults changed.");
         var store = new CaptureHistoryStore(Path.Combine(root, "roundtrip"));
-        store.UpdateSettings(settings => settings with { GifFps = 20, GifMaxDimension = 0, KeepMarkedCopy = false, TrimReplacesOriginal = true });
+        store.UpdateSettings(settings => settings with { GifFps = 20, GifMaxDimension = 0, Mp4ExportPreset = Mp4ExportPreset.P720, KeepMarkedCopy = false, TrimReplacesOriginal = true });
         CaptureSettings reloaded = new CaptureHistoryStore(Path.Combine(root, "roundtrip")).Settings;
-        Check(reloaded.GifFps == 20 && reloaded.GifMaxDimension == 0 && !reloaded.KeepMarkedCopy && reloaded.TrimReplacesOriginal, "Recording editor settings did not round-trip.");
+        Check(reloaded.GifFps == 20 && reloaded.GifMaxDimension == 0 && reloaded.Mp4ExportPreset == Mp4ExportPreset.P720 && !reloaded.KeepMarkedCopy && reloaded.TrimReplacesOriginal, "Recording editor settings did not round-trip.");
         string legacyRoot = Path.Combine(root, "legacy");
         Directory.CreateDirectory(legacyRoot);
-        File.WriteAllText(Path.Combine(legacyRoot, "settings.json"), "{\"RetentionDays\":7,\"GifFps\":13,\"GifMaxDimension\":-5,\"OnboardingFuture\":{\"Seen\":true}}");
+        File.WriteAllText(Path.Combine(legacyRoot, "settings.json"), "{\"RetentionDays\":7,\"GifFps\":13,\"GifMaxDimension\":-5,\"Mp4ExportPreset\":\"FuturePreset\",\"OnboardingFuture\":{\"Seen\":true}}");
         var legacy = new CaptureHistoryStore(legacyRoot);
-        Check(legacy.Settings.GifFps == 12 && legacy.Settings.GifMaxDimension == 960 && legacy.Settings.KeepMarkedCopy, "Invalid GIF settings were not reset.");
+        Check(legacy.Settings.GifFps == 12 && legacy.Settings.GifMaxDimension == 960 && legacy.Settings.Mp4ExportPreset == Mp4ExportPreset.Original && legacy.Settings.KeepMarkedCopy, "Invalid recording editor settings were not reset.");
         legacy.UpdateSettings(settings => settings with { TrimReplacesOriginal = true });
         JsonNode saved = JsonNode.Parse(File.ReadAllText(Path.Combine(legacyRoot, "settings.json")))!;
         Check(saved["OnboardingFuture"]?["Seen"]?.GetValue<bool>() == true && saved["TrimReplacesOriginal"]!.GetValue<bool>(), "Unknown settings were dropped by an editor settings write.");
@@ -671,8 +678,9 @@ internal static class RecordingEditorDiagnostics
 
         string lossless = await VerifyLosslessTrimAsync(source, reader.Info, root);
         string remix = await VerifyRemixedExportsAsync(source, reader, cut, markedState, root, dispatcher, progress);
+        await VerifyCameraExportsAsync(source, reader, cut, root);
         await RenderEditorAsync(source, reader.Info, root, screenshotFolder);
-        return $"live exports of a synthetic {width}x{height} clip (precise trim {trimmedDuration:0.00} s, burned-in redaction, {gifDecoder.Frames.Count}-frame looping GIF, 2x timelapse {lapseDuration:0.00} s, cancel cleanup), {lossless}, {remix}, and editor renders at 1280x800 and the minimum size";
+        return $"live exports of a synthetic {width}x{height} clip (precise trim {trimmedDuration:0.00} s, burned-in redaction, {gifDecoder.Frames.Count}-frame looping GIF, 2x timelapse {lapseDuration:0.00} s, cancel cleanup), {lossless}, {remix}, camera shape, placement, visibility, microphone audio and source timing in MP4/GIF/timelapse, and editor renders at 1280x800 and the minimum size";
     }
 
     /// <summary>Stream-copies the out-trimmed start of the Windows-encoded clip and checks it decodes to the same picture.</summary>
@@ -728,12 +736,14 @@ internal static class RecordingEditorDiagnostics
     /// <summary>Renders the editor (synthetic clip, separate tracks, click/key events) at 1280x800 and at its minimum size.</summary>
     private static async Task RenderEditorAsync(string movie, VideoInfo info, string root, string screenshotFolder)
     {
+        string camera = Path.Combine(root, "synthetic-camera.mp4");
         var events = new RecordingEventLog();
+        events.AddCamera(TimeSpan.FromSeconds(-0.03), "start"); // Exercises the short camera-tail hold at the movie end.
         events.AddClick(TimeSpan.FromSeconds(0.4), 40, 40);
         events.AddKey(TimeSpan.FromSeconds(1.1), "Ctrl+C");
         events.AddClick(TimeSpan.FromSeconds(1.7), 200, 100);
         events.WriteSidecar(movie);
-        var entry = new RecordingEntry(Guid.NewGuid(), movie, null, DateTime.UtcNow, info.Duration, info.Width, info.Height);
+        var entry = new RecordingEntry(Guid.NewGuid(), movie, camera, DateTime.UtcNow, info.Duration, info.Width, info.Height);
         RecordingEditorWindow editor = RecordingEditorWindow.Open(entry, new RecordingEditorContext(() => CaptureSettings.Default, _ => { }, _ => { }, root));
         try
         {
@@ -745,14 +755,27 @@ internal static class RecordingEditorDiagnostics
             editor.Height = editor.MinHeight;
             await Task.Delay(1200);
             await SaveRenderAsync(editor, Path.Combine(screenshotFolder, "recording-editor-min.png"));
+            editor.TimelineMoveTrimHandle(true, 0.25);
+            editor.TimelineDragFinished();
         }
         finally { editor.Close(); }
+        LoadedEditProject saved = RecordingEditProject.Load(movie, info.Duration);
+        Check(Math.Abs(saved.State.Timeline.EffectiveIn - .25) < .01, "Close saved an incorrect edit project.");
+        Check(!File.Exists(RecordingSharing.MarkedCopyPath(movie)), "Closing the editor rendered a share copy.");
     }
 
     private static async Task SaveRenderAsync(Window window, string path)
     {
         await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         window.UpdateLayout();
+        // The compact timeline shares this row with two buttons. Check the allocated text
+        // width because WPF can clip "Markup" silently while the controls still render.
+        TextBlock markup = FindMarkupLabel(window) ?? throw new InvalidOperationException("The timeline Markup label is missing.");
+        var size = new FormattedText(markup.Text, System.Globalization.CultureInfo.CurrentUICulture, markup.FlowDirection,
+            new Typeface(markup.FontFamily, markup.FontStyle, markup.FontWeight, markup.FontStretch), markup.FontSize,
+            markup.Foreground, VisualTreeHelper.GetDpi(markup).PixelsPerDip);
+        double available = System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(markup).Width - markup.Margin.Left - markup.Margin.Right;
+        Check(available >= Math.Ceiling(size.Width), $"The timeline clips the Markup label at {window.ActualWidth} DIP ({available} available, {size.Width} required).");
         DpiScale dpi = VisualTreeHelper.GetDpi(window);
         var bitmap = new RenderTargetBitmap(Math.Max(1, (int)Math.Ceiling(window.ActualWidth * dpi.DpiScaleX)), Math.Max(1, (int)Math.Ceiling(window.ActualHeight * dpi.DpiScaleY)), 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
         bitmap.Render(window);
@@ -760,6 +783,16 @@ internal static class RecordingEditorDiagnostics
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = File.Create(path);
         encoder.Save(stream);
+    }
+
+    private static TextBlock? FindMarkupLabel(DependencyObject parent)
+    {
+        if (parent is TextBlock { Text: "Markup" } label) return label;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            if (FindMarkupLabel(VisualTreeHelper.GetChild(parent, i)) is { } found) return found;
+        }
+        return null;
     }
 
     private static DecodedFrame SyntheticFrame(int width, int height, int index)

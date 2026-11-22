@@ -81,6 +81,12 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (e.Args.Contains("--sound-test", StringComparer.OrdinalIgnoreCase))
+        {
+            _ = RunSoundTestAsync(testOutput);
+            return;
+        }
+
         if (e.Args.Contains("--ocr-test", StringComparer.OrdinalIgnoreCase))
         {
             _ = RunOcrTestAsync(testOutput);
@@ -345,6 +351,11 @@ public partial class App : System.Windows.Application
     {
         try { await CaptureSettingsDiagnostics.RunAsync(output); Shutdown(0); }
         catch (Exception ex) { WriteTestResult(output, $"FAIL: capture settings test: {ex}", "capture-settings-test.txt"); Shutdown(1); }
+    }
+    private async Task RunSoundTestAsync(string? output)
+    {
+        try { await SoundEffectsDiagnostics.RunAsync(output); Shutdown(0); }
+        catch (Exception ex) { WriteTestResult(output, $"FAIL: sound effects test: {ex}", "sound-test.txt"); Shutdown(1); }
     }
     private async Task RunAiTestAsync(string? output)
     {

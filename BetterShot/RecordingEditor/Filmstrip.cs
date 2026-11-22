@@ -57,7 +57,9 @@ internal sealed class FilmstripCache : IDisposable
 
     internal void Attach(RecordingFrameReader? reader, int thumbnailWidth, int thumbnailHeight)
     {
+        RecordingFrameReader? previous = _reader;
         _reader = reader;
+        if (!ReferenceEquals(previous, reader)) previous?.Dispose();
         _duration = reader?.Info.Duration ?? 0;
         _thumbnailWidth = Math.Max(8, thumbnailWidth);
         _thumbnailHeight = Math.Max(8, thumbnailHeight);
@@ -139,6 +141,7 @@ internal sealed class FilmstripCache : IDisposable
     {
         _cancellation.Cancel();
         _cancellation.Dispose();
+        _reader?.Dispose();
         _reader = null;
         Clear();
     }

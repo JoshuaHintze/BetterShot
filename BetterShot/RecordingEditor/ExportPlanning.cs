@@ -1,10 +1,19 @@
 namespace BetterShot.RecordingEditor;
 
 internal enum RecordingExportKind { Mp4, Mp4WithoutAudio, Gif, Timelapse }
+internal enum Mp4ExportPreset { Original, P1080, P720, P480 }
+
+/// <summary>The exact geometry and rates used by an MP4 export and its size estimate.</summary>
+internal sealed record Mp4ExportPlan(int Width, int Height, double FrameRate, uint VideoBitrate, uint AudioBitrate)
+{
+    internal long EstimateBytes(double seconds, bool includeAudio) =>
+        (long)Math.Round(Math.Max(0, seconds) * (VideoBitrate + (includeAudio ? AudioBitrate : 0)) / 8.0);
+}
 
 /// <summary>Pure timing and sizing math for recording exports.</summary>
 internal static class ExportPlanning
 {
+    internal const uint Mp4AudioBitrate = 128_000;
     internal const double TimelapseTargetSeconds = 30;
     internal const int TimelapseFrameRate = 30;
     internal static readonly int[] TimelapseSpeeds = [2, 4, 8, 16];
@@ -14,6 +23,35 @@ internal static class ExportPlanning
     internal const int DefaultGifMaxDimension = 960;
     /// <summary>A GIF needs at least two frames and a quarter second of selection.</summary>
     internal const double MinimumGifSeconds = 0.25;
+
+    /// <summary>
+    /// Plans an H.264 export. Named sizes fit inside the usual landscape box (swapped for portrait), never upscale,
+    /// and retain the source rate except that the compact 480p preset is capped at 30 fps.
+    /// </summary>
+    internal static Mp4ExportPlan PlanMp4(Mp4ExportPreset preset, int sourceWidth, int sourceHeight, double sourceFrameRate)
+    {
+        int width = Math.Max(2, sourceWidth), height = Math.Max(2, sourceHeight);
+        (int boxWidth, int boxHeight) = preset switch
+        {
+            Mp4ExportPreset.P1080 => (1920, 1080),
+            Mp4ExportPreset.P720 => (1280, 720),
+            Mp4ExportPreset.P480 => (854, 480),
+            _ => (width, height)
+        };
+        if (height > width && preset != Mp4ExportPreset.Original) (boxWidth, boxHeight) = (boxHeight, boxWidth);
+        double scale = Math.Min(1, Math.Min(boxWidth / (double)width, boxHeight / (double)height));
+        if (scale < 1)
+        {
+            width = Math.Min(boxWidth & ~1, Math.Max(2, ((int)Math.Round(width * scale) + 1) & ~1));
+            height = Math.Min(boxHeight & ~1, Math.Max(2, ((int)Math.Round(height * scale) + 1) & ~1));
+        }
+        else (width, height) = Even(width, height);
+        double safeRate = Math.Clamp(double.IsFinite(sourceFrameRate) ? sourceFrameRate : 30, 1, 120);
+        double frameRate = preset == Mp4ExportPreset.P480 ? Math.Min(30, safeRate) : safeRate;
+        // Screen content remains crisp below the recorder's 0.1 bpp/f rate, while avoiding unexpectedly huge exports.
+        uint videoBitrate = (uint)Math.Clamp(Math.Round(width * (double)height * frameRate * 0.07), 800_000, 16_000_000);
+        return new Mp4ExportPlan(width, height, frameRate, videoBitrate, Mp4AudioBitrate);
+    }
 
     /// <summary>
     /// The timelapse speed: the user's choice from <see cref="TimelapseSpeeds"/>, or (when null) the smallest power of two

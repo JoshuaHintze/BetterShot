@@ -17,9 +17,9 @@ namespace BetterShot;
 /// </summary>
 public partial class MainWindow
 {
-    private const double LibraryWidth = 340;
+    private const double LibraryWidth = 260;
     /// <summary>Below this window width an open editor hides the library unless the user shows it again.</summary>
-    private const double LibraryAutoHideWidth = 1080;
+    private const double LibraryAutoHideWidth = 1360;
     /// <summary>Room kept free at the top right for the Settings and caption buttons.</summary>
     private const double CaptionInset = 4 * 40 + 24;
     /// <summary>Distance from the window's right edge to the caption buttons in the library-only and editing layouts.</summary>
@@ -28,9 +28,8 @@ public partial class MainWindow
     private static readonly Brush IdleDot = Frozen(Color.FromRgb(0x7A, 0x7C, 0x82));
     private readonly DispatcherTimer _libraryClock = new() { Interval = TimeSpan.FromMinutes(1) };
     private EditorSurface? _editor;
-    private bool _libraryWanted = true;
-    private bool _libraryForced;
-    private bool _compactLibraryHeader;
+    private bool _libraryWanted;
+    private bool _narrowLibraryWanted;
     private bool _gridMode;
     private bool _oldestFirst;
     private bool _showingVideos;
@@ -61,6 +60,8 @@ public partial class MainWindow
     /// <summary>Called once from the constructor, after the library has loaded.</summary>
     private void InitializeLibrary()
     {
+        _libraryWanted = CurrentSettings.EditorLibraryVisible;
+        _narrowLibraryWanted = CurrentSettings.EditorLibraryNarrowVisible;
         RecentListView.SortDescriptions.Add(new SortDescription(nameof(RecentCaptureItem.Timestamp), ListSortDirection.Descending));
         RecentListView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(RecentCaptureItem.DayGroup)));
         _presentation.EditInLibrary = document => { ShowAndActivate(); OpenInEditor(document); };
@@ -125,8 +126,19 @@ public partial class MainWindow
     private void ToggleLibrary()
     {
         bool visible = LibraryPanel.Visibility == Visibility.Visible;
-        _libraryWanted = !visible;
-        _libraryForced = !visible && ActualWidth < LibraryAutoHideWidth;
+        bool narrowEditor = _editor is not null && ActualWidth > 0 && ActualWidth < LibraryAutoHideWidth;
+        if (narrowEditor)
+        {
+            _narrowLibraryWanted = !visible;
+            if (_narrowLibraryWanted != CurrentSettings.EditorLibraryNarrowVisible)
+                TrySaveSettings(settings => settings with { EditorLibraryNarrowVisible = _narrowLibraryWanted }, "the narrow editor library preference");
+        }
+        else
+        {
+            _libraryWanted = !visible;
+            if (_libraryWanted != CurrentSettings.EditorLibraryVisible)
+                TrySaveSettings(settings => settings with { EditorLibraryVisible = _libraryWanted }, "the editor library preference");
+        }
         UpdateLibraryLayout();
     }
 
@@ -135,8 +147,7 @@ public partial class MainWindow
     {
         bool editing = _editor is not null;
         bool roomy = ActualWidth <= 0 || ActualWidth >= LibraryAutoHideWidth;
-        if (roomy) _libraryForced = false;
-        bool showLibrary = !editing || (_libraryWanted && (roomy || _libraryForced));
+        bool showLibrary = !editing || (roomy ? _libraryWanted : _narrowLibraryWanted);
         LibraryPanel.Visibility = showLibrary ? Visibility.Visible : Visibility.Collapsed;
         EditorHost.Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
         LibraryColumn.Width = !editing ? new GridLength(1, GridUnitType.Star) : showLibrary ? new GridLength(LibraryWidth) : new GridLength(0);
@@ -146,16 +157,12 @@ public partial class MainWindow
         RootGrid.Background = editing ? EditorSurface.Backdrop : null;
         // The caption buttons overlap the library header only while the library reaches the right edge.
         LibraryHeaderButtons.Margin = editing ? new Thickness(0) : new Thickness(0, 0, CaptionInset - 16, 0);
-        if (_compactLibraryHeader != editing)
-        {
-            _compactLibraryHeader = editing;
-            double size = editing ? 38 : 46;
-            SortButton.Width = SortButton.Height = ViewModeButton.Width = ViewModeButton.Height = size;
-            ViewModeButton.Margin = new Thickness(editing ? 6 : 10, 0, 0, 0);
-            VideosTabButton.Margin = new Thickness(editing ? 14 : 20, 0, 0, 0);
-            StyleTab(ImagesTabButton, !_showingVideos);
-            StyleTab(VideosTabButton, _showingVideos);
-        }
+        const double headerButtonSize = 34;
+        SortButton.Width = SortButton.Height = ViewModeButton.Width = ViewModeButton.Height = headerButtonSize;
+        ViewModeButton.Margin = new Thickness(6, 0, 0, 0);
+        VideosTabButton.Margin = new Thickness(14, 0, 0, 0);
+        StyleTab(ImagesTabButton, !_showingVideos);
+        StyleTab(VideosTabButton, _showingVideos);
         if (_editor is not null) _editor.LibraryVisible = showLibrary;
         Dispatcher.BeginInvoke(AlignCaptionButtons, DispatcherPriority.Loaded);
     }
@@ -193,8 +200,7 @@ public partial class MainWindow
 
     private void StyleTab(Button tab, bool selected)
     {
-        // Beside the editor the library column is narrow, so the tabs shrink to leave room for the sort and view buttons.
-        tab.FontSize = _compactLibraryHeader ? (selected ? 26 : 19) : (selected ? 32 : 24);
+        tab.FontSize = selected ? 18 : 16;
         tab.FontWeight = selected ? FontWeights.Bold : FontWeights.SemiBold;
         tab.Foreground = selected ? Brushes.White : new SolidColorBrush(Color.FromRgb(0x8E, 0x90, 0x97));
     }
@@ -310,6 +316,7 @@ public partial class MainWindow
         foreach (RecentCaptureItem item in _recentItems) item.RefreshAge();
         if (_libraryDay == DateTime.Today) return;
         _libraryDay = DateTime.Today;
+        foreach (RecentCaptureItem item in _recentItems) item.RefreshDayGroup();
         RecentListView.Refresh();
     }
 
@@ -348,6 +355,8 @@ internal sealed class RecentCaptureItem : INotifyPropertyChanged
     }
 
     internal void RefreshAge() => Raise(nameof(AgeText));
+
+    internal void RefreshDayGroup() => Raise(nameof(DayGroup));
 
     internal void SetHasText(bool value)
     {

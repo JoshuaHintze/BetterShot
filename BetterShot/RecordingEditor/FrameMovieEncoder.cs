@@ -176,31 +176,40 @@ internal sealed class FrameMovieEncoder
     private readonly IProgress<double>? _progress;
     private readonly CancellationToken _cancellation;
     private readonly VideoStreamDescriptor _videoDescriptor;
+    private readonly Mp4ExportPlan _plan;
     private int _nextFrame;
     private Exception? _failure;
 
-    private FrameMovieEncoder(int width, int height, double frameRate, int frameCount, Func<int, CancellationToken, Task<DecodedFrame>> renderFrame,
+    private FrameMovieEncoder(Mp4ExportPlan plan, int frameCount, Func<int, CancellationToken, Task<DecodedFrame>> renderFrame,
         KeptAudio? audio, IProgress<double>? progress, CancellationToken cancellation)
     {
-        _width = width;
-        _height = height;
-        _frameRate = frameRate;
+        _plan = plan;
+        _width = plan.Width;
+        _height = plan.Height;
+        _frameRate = plan.FrameRate;
         _frameCount = frameCount;
         _renderFrame = renderFrame;
         _audio = audio;
         _progress = progress;
         _cancellation = cancellation;
-        _videoDescriptor = new VideoStreamDescriptor(VideoEncodingProperties.CreateUncompressed(MediaEncodingSubtypes.Nv12, (uint)width, (uint)height));
+        var input = VideoEncodingProperties.CreateUncompressed(MediaEncodingSubtypes.Nv12, (uint)_width, (uint)_height);
+        RecordingExportProfiles.SetFrameRate(input, _frameRate);
+        _videoDescriptor = new VideoStreamDescriptor(input);
     }
 
-    /// <param name="renderFrame">Returns frame <c>index</c> as BGRA at exactly <paramref name="width"/> x <paramref name="height"/>.</param>
-    internal static async Task EncodeAsync(string outputPath, int width, int height, double frameRate, int frameCount,
+    /// <param name="renderFrame">Returns frame <c>index</c> as BGRA at exactly the dimensions in <paramref name="plan"/>.</param>
+    internal static async Task EncodeAsync(string outputPath, Mp4ExportPlan plan, int frameCount,
         Func<int, CancellationToken, Task<DecodedFrame>> renderFrame, KeptAudio? audio, IProgress<double>? progress, CancellationToken cancellation)
     {
-        (int evenWidth, int evenHeight) = ExportPlanning.Even(width, height);
-        var encoder = new FrameMovieEncoder(evenWidth, evenHeight, frameRate, frameCount, renderFrame, audio, progress, cancellation);
+        var encoder = new FrameMovieEncoder(plan, frameCount, renderFrame, audio, progress, cancellation);
         await encoder.RunAsync(outputPath);
     }
+
+    /// <summary>Compatibility overload for synthetic sources and timelapses that do not expose an MP4 preset.</summary>
+    internal static Task EncodeAsync(string outputPath, int width, int height, double frameRate, int frameCount,
+        Func<int, CancellationToken, Task<DecodedFrame>> renderFrame, KeptAudio? audio, IProgress<double>? progress, CancellationToken cancellation) =>
+        EncodeAsync(outputPath, ExportPlanning.PlanMp4(Mp4ExportPreset.Original, width, height, frameRate), frameCount,
+            renderFrame, audio, progress, cancellation);
 
     private async Task RunAsync(string outputPath)
     {
@@ -217,7 +226,7 @@ internal sealed class FrameMovieEncoder
         source.Starting += (_, args) => args.Request.SetActualStartPosition(TimeSpan.Zero);
         source.SampleRequested += Source_SampleRequested;
 
-        MediaEncodingProfile profile = RecordingExportProfiles.Mp4(_width, _height, _frameRate, _audio is not null);
+        MediaEncodingProfile profile = RecordingExportProfiles.Mp4(_plan, _audio is not null);
         await using var output = new FileStream(outputPath, FileMode.Create, FileAccess.ReadWrite, FileShare.Read);
         var transcoder = new MediaTranscoder { HardwareAccelerationEnabled = true, AlwaysReencode = true };
         PrepareTranscodeResult prepared = await transcoder.PrepareMediaStreamSourceTranscodeAsync(source, output.AsRandomAccessStream(), profile).AsTask(_cancellation);

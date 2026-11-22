@@ -44,7 +44,10 @@ internal static class EditorFeatureDiagnostics
             (Key.N, EditorTool.Step), (Key.B, EditorTool.Redact), (Key.S, EditorTool.Spotlight), (Key.M, EditorTool.Magnify), (Key.V, EditorTool.Select)
         };
         foreach ((Key key, EditorTool tool) in expectations)
+        {
             Check(editor.HandleShortcutForTest(key) && editor.CurrentToolForTest == tool, $"Shortcut {key} did not select {tool}.");
+            editor.VerifyToolIconCentersForTest($"{tool} selected");
+        }
         editor.HandleShortcutForTest(Key.O);
         editor.HandleShortcutForTest(Key.V);
         Check(editor.GroupToolForTest(EditorTool.Rectangle) == EditorTool.Ellipse, "The Shapes group did not remember its last-used tool.");
@@ -169,6 +172,7 @@ internal static class EditorFeatureDiagnostics
 
     private static void VerifyInspector(EditorSurface editor, EditorStyleStore styles)
     {
+        Check(EditorSurface.HeaderHeight == 44 && EditorSurface.InspectorWidth == 240, "The compact editor chrome dimensions changed.");
         editor.HandleShortcutForTest(Key.R);
         editor.SetInspectorForTest(true, docked: true);
         editor.UpdateLayout();

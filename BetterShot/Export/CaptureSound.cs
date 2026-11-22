@@ -54,6 +54,26 @@ internal static class CaptureSound
         return EncodeWave(samples);
     }
 
+    /// <summary>Builds a quiet multi-note tone used by the original bundled UI cues.</summary>
+    internal static byte[] CreateToneWave((double Frequency, double Start, double Duration)[] notes)
+    {
+        double duration = notes.Max(note => note.Start + note.Duration) + .03;
+        var samples = new short[(int)(SampleRate * duration)];
+        for (int index = 0; index < samples.Length; index++)
+        {
+            double time = (double)index / SampleRate, value = 0;
+            foreach ((double frequency, double start, double length) in notes)
+            {
+                double local = time - start;
+                if (local < 0 || local > length) continue;
+                double attack = Math.Min(1, local / .015), release = Math.Min(1, (length - local) / .05);
+                value += Math.Sin(2 * Math.PI * frequency * local) * attack * release * .18;
+            }
+            samples[index] = (short)Math.Round(Math.Clamp(value, -1, 1) * short.MaxValue);
+        }
+        return EncodeWave(samples);
+    }
+
     private static double Burst(double time, double start, double decay) =>
         time < start ? 0 : Math.Exp(-(time - start) * decay);
 

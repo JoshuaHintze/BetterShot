@@ -22,6 +22,9 @@ internal interface IRecordingTimelineHost
     bool MarksOnOwnRows { get; }
     IReadOnlyList<RecordingEvent> Events { get; }
     IReadOnlyList<TimelineAudioLane> AudioLanes { get; }
+    bool HasCamera { get; }
+    bool CameraEnabled { get; }
+    bool CameraVisibleAt(double sourceTime);
     FilmstripCache Filmstrip { get; }
     double VideoAspect { get; }
     void TimelineSeek(double time);
@@ -43,7 +46,7 @@ internal interface IRecordingTimelineHost
 /// </summary>
 internal sealed class RecordingTimeline : FrameworkElement
 {
-    internal const double RulerHeight = 26, VideoTop = 30, VideoHeight = 52, LaneGap = 6, AudioHeight = 28, EventsHeight = 20, RowHeight = 20, RowGap = 3, SidePadding = 14;
+    internal const double RulerHeight = 19, VideoTop = 22, VideoHeight = 38, LaneGap = 3, AudioHeight = 20, CameraHeight = 20, EventsHeight = 15, RowHeight = 16, RowGap = 2, SidePadding = 14;
     internal const double MaximumPixelsPerSecond = 2000;
     private const double HandleWidth = 11, EdgeGrip = 6, SnapPixels = 8, BarStep = 3;
     private static readonly double[] TickSteps = [0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800];
@@ -64,6 +67,8 @@ internal sealed class RecordingTimeline : FrameworkElement
     private static readonly Brush WaveBrush = Brush(0xC9, 0xCC, 0xD2);
     private static readonly Brush WaveDimBrush = Brush(0x5C, 0x5F, 0x66);
     private static readonly Brush WaveMutedBrush = Brush(0x46, 0x48, 0x4D);
+    private static readonly Brush CameraBrush = Brush(0x72, 0xB8, 0xFF);
+    private static readonly Brush CameraDimBrush = Brush(0x3F, 0x48, 0x55);
     private static readonly Pen PlayheadPen = new(Brush(0xF4, 0xF4, 0xF5), 1.5);
     private static readonly Pen SplitHoverPen = new(Brushes.White, 1) { DashStyle = DashStyles.Dash };
     private static readonly Brush ClickBrush = Brush(0xC9, 0xCC, 0xD2);
@@ -105,14 +110,15 @@ internal sealed class RecordingTimeline : FrameworkElement
     // ---------- Lane geometry (shared with the label column) ----------
 
     internal static double AudioTop(int lane) => VideoTop + VideoHeight + LaneGap + lane * (AudioHeight + LaneGap);
-    internal static double EventsTop(int audioLanes) => AudioTop(audioLanes);
-    internal static double MarksTop(int audioLanes) => EventsTop(audioLanes) + EventsHeight + LaneGap;
+    internal static double CameraTop(int audioLanes) => AudioTop(audioLanes);
+    internal static double EventsTop(int audioLanes, bool hasCamera = false) => AudioTop(audioLanes) + (hasCamera ? CameraHeight + LaneGap : 0);
+    internal static double MarksTop(int audioLanes, bool hasCamera = false) => EventsTop(audioLanes, hasCamera) + EventsHeight + LaneGap;
 
     /// <summary>Total height that shows every lane and <paramref name="markRows"/> rows of marks.</summary>
-    internal static double ContentHeight(int audioLanes, int markRows) => MarksTop(audioLanes) + Math.Max(1, markRows) * (RowHeight + RowGap) + 6;
+    internal static double ContentHeight(int audioLanes, int markRows, bool hasCamera = false) => MarksTop(audioLanes, hasCamera) + Math.Max(1, markRows) * (RowHeight + RowGap) + 6;
 
     private int AudioLaneCount => _host.AudioLanes.Count;
-    private double MarksTopY => MarksTop(AudioLaneCount);
+    private double MarksTopY => MarksTop(AudioLaneCount, _host.HasCamera);
 
     // ---------- Zoom and scroll ----------
 
@@ -188,6 +194,7 @@ internal sealed class RecordingTimeline : FrameworkElement
         DrawRuler(dc);
         DrawVideo(dc);
         DrawAudioLanes(dc);
+        DrawCameraLane(dc);
         DrawEvents(dc);
         DrawMarks(dc);
         if (_host.SplitMode && _hoverTime is double hover)
@@ -330,13 +337,28 @@ internal sealed class RecordingTimeline : FrameworkElement
 
     private void DrawEvents(DrawingContext dc)
     {
-        double y = EventsTop(AudioLaneCount) + EventsHeight / 2;
+        double y = EventsTop(AudioLaneCount, _host.HasCamera) + EventsHeight / 2;
         foreach (RecordingEvent item in _host.Events)
         {
             double x = TimeToX(item.Time);
             if (x < 0 || x > ActualWidth) continue;
             if (item.Kind == RecordingEvent.ClickKind) dc.DrawEllipse(ClickBrush, null, new Point(x, y), 3.5, 3.5);
             else if (item.Kind == RecordingEvent.KeyKind) dc.DrawRoundedRectangle(KeyBrush, null, new Rect(x - 3, y - 3, 6, 6), 1.5, 1.5);
+        }
+    }
+
+    private void DrawCameraLane(DrawingContext dc)
+    {
+        if (!_host.HasCamera) return;
+        double top = CameraTop(AudioLaneCount);
+        var box = new Rect(TimeToX(0), top, Math.Max(1, TimeToX(Duration) - TimeToX(0)), CameraHeight);
+        dc.DrawRoundedRectangle(LaneFill, null, box, 6, 6);
+        double left = Math.Max(0, box.Left), right = Math.Min(ActualWidth, box.Right);
+        for (double x = left + 3; x < right - 3; x += 3)
+        {
+            double time = XToTime(x + 1.5);
+            Brush brush = _host.CameraEnabled && _host.CameraVisibleAt(time) ? CameraBrush : CameraDimBrush;
+            dc.DrawRectangle(brush, null, new Rect(x, top + 4, 2, CameraHeight - 8));
         }
     }
 

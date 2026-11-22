@@ -45,7 +45,7 @@ internal static class RecordingFiles
     /// The file to drag out for a recording: its marked copy when it has been edited (always when it has a redaction),
     /// otherwise the movie. Null (with a reason) when a redacted recording has no up-to-date covered copy yet.
     /// </summary>
-    internal static (string? Path, string? Note) SharePath(string moviePath) => RecordingSharing.ResolveSharePath(moviePath);
+    internal static (string? Path, string? Note) SharePath(RecordingEntry entry) => RecordingSharing.ResolveSharePath(entry.MoviePath, entry.CameraPath);
 
     /// <summary>The movie as a file drop (CF_HDROP) for dragging into chat apps, email, or Explorer.</summary>
     internal static DataObject CreateDragData(string path)
@@ -62,7 +62,7 @@ internal static class RecordingFiles
     internal static void DeleteToRecycleBin(RecordingEntry entry)
     {
         RecordingSharing.DeleteMarkedCopy(entry.MoviePath);
-        string?[] paths = [entry.MoviePath, entry.CameraPath, RecordingEventLog.SidecarPath(entry.MoviePath), RecordingEditProject.SidecarPath(entry.MoviePath), .. RecordingAudioTracks.AllSidecarPaths(entry.MoviePath)];
+        string?[] paths = [entry.MoviePath, entry.CameraPath, RecordingEventLog.SidecarPath(entry.MoviePath), RecordingEditProject.SidecarPath(entry.MoviePath), CameraSourceResolver.SuppressionPath(entry.MoviePath), .. RecordingAudioTracks.AllSidecarPaths(entry.MoviePath)];
         foreach (string? path in paths)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) continue;

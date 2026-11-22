@@ -17,7 +17,7 @@ namespace BetterShot.RecordingEditor;
 /// </summary>
 internal sealed partial class RecordingEditorWindow
 {
-    private const double InspectorWidth = 350, NarrowWindowWidth = 1180;
+    private const double InspectorWidth = 328, NarrowWindowWidth = 940;
     private static readonly Brush LosslessGreen = Brush("#4ADE80");
     private readonly Grid _inspectorGrid = new();
     private readonly StackPanel _trimSection = new();
@@ -30,6 +30,9 @@ internal sealed partial class RecordingEditorWindow
     private readonly ToggleSwitch _replaceSwitch = new("Replace the original");
     private readonly TextBlock _exportDescription = new() { FontSize = 14, Foreground = Brush("#C9CCD2"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) };
     private readonly TextBlock _estimate = new() { FontSize = 14, Foreground = MutedText, VerticalAlignment = VerticalAlignment.Center };
+    private readonly StackPanel _mp4Options = new() { Orientation = Orientation.Horizontal };
+    private readonly TextBlock _mp4Dimensions = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 12.5, Margin = new Thickness(8, 8, 0, 0), Foreground = MutedText };
+    private readonly ComboBox _mp4Preset = new() { Height = 28, MinWidth = 140, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 0) };
     private readonly Dictionary<RecordingExportKind, Button> _exportCards = [];
     private TimeStepper? _inStepper, _outStepper;
     private Button? _trimButton, _exportButton;
@@ -49,7 +52,7 @@ internal sealed partial class RecordingEditorWindow
         // Scrolls only when the window is too short; otherwise it fills the panel so the export button sits at the bottom.
         var scroller = new ScrollViewer { Content = _inspectorGrid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false };
         scroller.SizeChanged += (_, _) => _inspectorGrid.MinHeight = _narrowLayout ? 0 : scroller.ActualHeight;
-        return Panel(scroller, new Thickness(18, 14, 18, 14));
+        return Panel(scroller, new Thickness(14, 11, 14, 11));
     }
 
     /// <summary>Wide: Trim above Export. Narrow: side by side under the player.</summary>
@@ -60,7 +63,7 @@ internal sealed partial class RecordingEditorWindow
         if (narrow)
         {
             _inspectorGrid.ColumnDefinitions.Add(new ColumnDefinition());
-            _inspectorGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
+            _inspectorGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
             _inspectorGrid.ColumnDefinitions.Add(new ColumnDefinition());
             Grid.SetRow(_trimSection, 0);
             Grid.SetRow(_exportSection, 0);
@@ -74,18 +77,18 @@ internal sealed partial class RecordingEditorWindow
             _inspectorGrid.RowDefinitions.Add(new RowDefinition());
             Grid.SetRow(_exportSection, 1);
             Grid.SetColumn(_exportSection, 0);
-            _trimSection.Margin = new Thickness(0, 0, 0, 14);
+            _trimSection.Margin = new Thickness(0, 0, 0, 10);
         }
     }
 
     private void BuildTrimSection()
     {
         var heading = new Grid();
-        heading.Children.Add(Label("Trim", 18, Brushes.White, FontWeights.SemiBold));
+        heading.Children.Add(Label("Trim", 16, Brushes.White, FontWeights.SemiBold));
         heading.Children.Add(_badge);
         _trimSection.Children.Add(heading);
 
-        var steppers = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+        var steppers = new Grid { Margin = new Thickness(0, 7, 0, 0) };
         steppers.ColumnDefinitions.Add(new ColumnDefinition());
         steppers.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
         steppers.ColumnDefinitions.Add(new ColumnDefinition());
@@ -96,7 +99,7 @@ internal sealed partial class RecordingEditorWindow
         steppers.Children.Add(_outStepper.Root);
         _trimSection.Children.Add(steppers);
 
-        var keeping = new Grid { Margin = new Thickness(0, 12, 0, 7) };
+        var keeping = new Grid { Margin = new Thickness(0, 8, 0, 5) };
         keeping.Children.Add(Label("Keeping", 15, Brush("#C9CCD2"), FontWeights.Normal));
         var amount = new TextBlock { FontSize = 15, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         amount.Inlines.Add(_keepingValue);
@@ -110,7 +113,7 @@ internal sealed partial class RecordingEditorWindow
         _trimSection.Children.Add(track);
         _trimSection.Children.Add(_snapNote);
 
-        var replace = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+        var replace = new Grid { Margin = new Thickness(0, 7, 0, 0) };
         replace.ColumnDefinitions.Add(new ColumnDefinition());
         replace.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         replace.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -122,9 +125,9 @@ internal sealed partial class RecordingEditorWindow
         _replaceSwitch.Toggled += (_, _) => SetReplaceOriginal(_replaceSwitch.IsOn);
         Grid.SetColumn(_replaceSwitch, 1);
         replace.Children.Add(_replaceSwitch);
-        _trimButton = TextButton("Trim", "Keep only what is highlighted", async (_, _) => await ApplyTrimAsync(), LucideIconKind.Scissors, 38);
+        _trimButton = TextButton("Trim", "Keep only what is highlighted", async (_, _) => await ApplyTrimAsync(), LucideIconKind.Scissors, 32);
         _trimButton.Background = SurfaceBrush;
-        _trimButton.Margin = new Thickness(14, 0, 0, 0);
+        _trimButton.Margin = new Thickness(8, 0, 0, 0);
         Grid.SetColumn(_trimButton, 2);
         replace.Children.Add(_trimButton);
         _trimSection.Children.Add(replace);
@@ -137,46 +140,73 @@ internal sealed partial class RecordingEditorWindow
         _exportSection.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _exportSection.RowDefinitions.Add(new RowDefinition());
         _exportSection.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var rule = new Border { Height = 1, Background = PanelBorderBrush, Margin = new Thickness(0, 0, 0, 12) };
+        var rule = new Border { Height = 1, Background = PanelBorderBrush, Margin = new Thickness(0, 0, 0, 8) };
         _exportSection.Children.Add(rule);
-        TextBlock heading = Label("Export", 18, Brushes.White, FontWeights.SemiBold);
+        TextBlock heading = Label("Export", 16, Brushes.White, FontWeights.SemiBold);
         Grid.SetRow(heading, 1);
         _exportSection.Children.Add(heading);
-        var cards = new UniformGrid { Columns = 3, Margin = new Thickness(-4, 10, -4, 0) };
+        var cards = new UniformGrid { Columns = 3, Margin = new Thickness(-3, 7, -3, 0) };
         cards.Children.Add(ExportCard(RecordingExportKind.Mp4, LucideIconKind.Film, "MP4"));
         cards.Children.Add(ExportCard(RecordingExportKind.Gif, LucideIconKind.Images, "GIF"));
         cards.Children.Add(ExportCard(RecordingExportKind.Timelapse, LucideIconKind.Clock, "Timelapse"));
         var details = new StackPanel();
         details.Children.Add(cards);
+        _mp4Preset.SetResourceReference(StyleProperty, "DarkComboBox");
+        foreach ((Mp4ExportPreset preset, string label) in new[]
+        {
+            (Mp4ExportPreset.Original, "Original resolution"), (Mp4ExportPreset.P1080, "Full HD · 1080p"),
+            (Mp4ExportPreset.P720, "HD · 720p"), (Mp4ExportPreset.P480, "Small · 480p")
+        })
+            _mp4Preset.Items.Add(new ComboBoxItem { Content = label, Tag = preset });
+        Mp4ExportPreset savedPreset = _context.Settings().Mp4ExportPreset;
+        _mp4Preset.SelectedItem = _mp4Preset.Items.Cast<ComboBoxItem>().First(item => Equals(item.Tag, savedPreset));
+        _mp4Preset.SelectionChanged += (_, _) => SetMp4Preset(SelectedMp4Preset);
+        System.Windows.Automation.AutomationProperties.SetName(_mp4Preset, "MP4 export quality");
+        _mp4Options.Children.Add(_mp4Preset);
+        _mp4Options.Children.Add(_mp4Dimensions);
+        details.Children.Add(_mp4Options);
         details.Children.Add(_exportDescription);
         Grid.SetRow(details, 2);
         _exportSection.Children.Add(details);
 
-        var footer = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+        var footer = new Grid { Margin = new Thickness(0, 8, 0, 0) };
         footer.ColumnDefinitions.Add(new ColumnDefinition());
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         footer.Children.Add(_estimate);
-        _exportButton = TextButton("Export MP4", "Export the kept stretch", async (_, _) => await ExportSelectedAsync(), LucideIconKind.Share, 40);
+        _exportButton = TextButton("Export MP4", "Export the kept stretch", async (_, _) => await ExportSelectedAsync(), LucideIconKind.Share, 34);
         _exportButton.Background = Brushes.Transparent;
         _exportButton.BorderBrush = SurfaceBorderBrush;
-        _exportButton.FontSize = 16;
-        _exportButton.Padding = new Thickness(16, 4, 18, 4);
+        _exportButton.FontSize = 13;
+        _exportButton.Padding = new Thickness(10, 3, 11, 3);
         _exportButton.Template = OutlinedTemplate();
         _exportButton.HorizontalContentAlignment = HorizontalAlignment.Center;
         Grid.SetColumn(_exportButton, 1);
         footer.Children.Add(_exportButton);
-        var footerFrame = new Border { BorderBrush = PanelBorderBrush, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 12, 0, 0), Child = footer };
+        var footerFrame = new Border { BorderBrush = PanelBorderBrush, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 8, 0, 0), Child = footer };
         Grid.SetRow(footerFrame, 4);
         _exportSection.Children.Add(footerFrame);
+    }
+
+    private Mp4ExportPreset SelectedMp4Preset =>
+        (_mp4Preset.SelectedItem as ComboBoxItem)?.Tag is Mp4ExportPreset preset ? preset : Mp4ExportPreset.Original;
+
+    private void SetMp4Preset(Mp4ExportPreset preset)
+    {
+        if (_context.UpdateSettings is { } update)
+        {
+            try { update(settings => settings with { Mp4ExportPreset = preset }); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { SetStatus($"The export choice could not be saved: {error.Message}", true); }
+        }
+        UpdateExportCards();
     }
 
     private Button ExportCard(RecordingExportKind kind, LucideIconKind icon, string title)
     {
         var heading = new StackPanel { Orientation = Orientation.Horizontal };
-        heading.Children.Add(new LucideIcon { Icon = icon, Width = 16, Height = 16, Foreground = Brushes.White, Margin = new Thickness(0, 0, 7, 0) });
-        heading.Children.Add(Label(title, 15, Brushes.White, FontWeights.SemiBold));
-        var detail = new TextBlock { FontSize = 12.5, Foreground = MutedText, Margin = new Thickness(0, 4, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
-        var content = new StackPanel { Margin = new Thickness(12, 10, 10, 10), HorizontalAlignment = HorizontalAlignment.Left };
+        heading.Children.Add(new LucideIcon { Icon = icon, Width = 13, Height = 13, Foreground = Brushes.White, Margin = new Thickness(0, 0, 3, 0) });
+        heading.Children.Add(Label(title, 12, Brushes.White, FontWeights.SemiBold));
+        var detail = new TextBlock { FontSize = 11.5, Foreground = MutedText, Margin = new Thickness(0, 3, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+        var content = new StackPanel { Margin = new Thickness(5, 7, 4, 7), HorizontalAlignment = HorizontalAlignment.Left };
         content.Children.Add(heading);
         content.Children.Add(detail);
         var card = new Button
@@ -255,6 +285,11 @@ internal sealed partial class RecordingEditorWindow
     /// <summary>The lossless plan for the current cuts, or null with the reason Trim would re-encode.</summary>
     private LosslessTrimPlan? CurrentLosslessPlan(out string reason)
     {
+        if (HasCamera)
+        {
+            reason = "Trimming renders the selected camera appearance into the saved video.";
+            return null;
+        }
         if (_losslessIndex is null) { reason = _losslessUnavailable ?? "Checking whether the movie can be trimmed without re-encoding…"; return null; }
         LosslessTrimPlan? plan = LosslessTrimPlanner.Plan(_losslessIndex.KeyframeTimes, State.Timeline.KeptRanges, FrameDuration, out string? why);
         reason = why ?? string.Empty;
@@ -311,6 +346,9 @@ internal sealed partial class RecordingEditorWindow
         int gifFps = ExportPlanning.NormalizeGifFrameRate(settings.GifFps), gifSize = ExportPlanning.NormalizeGifMaxDimension(settings.GifMaxDimension);
         int width = _info?.Width ?? Entry.Width, height = _info?.Height ?? Entry.Height;
         (int gifWidth, int gifHeight) = ExportPlanning.FitWithin(width, height, gifSize);
+        Mp4ExportPlan mp4Plan = ExportPlanning.PlanMp4(SelectedMp4Preset, width, height, _info?.FrameRate ?? 30);
+        _mp4Dimensions.Text = $"{mp4Plan.Width} × {mp4Plan.Height}";
+        _mp4Options.Visibility = _exportKind == RecordingExportKind.Mp4 ? Visibility.Visible : Visibility.Collapsed;
         foreach ((RecordingExportKind kind, Button card) in _exportCards)
         {
             bool selected = kind == _exportKind;
@@ -322,7 +360,7 @@ internal sealed partial class RecordingEditorWindow
                 {
                     RecordingExportKind.Gif => $"{(gifSize == 0 ? "Full size" : Math.Max(gifWidth, gifHeight) + " px")} · {gifFps} fps",
                     RecordingExportKind.Timelapse => $"{_timelapseSpeed}× · {RecordingTimeText.Whole(kept)} → {RecordingTimeText.Whole(kept / _timelapseSpeed)}",
-                    _ => "Full quality"
+                    _ => "Video"
                 };
             }
         }
@@ -339,25 +377,18 @@ internal sealed partial class RecordingEditorWindow
                 _ => "The kept stretch as an MP4, without audio."
             } + markup
         };
-        _estimate.Text = ExportEstimate.About(_exportKind switch
+        _estimate.Text = _exportKind switch
         {
-            RecordingExportKind.Gif => ExportEstimate.GifBytes(kept, gifFps, gifWidth, gifHeight),
-            RecordingExportKind.Timelapse => ExportEstimate.TimelapseBytes(kept, _timelapseSpeed, width, height),
-            _ => ExportEstimate.Mp4Bytes(kept, SourceBytesPerSecond(), _info?.HasAudio ?? false, audio.Mode != AudioOutputMode.Silent)
-        });
+            RecordingExportKind.Gif => ExportEstimate.About(ExportEstimate.GifBytes(kept, gifFps, gifWidth, gifHeight)),
+            RecordingExportKind.Timelapse => ExportEstimate.About(ExportEstimate.TimelapseBytes(kept, _timelapseSpeed, width, height)),
+            _ => ExportEstimate.Mp4Range(kept, mp4Plan, audio.Mode != AudioOutputMode.Silent, _info, _sourceFileBytes)
+        };
+        _estimate.ToolTip = _exportKind == RecordingExportKind.Mp4
+            ? "Estimated from the source recording and the selected encoder bitrate. Motion and overlays affect the finished size."
+            : null;
         if (_exportButton?.Content is StackPanel buttonRow && buttonRow.Children.OfType<TextBlock>().FirstOrDefault() is TextBlock label)
             label.Text = _exportKind switch { RecordingExportKind.Gif => "Export GIF", RecordingExportKind.Timelapse => "Export timelapse", _ => "Export MP4" };
         if (_exportButton is not null) _exportButton.IsEnabled = _operation is null;
-    }
-
-    private double SourceBytesPerSecond()
-    {
-        double duration = Math.Max(0.1, _info?.Duration ?? Entry.DurationSeconds);
-        try { return new FileInfo(Entry.MoviePath).Length / duration; }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        {
-            return Recording.RecordingGeometry.SuggestBitrate(Math.Max(2, Entry.Width), Math.Max(2, Entry.Height), 30) / 8.0;
-        }
     }
 
     /// <summary>Moves the panel under the player when the window is too narrow for three columns of content.</summary>
@@ -371,7 +402,7 @@ internal sealed partial class RecordingEditorWindow
         if (narrow)
         {
             _contentGrid.RowDefinitions.Add(new RowDefinition { MinHeight = 160 });
-            _contentGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14) });
+            _contentGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10) });
             _contentGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             _contentGrid.ColumnDefinitions.Add(new ColumnDefinition());
             Grid.SetColumn(_inspectorPanel, 0);
@@ -380,7 +411,7 @@ internal sealed partial class RecordingEditorWindow
         else
         {
             _contentGrid.ColumnDefinitions.Add(new ColumnDefinition());
-            _contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+            _contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
             _contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(InspectorWidth) });
             Grid.SetColumn(_inspectorPanel, 2);
             Grid.SetRow(_inspectorPanel, 0);

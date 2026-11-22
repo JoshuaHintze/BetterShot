@@ -16,7 +16,7 @@ namespace BetterShot.Editing;
 /// </summary>
 public sealed partial class EditorSurface : UserControl
 {
-    internal const double HeaderHeight = 64;
+    internal const double HeaderHeight = 44;
     private readonly CaptureDocument _document;
     private EditorStyleStore _styles;
     private readonly bool _libraryControls;
@@ -186,7 +186,7 @@ public sealed partial class EditorSurface : UserControl
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition());
         _floatingToolbarSlot.HorizontalAlignment = HorizontalAlignment.Center;
-        _floatingToolbarSlot.Margin = new Thickness(12, 2, 12, 12);
+        _floatingToolbarSlot.Margin = new Thickness(10, 2, 10, 8);
         Grid.SetColumn(_floatingToolbarSlot, 1);
         body.Children.Add(_floatingToolbarSlot);
         Grid.SetRow(_inspectorDock, 1);
@@ -239,7 +239,7 @@ public sealed partial class EditorSurface : UserControl
         _scroller.Content = imageBorder;
         area.Children.Add(_scroller);
         area.Children.Add(_inspectorFloatSlot);
-        _status.HorizontalAlignment = HorizontalAlignment.Left; _status.VerticalAlignment = VerticalAlignment.Bottom; _status.Margin = new Thickness(22, 0, 0, 34);
+        _status.HorizontalAlignment = HorizontalAlignment.Left; _status.VerticalAlignment = VerticalAlignment.Bottom; _status.Margin = new Thickness(18, 0, 0, 26);
         area.Children.Add(_status);
         area.Children.Add(BuildZoomPill());
         area.Children.Add(_toast);
@@ -261,7 +261,7 @@ public sealed partial class EditorSurface : UserControl
         var icon = new LucideIcon { Icon = kind, Width = 18, Height = 18, Margin = new Thickness(0, 0, 8, 0) };
         var label = new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.SemiBold };
         row.Children.Add(icon); row.Children.Add(label);
-        var b = new Button { Content = row, ToolTip = tip, Height = 36, MinWidth = minimumWidth, Margin = new Thickness(4, 0, 0, 0), Padding = new Thickness(12, 0, 14, 0), Foreground = Brushes.White, Background = Brush("#303133"), BorderThickness = new Thickness(0), Cursor = Cursors.Hand, HorizontalContentAlignment = HorizontalAlignment.Center };
+        var b = new Button { Content = row, ToolTip = tip, Height = 32, MinWidth = minimumWidth, Margin = new Thickness(3, 0, 0, 0), Padding = new Thickness(10, 0, 11, 0), Foreground = Brushes.White, Background = Brush("#303133"), BorderThickness = new Thickness(0), Cursor = Cursors.Hand, HorizontalContentAlignment = HorizontalAlignment.Center };
         icon.SetBinding(Control.ForegroundProperty, new System.Windows.Data.Binding(nameof(Button.Foreground)) { Source = b }); label.SetBinding(TextBlock.ForegroundProperty, new System.Windows.Data.Binding(nameof(Button.Foreground)) { Source = b });
         System.Windows.Automation.AutomationProperties.SetName(b, tip.Split('(')[0].Trim()); b.Template = ButtonTemplate(10); b.Click += click; return b;
     }

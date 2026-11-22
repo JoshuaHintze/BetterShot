@@ -7,6 +7,7 @@ internal sealed record RecordingEditState(EditTimeline Timeline, IReadOnlyList<V
 
     /// <summary>Audio tracks left out of the preview, the exports, and the marked copy (the movie file keeps them).</summary>
     internal MutedAudioTracks MutedTracks { get; init; }
+    internal CameraEdit Camera { get; init; } = CameraEdit.Default;
 
     internal bool HasRedaction => Marks.Any(mark => mark.IsRedaction);
 
@@ -18,8 +19,12 @@ internal sealed record RecordingEditState(EditTimeline Timeline, IReadOnlyList<V
 
     internal bool HasVisibleMarks => VisibleMarks.Any();
 
-    /// <summary>True when an export differs from the original movie (cuts, in/out, visible marks, or muted audio).</summary>
-    internal bool HasEdits => Timeline.HasCuts || HasVisibleMarks || MutedTracks != MutedAudioTracks.None;
+    /// <summary>True when an export differs from the original movie (cuts, marks, audio, or camera styling).</summary>
+    internal bool HasEdits => Timeline.HasCuts || HasVisibleMarks || MutedTracks != MutedAudioTracks.None || Camera != CameraEdit.Default;
+
+    internal RecordingEditState WithCameraPlacement(CameraPlacement placement) => this with { Camera = Camera with { Placement = placement.Clamp() } };
+    internal RecordingEditState WithCameraVisibility(bool visible) => this with { Camera = Camera with { Visible = visible } };
+    internal RecordingEditState WithCameraShape(CameraShape shape) => this with { Camera = Camera with { Shape = shape } };
 
     internal VideoMark? Find(Guid id) => Marks.FirstOrDefault(mark => mark.Id == id);
 
@@ -116,5 +121,5 @@ internal sealed class RecordingEditHistory
 
     private static bool SameContent(RecordingEditState first, RecordingEditState second) =>
         ReferenceEquals(first.Timeline, second.Timeline) && first.HideMarkup == second.HideMarkup && first.MutedTracks == second.MutedTracks
-        && first.Marks.SequenceEqual(second.Marks);
+        && first.Camera == second.Camera && first.Marks.SequenceEqual(second.Marks);
 }

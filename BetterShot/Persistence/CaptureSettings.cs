@@ -29,7 +29,17 @@ internal sealed partial record CaptureSettings
     public bool CopyToClipboard { get; init; } = true;
     public bool ShowThumbnail { get; init; } = true;
     public bool OpenEditorAfterCapture { get; init; }
+    /// <summary>Whether the capture library stays open beside the screenshot editor when there is room.</summary>
+    public bool EditorLibraryVisible { get; init; }
+    /// <summary>Whether the user explicitly keeps the library open beside the editor below the responsive breakpoint.</summary>
+    public bool EditorLibraryNarrowVisible { get; init; }
     public bool PlayCaptureSound { get; init; } = true;
+    public string ScreenshotSound { get; init; } = SoundEffects.Shutter;
+    public string ScreenshotCustomSoundPath { get; init; } = string.Empty;
+    public string RecordingStartSound { get; init; } = SoundEffects.None;
+    public string RecordingStartCustomSoundPath { get; init; } = string.Empty;
+    public string RecordingStopSound { get; init; } = SoundEffects.None;
+    public string RecordingStopCustomSoundPath { get; init; } = string.Empty;
     public int ThumbnailAutoDismissSeconds { get; init; }
     /// <summary>Empty means the default Pictures\BetterShot folder.</summary>
     public string SaveFolder { get; init; } = string.Empty;
@@ -67,6 +77,8 @@ internal sealed partial record CaptureSettings
     public int GifFps { get; init; } = RecordingEditor.ExportPlanning.DefaultGifFrameRate;
     /// <summary>Longest side of exported GIFs in pixels; 0 keeps the recording size.</summary>
     public int GifMaxDimension { get; init; } = RecordingEditor.ExportPlanning.DefaultGifMaxDimension;
+    /// <summary>Last quality/size preset selected for an explicit MP4 export.</summary>
+    public RecordingEditor.Mp4ExportPreset Mp4ExportPreset { get; init; } = RecordingEditor.Mp4ExportPreset.Original;
     /// <summary>Dragging an edited recording shares a rendered copy. Recordings with a redaction always do.</summary>
     public bool KeepMarkedCopy { get; init; } = true;
     /// <summary>Saving a trim replaces the original movie instead of saving a trimmed copy beside it.</summary>
@@ -107,6 +119,12 @@ internal sealed partial record CaptureSettings
         RetentionDays = RetentionDays is NeverExpire or (>= 1 and <= 365) ? RetentionDays : 7,
         CaptureDelaySeconds = DelayChoices.Contains(CaptureDelaySeconds) ? CaptureDelaySeconds : 0,
         ThumbnailAutoDismissSeconds = AutoDismissChoices.Contains(ThumbnailAutoDismissSeconds) ? ThumbnailAutoDismissSeconds : 0,
+        ScreenshotSound = SoundEffects.NormalizeId(ScreenshotSound, SoundEffects.Shutter),
+        ScreenshotCustomSoundPath = ScreenshotCustomSoundPath?.Trim() ?? string.Empty,
+        RecordingStartSound = SoundEffects.NormalizeId(RecordingStartSound, SoundEffects.None),
+        RecordingStartCustomSoundPath = RecordingStartCustomSoundPath?.Trim() ?? string.Empty,
+        RecordingStopSound = SoundEffects.NormalizeId(RecordingStopSound, SoundEffects.None),
+        RecordingStopCustomSoundPath = RecordingStopCustomSoundPath?.Trim() ?? string.Empty,
         SaveFolder = SaveFolder?.Trim() ?? string.Empty,
         FileNamePattern = string.IsNullOrWhiteSpace(FileNamePattern) ? FileNameTemplate.DefaultPattern : FileNamePattern,
         FileNameCounter = Math.Max(1, FileNameCounter),
@@ -127,7 +145,8 @@ internal sealed partial record CaptureSettings
         ScrollingHotkey = SafeHotkey(ScrollingHotkey),
         SkippedUpdateVersion = SkippedUpdateVersion?.Trim() ?? string.Empty,
         GifFps = RecordingEditor.ExportPlanning.NormalizeGifFrameRate(GifFps),
-        GifMaxDimension = RecordingEditor.ExportPlanning.NormalizeGifMaxDimension(GifMaxDimension)
+        GifMaxDimension = RecordingEditor.ExportPlanning.NormalizeGifMaxDimension(GifMaxDimension),
+        Mp4ExportPreset = Enum.IsDefined(Mp4ExportPreset) ? Mp4ExportPreset : RecordingEditor.Mp4ExportPreset.Original
     };
 
     private static HotkeyBinding SafeHotkey(HotkeyBinding binding) =>
@@ -151,7 +170,15 @@ internal static partial class CaptureSettingsMapper
             CopyToClipboard = dto.CopyToClipboard ?? defaults.CopyToClipboard,
             ShowThumbnail = dto.ShowThumbnail ?? defaults.ShowThumbnail,
             OpenEditorAfterCapture = dto.OpenEditorAfterCapture ?? defaults.OpenEditorAfterCapture,
+            EditorLibraryVisible = dto.EditorLibraryVisible ?? defaults.EditorLibraryVisible,
+            EditorLibraryNarrowVisible = dto.EditorLibraryNarrowVisible ?? defaults.EditorLibraryNarrowVisible,
             PlayCaptureSound = dto.PlayCaptureSound ?? defaults.PlayCaptureSound,
+            ScreenshotSound = dto.ScreenshotSound ?? defaults.ScreenshotSound,
+            ScreenshotCustomSoundPath = dto.ScreenshotCustomSoundPath ?? defaults.ScreenshotCustomSoundPath,
+            RecordingStartSound = dto.RecordingStartSound ?? defaults.RecordingStartSound,
+            RecordingStartCustomSoundPath = dto.RecordingStartCustomSoundPath ?? defaults.RecordingStartCustomSoundPath,
+            RecordingStopSound = dto.RecordingStopSound ?? defaults.RecordingStopSound,
+            RecordingStopCustomSoundPath = dto.RecordingStopCustomSoundPath ?? defaults.RecordingStopCustomSoundPath,
             ThumbnailAutoDismissSeconds = dto.ThumbnailAutoDismissSeconds ?? defaults.ThumbnailAutoDismissSeconds,
             SaveFolder = dto.SaveFolder ?? defaults.SaveFolder,
             AutoSave = dto.AutoSave ?? defaults.AutoSave,
@@ -181,6 +208,7 @@ internal static partial class CaptureSettingsMapper
             RecordingFrameRate = dto.RecordingFrameRate ?? defaults.RecordingFrameRate,
             GifFps = dto.GifFps ?? defaults.GifFps,
             GifMaxDimension = dto.GifMaxDimension ?? defaults.GifMaxDimension,
+            Mp4ExportPreset = ParseMp4ExportPreset(dto.Mp4ExportPreset),
             KeepMarkedCopy = dto.KeepMarkedCopy ?? defaults.KeepMarkedCopy,
             TrimReplacesOriginal = dto.TrimReplacesOriginal ?? defaults.TrimReplacesOriginal
         }.WithExtrasFrom(dto).Normalize();
@@ -200,7 +228,15 @@ internal static partial class CaptureSettingsMapper
             CopyToClipboard = settings.CopyToClipboard,
             ShowThumbnail = settings.ShowThumbnail,
             OpenEditorAfterCapture = settings.OpenEditorAfterCapture,
+            EditorLibraryVisible = settings.EditorLibraryVisible,
+            EditorLibraryNarrowVisible = settings.EditorLibraryNarrowVisible,
             PlayCaptureSound = settings.PlayCaptureSound,
+            ScreenshotSound = settings.ScreenshotSound,
+            ScreenshotCustomSoundPath = settings.ScreenshotCustomSoundPath,
+            RecordingStartSound = settings.RecordingStartSound,
+            RecordingStartCustomSoundPath = settings.RecordingStartCustomSoundPath,
+            RecordingStopSound = settings.RecordingStopSound,
+            RecordingStopCustomSoundPath = settings.RecordingStopCustomSoundPath,
             ThumbnailAutoDismissSeconds = settings.ThumbnailAutoDismissSeconds,
             SaveFolder = settings.SaveFolder,
             AutoSave = settings.AutoSave,
@@ -230,6 +266,7 @@ internal static partial class CaptureSettingsMapper
             RecordingFrameRate = settings.RecordingFrameRate,
             GifFps = settings.GifFps,
             GifMaxDimension = settings.GifMaxDimension,
+            Mp4ExportPreset = settings.Mp4ExportPreset.ToString(),
             KeepMarkedCopy = settings.KeepMarkedCopy,
             TrimReplacesOriginal = settings.TrimReplacesOriginal,
             AdditionalFields = additionalFields
@@ -238,6 +275,11 @@ internal static partial class CaptureSettingsMapper
 
     private static CaptureImageFormat ParseFormat(string? value) =>
         value?.Trim().ToLowerInvariant() is "jpeg" or "jpg" ? CaptureImageFormat.Jpeg : CaptureImageFormat.Png;
+
+    private static RecordingEditor.Mp4ExportPreset ParseMp4ExportPreset(string? value) =>
+        Enum.TryParse(value, ignoreCase: true, out RecordingEditor.Mp4ExportPreset preset) && Enum.IsDefined(preset)
+            ? preset
+            : RecordingEditor.Mp4ExportPreset.Original;
 
     private static HotkeyBinding FromDto(HotkeyDto? dto)
     {

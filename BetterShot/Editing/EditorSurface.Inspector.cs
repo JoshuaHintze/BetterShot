@@ -15,14 +15,14 @@ namespace BetterShot.Editing;
 /// </summary>
 public sealed partial class EditorSurface
 {
-    private const double InspectorWidth = 304;
+    internal const double InspectorWidth = 240;
     private readonly Border _inspectorCard = new()
     {
-        Width = InspectorWidth, CornerRadius = new CornerRadius(18), Background = Brush("#1E1F22"), BorderBrush = Brush("#303236"), BorderThickness = new Thickness(1),
+        Width = InspectorWidth, CornerRadius = new CornerRadius(14), Background = Brush("#1E1F22"), BorderBrush = Brush("#303236"), BorderThickness = new Thickness(1),
         VerticalAlignment = VerticalAlignment.Stretch
     };
-    private readonly Border _inspectorDock = new() { Margin = new Thickness(14, 0, 0, 16) };
-    private readonly Border _inspectorFloatSlot = new() { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(16, 0, 0, 16) };
+    private readonly Border _inspectorDock = new() { Margin = new Thickness(10, 0, 0, 10) };
+    private readonly Border _inspectorFloatSlot = new() { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(10, 0, 0, 10) };
     private (EditorTool Tool, Annotation? Selected) _inspectorContext = (EditorTool.Select, null);
     private bool _inspectorBuilt;
     private StrokePreview? _strokePreview;
@@ -46,12 +46,6 @@ public sealed partial class EditorSurface
     {
         _styles.InspectorDocked = !_styles.InspectorDocked;
         PlaceInspector();
-    }
-
-    private void ShowInspectorColors()
-    {
-        if (!_styles.ShowsInspector) { _styles.ShowsInspector = true; PlaceInspector(); }
-        _status.Text = "Pick any color in the inspector: palette, hex, or the eyedropper.";
     }
 
     private void PlaceInspector()
@@ -101,15 +95,28 @@ public sealed partial class EditorSurface
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition());
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.Children.Add(InspectorHeader(info));
+        bool lineTool = tool is EditorTool.Arrow or EditorTool.Line;
+        if (lineTool && GroupOf(tool) is { } lines)
+        {
+            var bar = new DockPanel { Margin = new Thickness(8, 7, 6, 5) };
+            Button hide = IconButton(LucideIconKind.PanelLeftClose, "Hide inspector (I)", (_, _) => ToggleInspector(), 28, 28, 16);
+            DockPanel.SetDock(hide, Dock.Right);
+            bar.Children.Add(hide);
+            var selector = VariantSegments(lines, tool);
+            selector.Margin = new Thickness(0, 0, 4, 0);
+            selector.ToolTip = _selected is null ? info.NextLabel : $"Selected {info.Noun}";
+            bar.Children.Add(selector);
+            grid.Children.Add(bar);
+        }
+        else grid.Children.Add(InspectorHeader(info));
 
         var top = new StackPanel();
-        if (GroupOf(tool) is { Tools.Length: > 1 } group) top.Children.Add(VariantSegments(group, tool));
+        if (!lineTool && GroupOf(tool) is { Tools.Length: > 1 } group) top.Children.Add(VariantSegments(group, tool));
         top.Children.Add(new Border { Height = 1, Background = Brush("#2C2D31"), Margin = new Thickness(0, 2, 0, 0) });
         Grid.SetRow(top, 1);
         grid.Children.Add(top);
 
-        var body = new StackPanel { Margin = new Thickness(20, 6, 20, 14) };
+        var body = new StackPanel { Margin = new Thickness(14, 4, 14, 10) };
         _strokePreview = null;
         if (styled) AddStyleSections(body, tool, style);
         else body.Children.Add(new TextBlock { Text = info.Hint, TextWrapping = TextWrapping.Wrap, Foreground = Brush("#B5B7BC"), FontSize = 14, LineHeight = 20, Margin = new Thickness(0, 14, 0, 0) });
@@ -126,28 +133,28 @@ public sealed partial class EditorSurface
 
     private FrameworkElement InspectorHeader(ToolInfo info)
     {
-        var header = new Grid { Margin = new Thickness(20, 20, 12, 14) };
+        var header = new Grid { Margin = new Thickness(14, 12, 8, 9) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition());
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.Children.Add(new Border
         {
-            Width = 52, Height = 52, CornerRadius = new CornerRadius(14), Background = Brush("#3A3317"), BorderBrush = Brush("#5E5121"), BorderThickness = new Thickness(1),
-            Child = new LucideIcon { Icon = info.Icon, Width = 24, Height = 24, Foreground = Brush("#FFD400"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+            Width = 38, Height = 38, CornerRadius = new CornerRadius(10), Background = Brush("#3A3317"), BorderBrush = Brush("#5E5121"), BorderThickness = new Thickness(1),
+            Child = new LucideIcon { Icon = info.Icon, Width = 19, Height = 19, Foreground = Brush("#FFD400"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
         });
-        var titles = new StackPanel { Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        var titles = new StackPanel { Margin = new Thickness(9, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         var name = new StackPanel { Orientation = Orientation.Horizontal };
-        name.Children.Add(new TextBlock { Text = info.Name, FontSize = 21, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        name.Children.Add(new TextBlock { Text = info.Name, FontSize = 18, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         name.Children.Add(new Border
         {
-            BorderBrush = Brush("#5A5C61"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(6, 0, 6, 1), Margin = new Thickness(9, 2, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            BorderBrush = Brush("#5A5C61"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 0, 4, 1), Margin = new Thickness(6, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock { Text = info.Shortcut, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brush("#D6D7DA") }
         });
         titles.Children.Add(name);
-        var scope = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) };
+        var scope = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 0), ToolTip = info.NextLabel };
         scope.Children.Add(new Ellipse { Width = 7, Height = 7, Fill = Brush("#FFD400"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1, 1, 8, 0) });
         string scopeText = _selected is not null && HasStyleOptions(info.Tool) ? $"Selected {info.Noun}" : info.NextLabel;
-        scope.Children.Add(new TextBlock { Text = scopeText, FontSize = 14, Foreground = Brush("#C9CBD0"), TextTrimming = TextTrimming.CharacterEllipsis });
+        scope.Children.Add(new TextBlock { Text = scopeText, FontSize = 13, Foreground = Brush("#C9CBD0"), TextTrimming = TextTrimming.CharacterEllipsis });
         titles.Children.Add(scope);
         Grid.SetColumn(titles, 1);
         header.Children.Add(titles);
@@ -166,22 +173,24 @@ public sealed partial class EditorSurface
             ToolInfo info = Info(tool);
             bool selected = tool == active;
             var content = new StackPanel { Orientation = Orientation.Horizontal };
-            var icon = new LucideIcon { Icon = info.Icon, Width = 16, Height = 16, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center };
+            bool showLabel = group.Tools.Length <= 2;
+            var icon = new LucideIcon { Icon = info.Icon, Width = 16, Height = 16, Margin = new Thickness(0, 0, showLabel ? 6 : 0, 0), VerticalAlignment = VerticalAlignment.Center };
             var label = new TextBlock { Text = info.Name, FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            content.Children.Add(icon); content.Children.Add(label);
+            content.Children.Add(icon);
+            if (showLabel) content.Children.Add(label);
             var button = new Button
             {
-                Content = content, Height = 40, Padding = new Thickness(6, 0, 6, 0), Cursor = Cursors.Hand, BorderThickness = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Center,
+                Content = content, Height = 30, Padding = new Thickness(4, 0, 4, 0), Cursor = Cursors.Hand, BorderThickness = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Center,
                 Background = selected ? Brush("#2F3034") : Brushes.Transparent, Foreground = selected ? Brushes.White : Brush("#A7A9AF"), ToolTip = info.Tip
             };
             icon.SetBinding(Control.ForegroundProperty, new System.Windows.Data.Binding(nameof(Button.Foreground)) { Source = button });
-            label.SetBinding(TextBlock.ForegroundProperty, new System.Windows.Data.Binding(nameof(Button.Foreground)) { Source = button });
+            if (showLabel) label.SetBinding(TextBlock.ForegroundProperty, new System.Windows.Data.Binding(nameof(Button.Foreground)) { Source = button });
             button.Template = ButtonTemplate(10);
             System.Windows.Automation.AutomationProperties.SetName(button, info.Name);
             button.Click += (_, _) => { if (_selected is not null) _selected = null; SelectTool(tool); };
             grid.Children.Add(button);
         }
-        return new Border { Child = grid, Background = Brush("#141517"), CornerRadius = new CornerRadius(13), Padding = new Thickness(4), Margin = new Thickness(20, 0, 20, 16) };
+        return new Border { Child = grid, Background = Brush("#141517"), CornerRadius = new CornerRadius(10), Padding = new Thickness(3), Margin = new Thickness(14, 0, 14, 9) };
     }
 
     private void AddStyleSections(StackPanel body, EditorTool tool, ToolStyle style)
@@ -206,10 +215,10 @@ public sealed partial class EditorSurface
             };
             body.Children.Add(InspectorSlider(label, style.Width, minimum, maximum, value => $"{value:0} pt", "width", value => s => s with { Width = value }));
         }
-        if (StrokePreview.Supports(tool))
+        if (tool is not (EditorTool.Arrow or EditorTool.Line) && StrokePreview.Supports(tool))
         {
-            _strokePreview = new StrokePreview(tool, () => CurrentStyle, _document.RenderContext) { Height = 84 };
-            body.Children.Add(new Border { Child = _strokePreview, Background = Brush("#141517"), CornerRadius = new CornerRadius(13), Margin = new Thickness(0, 14, 0, 0), ClipToBounds = true });
+            _strokePreview = new StrokePreview(tool, () => CurrentStyle, _document.RenderContext) { Height = 46 };
+            body.Children.Add(new Border { Child = _strokePreview, Background = Brush("#141517"), CornerRadius = new CornerRadius(9), Margin = new Thickness(0, 8, 0, 0), ClipToBounds = true, ToolTip = "Preview of the current style" });
         }
         if (tool is EditorTool.Rectangle or EditorTool.Ellipse)
         {
@@ -225,8 +234,8 @@ public sealed partial class EditorSurface
             body.Children.Add(InspectorSlider("Corner radius", style.CornerRadius, 0, 40, value => $"{value:0} pt", "radius", value => s => s with { CornerRadius = value }));
         if (tool == EditorTool.Magnify)
         {
-            body.Children.Add(SectionLabel("Zoom", $"{style.MagnifyZoom:0.#}×"));
-            body.Children.Add(Segments(MagnifyZoomPresets.Select(zoom => ($"{zoom:0.#}×", Math.Abs(style.MagnifyZoom - zoom) < .01, (Action)(() => ApplyStyleChange(s => s with { MagnifyZoom = zoom }, null, true))))));
+            body.Children.Add(SectionLabel("Zoom", $"{style.MagnifyZoom:0.#}Ã—"));
+            body.Children.Add(Segments(MagnifyZoomPresets.Select(zoom => ($"{zoom:0.#}Ã—", Math.Abs(style.MagnifyZoom - zoom) < .01, (Action)(() => ApplyStyleChange(s => s with { MagnifyZoom = zoom }, null, true))))));
             body.Children.Add(InspectorSlider("Diameter", style.MagnifyDiameter, 40, 600, value => $"{value:0} pt", "diameter", value => s => s with { MagnifyDiameter = value }));
         }
         if (tool is not (EditorTool.Redact or EditorTool.Spotlight))
@@ -247,11 +256,11 @@ public sealed partial class EditorSurface
     }
 
     private static TextBlock SectionHeading(string text) =>
-        new() { Text = text, FontSize = 15, Foreground = Brush("#E6E7EA"), VerticalAlignment = VerticalAlignment.Center };
+        new() { Text = text, FontSize = 13, Foreground = Brush("#E6E7EA"), VerticalAlignment = VerticalAlignment.Center };
 
     private static FrameworkElement SectionLabel(string label, string? value)
     {
-        var grid = new Grid { Margin = new Thickness(0, 18, 0, 10) };
+        var grid = new Grid { Margin = new Thickness(0, 11, 0, 6) };
         grid.Children.Add(SectionHeading(label));
         if (value is not null) grid.Children.Add(new TextBlock { Text = value, FontSize = 15, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center });
         return grid;
@@ -261,8 +270,8 @@ public sealed partial class EditorSurface
     {
         body.Children.Add(SectionLabel(label, ColorName(current)));
 
-        var quick = new Grid { Margin = new Thickness(0, 0, 0, 12) };
-        quick.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+        var quick = new Grid { Margin = new Thickness(0, 0, 0, 7) };
+        quick.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
         quick.ColumnDefinitions.Add(new ColumnDefinition());
         quick.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         quick.Children.Add(new TextBlock { Text = "QUICK", FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = Brush("#8E9097"), VerticalAlignment = VerticalAlignment.Center });
@@ -272,12 +281,12 @@ public sealed partial class EditorSurface
             int slot = index;
             Color color = _styles.QuickColors[slot];
             bool ringed = _editingQuickColors ? slot == _quickColorSlot : SameColor(color, current);
-            Button swatch = ColorDot(color, 36, ringed, _editingQuickColors ? $"Change quick color {slot + 1}" : ColorName(color), () =>
+            Button swatch = ColorDot(color, 22, ringed, _editingQuickColors ? $"Change quick color {slot + 1}" : ColorName(color), () =>
             {
                 if (_editingQuickColors) { _quickColorSlot = slot; UpdateInspector(force: true); }
                 else apply(color);
             });
-            swatch.Margin = new Thickness(0, 0, 10, 0);
+            swatch.Margin = new Thickness(0, 0, 4, 0);
             quickRow.Children.Add(swatch);
         }
         Grid.SetColumn(quickRow, 1);
@@ -287,7 +296,7 @@ public sealed partial class EditorSurface
             _editingQuickColors = !_editingQuickColors;
             _quickColorSlot = _editingQuickColors ? 0 : -1;
             UpdateInspector(force: true);
-        }, 34, 34, 18);
+        }, 28, 28, 15);
         customize.Foreground = _editingQuickColors ? Brush("#FFD400") : Brush("#A7A9AF");
         Grid.SetColumn(customize, 2);
         quick.Children.Add(customize);
@@ -295,11 +304,11 @@ public sealed partial class EditorSurface
         if (_editingQuickColors)
             body.Children.Add(new TextBlock { Text = "Choose a quick color, then pick its new color below.", FontSize = 12, Foreground = Brush("#FFD400"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, -4, 0, 10) });
 
-        var palette = new UniformGrid { Rows = 1, Columns = PaletteColors.Length, Margin = new Thickness(0, 0, 0, 14) };
+        var palette = new UniformGrid { Rows = 1, Columns = PaletteColors.Length, Margin = new Thickness(0, 0, 0, 8) };
         foreach ((string name, Color value) in PaletteColors)
         {
             Color color = value;
-            palette.Children.Add(ColorDot(color, 30, !_editingQuickColors && SameColor(color, current), name, () => ChooseColor(color, apply)));
+            palette.Children.Add(ColorDot(color, 20, !_editingQuickColors && SameColor(color, current), name, () => ChooseColor(color, apply)));
         }
         body.Children.Add(palette);
 
@@ -307,13 +316,22 @@ public sealed partial class EditorSurface
         custom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         custom.ColumnDefinitions.Add(new ColumnDefinition());
         custom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        custom.Children.Add(new Border { Width = 44, Height = 44, CornerRadius = new CornerRadius(11), Background = new SolidColorBrush(current), BorderBrush = Brush("#4A4C51"), BorderThickness = new Thickness(1) });
-        var hexFrame = new Border { Height = 44, CornerRadius = new CornerRadius(11), Background = Brush("#141517"), BorderBrush = Brush("#303236"), BorderThickness = new Thickness(1), Margin = new Thickness(10, 0, 10, 0), Padding = new Thickness(14, 0, 10, 0) };
-        var hexRow = new Grid();
-        hexRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        hexRow.ColumnDefinitions.Add(new ColumnDefinition());
-        hexRow.Children.Add(new TextBlock { Text = "Hex", FontSize = 15, Foreground = Brush("#8E9097"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
-        var hex = new TextBox { Text = Hex(current), FontSize = 15, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, MaxLength = 9 };
+        var pickerFace = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        pickerFace.Children.Add(new Border { Width = 15, Height = 15, CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(current), BorderBrush = Brush("#868891"), BorderThickness = new Thickness(1) });
+        pickerFace.Children.Add(new TextBlock { Text = "Pick color", FontSize = 13, Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+        var currentColor = new Button
+        {
+            Content = pickerFace,
+            Height = 32, Padding = new Thickness(6, 0, 6, 0), Background = Brush("#292A2D"), Foreground = Brushes.White, BorderThickness = new Thickness(0), ToolTip = "Choose a custom color",
+            HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center
+        };
+        currentColor.Template = ButtonTemplate(8);
+        System.Windows.Automation.AutomationProperties.SetName(currentColor, "Choose a custom color");
+        currentColor.Click += (_, _) => ChooseCustomColor(current, color => ChooseColor(color, apply));
+        custom.Children.Add(currentColor);
+        var hexFrame = new Border { Height = 32, CornerRadius = new CornerRadius(8), Background = Brush("#141517"), BorderBrush = Brush("#303236"), BorderThickness = new Thickness(1), Margin = new Thickness(6, 0, 6, 0), Padding = new Thickness(8, 0, 6, 0) };
+
+        var hex = new TextBox { Text = Hex(current), ToolTip = "Hex color", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, MaxLength = 9 };
         if (TryFindResource("EditorField") is Style field) hex.Style = field;
         System.Windows.Automation.AutomationProperties.SetName(hex, "Hex color");
         hex.KeyDown += (_, e) =>
@@ -322,12 +340,10 @@ public sealed partial class EditorSurface
             else if (e.Key == Key.Escape) { hex.Text = Hex(current); _image.Focus(); e.Handled = true; }
         };
         hex.LostKeyboardFocus += (_, _) => { if (!string.Equals(hex.Text, Hex(current), StringComparison.OrdinalIgnoreCase)) CommitHex(hex.Text, apply); };
-        Grid.SetColumn(hex, 1);
-        hexRow.Children.Add(hex);
-        hexFrame.Child = hexRow;
+        hexFrame.Child = hex;
         Grid.SetColumn(hexFrame, 1);
         custom.Children.Add(hexFrame);
-        Button pick = IconButton(LucideIconKind.Pipette, "Pick a color from the screen", (_, _) => _ = PickScreenColorAsync(apply), 44, 44, 19);
+        Button pick = IconButton(LucideIconKind.Pipette, "Pick a color from the screen", (_, _) => _ = PickScreenColorAsync(apply), 32, 32, 16);
         pick.Background = Brush("#2A2B2E");
         Grid.SetColumn(pick, 2);
         custom.Children.Add(pick);
@@ -428,9 +444,17 @@ public sealed partial class EditorSurface
     private FrameworkElement InspectorSlider(string label, double value, double minimum, double maximum, Func<double, string> format, string key, Func<double, Func<ToolStyle, ToolStyle>> change)
     {
         var panel = new StackPanel();
-        var heading = new Grid { Margin = new Thickness(0, 18, 0, 6) };
+        var heading = new Grid { Margin = new Thickness(0, 11, 0, 4) };
         heading.Children.Add(SectionHeading(label));
         var valueText = new TextBlock { Text = format(value), FontSize = 15, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        if (key == "width" && StyleTool is (EditorTool.Arrow or EditorTool.Line))
+        {
+            _strokePreview = new StrokePreview(StyleTool, () => CurrentStyle, _document.RenderContext)
+            {
+                Width = 68, Height = 22, HorizontalAlignment = HorizontalAlignment.Center, IsHitTestVisible = false
+            };
+            heading.Children.Add(_strokePreview);
+        }
         heading.Children.Add(valueText);
         panel.Children.Add(heading);
         var slider = new Slider { Minimum = minimum, Maximum = maximum, Value = Math.Clamp(value, minimum, maximum), IsSnapToTickEnabled = true, TickFrequency = 1, SmallChange = 1, LargeChange = 4 };
@@ -449,7 +473,7 @@ public sealed partial class EditorSurface
 
     private CheckBox Switch(string text, bool value, Func<bool, Func<ToolStyle, ToolStyle>> change)
     {
-        var box = new CheckBox { Content = text, IsChecked = value, Margin = new Thickness(0, 16, 0, 0) };
+        var box = new CheckBox { Content = text, IsChecked = value, Margin = new Thickness(0, 9, 0, 0), FontSize = 13 };
         if (TryFindResource("EditorSwitch") is Style style) box.Style = style;
         box.Checked += (_, _) => ApplyStyleChange(change(true), null, false);
         box.Unchecked += (_, _) => ApplyStyleChange(change(false), null, false);
@@ -458,10 +482,10 @@ public sealed partial class EditorSurface
 
     private void AddPresetSection(StackPanel body, EditorTool tool)
     {
-        var heading = new TextBlock { Text = "Style presets", FontSize = 16, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 22, 0, 12) };
+        var heading = new TextBlock { Text = "Style presets", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 14, 0, 7) };
         body.Children.Add(heading);
         var wrap = new WrapPanel();
-        Button add = IconButton(LucideIconKind.Plus, "Save Style as Preset", (_, _) => SaveCurrentStyleAsPreset(), 40, 40, 18);
+        Button add = IconButton(LucideIconKind.Plus, "Save Style as Preset", (_, _) => SaveCurrentStyleAsPreset(), 32, 32, 16);
         add.Background = Brush("#26272A"); add.Template = ButtonTemplate(20); add.Margin = new Thickness(0, 0, 8, 8);
         wrap.Children.Add(add);
         foreach (ToolStyle preset in _styles.Presets(tool))
@@ -470,7 +494,7 @@ public sealed partial class EditorSurface
             var content = new StackPanel { Orientation = Orientation.Horizontal };
             content.Children.Add(new Ellipse { Width = 14, Height = 14, Fill = new SolidColorBrush(chosen.Stroke), Stroke = Brush("#55FFFFFF"), StrokeThickness = 1, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center });
             content.Children.Add(new TextBlock { Text = PresetSummary(tool, chosen), FontSize = 13, VerticalAlignment = VerticalAlignment.Center });
-            var chip = new Button { Content = content, Height = 40, Margin = new Thickness(0, 0, 8, 8), Padding = new Thickness(12, 0, 14, 0), Background = Brush("#26272A"), Foreground = Brushes.White, BorderThickness = new Thickness(0), Cursor = Cursors.Hand, ToolTip = "Apply preset · right-click to remove" };
+            var chip = new Button { Content = content, Height = 32, Margin = new Thickness(0, 0, 6, 6), Padding = new Thickness(9, 0, 10, 0), Background = Brush("#26272A"), Foreground = Brushes.White, BorderThickness = new Thickness(0), Cursor = Cursors.Hand, ToolTip = "Apply preset Â· right-click to remove" };
             chip.Template = ButtonTemplate(20);
             System.Windows.Automation.AutomationProperties.SetName(chip, $"Apply preset {PresetSummary(tool, chosen)}");
             chip.Click += (_, _) => ApplyStyleChange(_ => chosen, null, true);
@@ -484,18 +508,12 @@ public sealed partial class EditorSurface
 
     private FrameworkElement InspectorFooter(EditorTool tool, ToolInfo info, bool styled)
     {
-        var panel = new StackPanel { Margin = new Thickness(20, 12, 14, 16) };
+        var panel = new StackPanel { Margin = new Thickness(14, 7, 8, 8) };
         var remember = new Grid();
         remember.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         remember.ColumnDefinitions.Add(new ColumnDefinition());
         remember.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        if (styled)
-        {
-            remember.Children.Add(new LucideIcon { Icon = LucideIconKind.History, Width = 17, Height = 17, Foreground = Brush("#A7A9AF"), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 10, 0) });
-            var text = new TextBlock { Text = $"{info.Name} remembers these for next time", FontSize = 14, Foreground = Brush("#B5B7BC"), TextWrapping = TextWrapping.Wrap };
-            Grid.SetColumn(text, 1);
-            remember.Children.Add(text);
-        }
+        if (styled) remember.ToolTip = $"{info.Name} remembers these settings for next time";
         bool docked = _styles.InspectorDocked;
         Button dock = IconButton(docked ? LucideIconKind.PictureInPicture2 : LucideIconKind.PanelLeft, docked ? "Float the inspector over the canvas" : "Dock the inspector beside the canvas", (_, _) => ToggleInspectorDocking(), 30, 30, 16);
         dock.Foreground = Brush("#9A9CA2"); dock.VerticalAlignment = VerticalAlignment.Top;
@@ -504,22 +522,12 @@ public sealed partial class EditorSurface
         panel.Children.Add(remember);
         string? hint = tool switch
         {
-            EditorTool.Arrow or EditorTool.Line => "Drag to snap to 45°",
+            EditorTool.Arrow or EditorTool.Line => "Drag to snap to 45Â°",
             EditorTool.Rectangle or EditorTool.Redact or EditorTool.Spotlight => "Drag for a square",
             EditorTool.Ellipse => "Drag for a circle",
             _ => null
         };
-        if (hint is not null)
-        {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
-            row.Children.Add(new Border
-            {
-                Width = 28, Height = 26, CornerRadius = new CornerRadius(6), BorderBrush = Brush("#4A4C51"), BorderThickness = new Thickness(1), Background = Brush("#26272A"), Margin = new Thickness(0, 0, 10, 0),
-                ToolTip = "Shift", Child = new LucideIcon { Icon = LucideIconKind.ArrowBigUp, Width = 14, Height = 14, Foreground = Brush("#D6D7DA"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
-            });
-            row.Children.Add(new TextBlock { Text = hint, FontSize = 14, Foreground = Brush("#B5B7BC"), VerticalAlignment = VerticalAlignment.Center });
-            panel.Children.Add(row);
-        }
+        if (hint is not null) remember.ToolTip = $"Hold Shift: {hint}";
         return new Border { Child = panel, BorderBrush = Brush("#2C2D31"), BorderThickness = new Thickness(0, 1, 0, 0) };
     }
 

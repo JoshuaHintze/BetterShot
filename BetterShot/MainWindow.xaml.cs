@@ -108,14 +108,14 @@ public partial class MainWindow : Window
         menu.Items.Add("Capture fullscreen", null, (_, _) => Dispatcher.BeginInvoke(() => _ = CaptureAsync(CaptureMode.Fullscreen)));
         menu.Items.Add(CreateRecordingTrayMenu());
         menu.Items.Add("Scrolling capture", null, (_, _) => Dispatcher.BeginInvoke(() => _ = ScrollingCaptureAsync()));
-        menu.Items.Add("Open BetterShot", null, (_, _) => Dispatcher.BeginInvoke(ShowAndActivate));
+        menu.Items.Add("Open BetterShot", null, (_, _) => Dispatcher.BeginInvoke(OpenLibrary));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => Dispatcher.BeginInvoke(ExitApplication));
         using (var stream = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/BetterShot.ico")).Stream)
         using (var loadedIcon = new System.Drawing.Icon(stream, 32, 32))
             _applicationIcon = (System.Drawing.Icon)loadedIcon.Clone();
         _trayIcon = new Forms.NotifyIcon { Icon = _applicationIcon, Text = "BetterShot", ContextMenuStrip = menu, Visible = true };
-        _trayIcon.DoubleClick += (_, _) => Dispatcher.BeginInvoke(ShowAndActivate);
+        _trayIcon.DoubleClick += (_, _) => Dispatcher.BeginInvoke(OpenLibrary);
         SourceInitialized += OnSourceInitialized;
         Closing += OnClosing;
         if (_historyStore?.ReplaceScreenshotShortcut == true) ApplyShortcut(true);
@@ -275,7 +275,7 @@ public partial class MainWindow : Window
     internal async Task<CaptureThumbnailWindow?> CompleteCaptureAsync(BitmapSource image, Action<BitmapSource>? writeClipboard = null)
     {
         CaptureSettings settings = CurrentSettings;
-        if (settings.PlayCaptureSound) CaptureSound.Play();
+        if (settings.PlayCaptureSound) _ = SoundEffects.PlayAsync(settings.ScreenshotSound, settings.ScreenshotCustomSoundPath);
         string? copyError = settings.CopyToClipboard
             ? await CopyToClipboardAsync(ImageExporter.PrepareForClipboard(image, settings.ToExportOptions()), writeClipboard ?? Clipboard.SetImage)
             : null;
@@ -619,6 +619,13 @@ public partial class MainWindow : Window
         _hotkeys.Dispose();
         if (_source is not null) { GlobalHotKey.Unregister(_source.Handle); _source.RemoveHook(WndProc); }
         _trayIcon.Visible = false; _trayIcon.Dispose(); _applicationIcon.Dispose(); _presentation.Dispose();
+    }
+
+    private void OpenLibrary()
+    {
+        CloseEmbeddedEditor(commit: true);
+        if (SettingsPanel.Visibility == Visibility.Visible) SetSettingsVisible(false);
+        ShowAndActivate();
     }
 
     private void ShowAndActivate() { ShowActivated = true; Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); Focus(); }

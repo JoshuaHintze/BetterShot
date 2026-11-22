@@ -158,7 +158,7 @@ internal sealed class RecordingThumbnailWindow : Window
             Math.Abs(current.Y - _pointerDown.Y) < SystemParameters.MinimumVerticalDragDistance) return;
         _armed = false;
         ((UIElement)sender).ReleaseMouseCapture();
-        (string? share, string? note) = RecordingFiles.SharePath(Entry.MoviePath);
+        (string? share, string? note) = RecordingFiles.SharePath(Entry);
         if (share is null)
         {
             MessageBox.Show(note, "BetterShot", MessageBoxButton.OK, MessageBoxImage.Information);

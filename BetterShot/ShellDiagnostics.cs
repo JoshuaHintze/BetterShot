@@ -12,6 +12,7 @@ internal static class ShellDiagnostics
     {
         string directory = ResolveDirectory(output);
         Directory.CreateDirectory(directory);
+        await VerifyLibraryPreferenceAsync(Path.Combine(directory, "library-preference-fixture"));
         MainWindow? shell = null;
         try
         {
@@ -56,27 +57,44 @@ internal static class ShellDiagnostics
             if (!ReferenceEquals(shell.SelectedDocumentForTest, selected)) throw new InvalidOperationException("Editing a recent capture changed the library selection.");
 
             // Library + editor in one window (KhingShot layout).
-            shell.Width = 1100;
+            shell.Width = 1500;
             shell.Height = 900;
             shell.OpenInEditorForTest(selected);
             await SettleAsync(shell);
             Editing.EditorSurface editor = shell.EmbeddedEditorForTest ?? throw new InvalidOperationException("The capture did not open in the embedded editor.");
-            if (!shell.LibraryVisibleForTest) throw new InvalidOperationException("The library did not stay beside the editor at 1100 DIP.");
+            if (shell.LibraryVisibleForTest) throw new InvalidOperationException("A first edit did not default to a collapsed library.");
             editor.SetInspectorForTest(true, docked: true);
             await SettleAsync(shell);
-            VerifyVisibleControlsFit(shell, "library and editor at 1100 x 900");
-            editor.VerifyChromeFitsForTest("library and editor at 1100 x 900");
-            Render(shell, Path.Combine(directory, "shell-editor-1100x900.png"));
+            editor.HandleShortcutForTest(System.Windows.Input.Key.R);
+            editor.VerifyToolIconCentersForTest("Rectangle selected shell render");
+            editor.VerifyChromeFitsForTest("default collapsed library at 1500 x 900");
+            Render(shell, Path.Combine(directory, "shell-editor-rectangle-selected.png"));
+            shell.ToggleLibraryForTest();
+            await SettleAsync(shell);
+            if (!shell.LibraryVisibleForTest) throw new InvalidOperationException("The library did not open beside the editor at 1500 DIP.");
+            await SettleAsync(shell);
+            VerifyVisibleControlsFit(shell, "library and editor at 1500 x 900");
+            editor.VerifyChromeFitsForTest("library and editor at 1500 x 900");
+            Render(shell, Path.Combine(directory, "shell-editor-1500x900.png"));
             editor.SetInspectorForTest(true, docked: false);
             await SettleAsync(shell);
-            editor.VerifyChromeFitsForTest("floating inspector at 1100 x 900");
+            editor.VerifyChromeFitsForTest("floating inspector at 1500 x 900");
             Render(shell, Path.Combine(directory, "shell-editor-floating-inspector.png"));
             shell.SelectDocumentForTest(older);
             await SettleAsync(shell);
             if (!ReferenceEquals(shell.EmbeddedEditorForTest?.Document, older)) throw new InvalidOperationException("Picking another row did not switch the editor.");
+            shell.Width = 1100;
+            await SettleAsync(shell);
+            if (shell.LibraryVisibleForTest) throw new InvalidOperationException("The library did not auto-hide beside the editor at 1100 DIP.");
             shell.ToggleLibraryForTest();
             await SettleAsync(shell);
-            if (shell.LibraryVisibleForTest) throw new InvalidOperationException("The sidebar toggle did not hide the library.");
+            if (!shell.LibraryVisibleForTest) throw new InvalidOperationException("The sidebar toggle did not restore the library manually at 1100 DIP.");
+            VerifyVisibleControlsFit(shell, "manually restored library and editor at 1100 x 900");
+            editor = shell.EmbeddedEditorForTest!;
+            editor.VerifyChromeFitsForTest("manually restored library and editor at 1100 x 900");
+            shell.ToggleLibraryForTest();
+            await SettleAsync(shell);
+            if (shell.LibraryVisibleForTest) throw new InvalidOperationException("The sidebar toggle did not hide the manually restored library.");
             editor = shell.EmbeddedEditorForTest!;
             editor.VerifyChromeFitsForTest("editor without library at 1100 x 900");
             Render(shell, Path.Combine(directory, "shell-editor-no-library.png"));
@@ -144,7 +162,60 @@ internal static class ShellDiagnostics
 
             shell.CloseForTest();
             shell = null;
-            App.WriteTestResult(Path.Combine(directory, "shell-test.txt"), "PASS: empty and populated library (list, grid, Videos, day groups), library + editor at 1100x900, floating inspector, hidden library, wide header toolbar, minimum-size editor and library, Settings panel, thumbnail edit refresh, and close-to-tray reopen behavior");
+            App.WriteTestResult(Path.Combine(directory, "shell-test.txt"), "PASS: empty and populated library (list, grid, Videos, day groups), default-collapsed editor library, persisted roomy and narrow library preferences across switches and restarts, responsive auto-hide, floating inspector, wide header toolbar, minimum-size editor and library, Settings panel, thumbnail edit refresh, and close-to-tray reopen behavior");
+        }
+        finally { shell?.CloseForTest(); }
+    }
+
+    private static async Task VerifyLibraryPreferenceAsync(string root)
+    {
+        Directory.CreateDirectory(root);
+        CaptureDocument first = ShellPreviewSamples.Board(), second = ShellPreviewSamples.Code();
+        MainWindow? shell = null;
+        try
+        {
+            shell = new MainWindow(enableHistory: true, historyRoot: root) { Width = 1500, Height = 900 };
+            shell.Show(); shell.PresentDocumentForTest(first); shell.PresentDocumentForTest(second); shell.OpenInEditorForTest(first);
+            await SettleAsync(shell);
+            if (shell.LibraryVisibleForTest) throw new InvalidOperationException("The persisted editor library preference did not default to collapsed.");
+            shell.ToggleLibraryForTest(); await SettleAsync(shell);
+            if (!shell.LibraryVisibleForTest || !new Persistence.CaptureHistoryStore(root).Settings.EditorLibraryVisible)
+                throw new InvalidOperationException("Opening the editor library did not persist the preference.");
+            shell.SelectDocumentForTest(second); await SettleAsync(shell);
+            if (!shell.LibraryVisibleForTest) throw new InvalidOperationException("Switching documents lost the open editor library preference.");
+            shell.CloseEditorForTest(); shell.OpenInEditorForTest(first); await SettleAsync(shell);
+            if (!shell.LibraryVisibleForTest) throw new InvalidOperationException("Reopening the editor lost the open library preference.");
+            shell.CloseForTest(); shell = null;
+
+            shell = new MainWindow(enableHistory: true, historyRoot: root) { Width = 1500, Height = 900 };
+            shell.Show(); shell.PresentDocumentForTest(first); shell.OpenInEditorForTest(first); await SettleAsync(shell);
+            if (!shell.LibraryVisibleForTest) throw new InvalidOperationException("Restart did not restore the open editor library preference.");
+            shell.Width = 1100; await SettleAsync(shell);
+            if (shell.LibraryVisibleForTest) throw new InvalidOperationException("The responsive breakpoint did not auto-hide a preferred-open library.");
+            shell.ToggleLibraryForTest(); await SettleAsync(shell);
+            if (!shell.LibraryVisibleForTest || !new Persistence.CaptureHistoryStore(root).Settings.EditorLibraryNarrowVisible)
+                throw new InvalidOperationException("The narrow manual preference did not reveal and persist the library.");
+            shell.CloseForTest(); shell = null;
+
+            shell = new MainWindow(enableHistory: true, historyRoot: root) { Width = 1100, Height = 900 };
+            shell.Show(); shell.PresentDocumentForTest(first); shell.OpenInEditorForTest(first); await SettleAsync(shell);
+            if (!shell.LibraryVisibleForTest) throw new InvalidOperationException("Restart at a narrow width did not restore the explicit library preference.");
+            shell.Width = 1500; await SettleAsync(shell);
+            if (!shell.LibraryVisibleForTest) throw new InvalidOperationException("Widening did not restore the saved roomy open preference.");
+            shell.ToggleLibraryForTest(); await SettleAsync(shell);
+            if (shell.LibraryVisibleForTest || new Persistence.CaptureHistoryStore(root).Settings.EditorLibraryVisible)
+                throw new InvalidOperationException("Hiding the editor library did not persist the preference.");
+            shell.CloseEditorForTest(); shell.OpenInEditorForTest(first); await SettleAsync(shell);
+            if (shell.LibraryVisibleForTest) throw new InvalidOperationException("Reopening the editor lost the hidden library preference.");
+            shell.CloseForTest(); shell = null;
+
+            shell = new MainWindow(enableHistory: true, historyRoot: root) { Width = 1500, Height = 900 };
+            shell.Show(); shell.PresentDocumentForTest(first); shell.OpenInEditorForTest(first); await SettleAsync(shell);
+            if (shell.LibraryVisibleForTest) throw new InvalidOperationException("Restart did not restore the hidden editor library preference.");
+            shell.CloseEditorForTest(); await SettleAsync(shell);
+            if (!shell.LibraryVisibleForTest) throw new InvalidOperationException("Library-only browsing was not full width after a hidden editor preference.");
+            if (new Persistence.CaptureHistoryStore(root).Settings.EditorLibraryVisible)
+                throw new InvalidOperationException("Library-only browsing changed the editor library preference.");
         }
         finally { shell?.CloseForTest(); }
     }

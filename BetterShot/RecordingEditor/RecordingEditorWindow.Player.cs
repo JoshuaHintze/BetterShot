@@ -21,7 +21,8 @@ internal sealed partial class RecordingEditorWindow
         LoadedBehavior = MediaState.Manual, UnloadedBehavior = MediaState.Manual, ScrubbingEnabled = true, Stretch = Stretch.Fill
     };
     private readonly Grid _surface = new() { ClipToBounds = true };
-    private readonly Viewbox _viewbox = new() { Stretch = Stretch.Uniform, Margin = new Thickness(22, 22, 22, 6) };
+    private readonly Grid _composedBase = new() { ClipToBounds = true };
+    private readonly Viewbox _viewbox = new() { Stretch = Stretch.Uniform, Margin = new Thickness(14, 12, 14, 4) };
     private readonly Canvas _editCanvas = new();
     private readonly Run _timeNow = new("0:00.0") { Foreground = Brushes.White };
     private readonly Run _timeTotal = new(" / 0:00.0") { Foreground = MutedText };
@@ -49,9 +50,11 @@ internal sealed partial class RecordingEditorWindow
         panel.RowDefinitions.Add(new RowDefinition());
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var area = new Grid { ClipToBounds = true };
-        _redactionPreview = new RedactionPreviewLayer(_media);
+        _redactionPreview = new RedactionPreviewLayer(_composedBase);
         _surface.Children.Add(new Border { Background = Brushes.Black });
-        _surface.Children.Add(_media);
+        _composedBase.Children.Add(_media);
+        _surface.Children.Add(_composedBase);
+        InitializeCameraOverlay();
         _surface.Children.Add(_redactionPreview);
         _surface.Children.Add(_markLayer);
         _surface.Children.Add(_editCanvas);
@@ -78,26 +81,26 @@ internal sealed partial class RecordingEditorWindow
     /// <summary>Time on the left; first/back/play/forward/last in the middle; loop, speed, and volume on the right.</summary>
     private UIElement BuildTransport()
     {
-        var bar = new Grid { Margin = new Thickness(22, 6, 22, 16), Height = 56 };
+        var bar = new Grid { Margin = new Thickness(14, 4, 14, 8), Height = 42 };
         bar.ColumnDefinitions.Add(new ColumnDefinition());
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         bar.ColumnDefinitions.Add(new ColumnDefinition());
-        var time = new TextBlock { FontFamily = MonoFont, FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var time = new TextBlock { FontFamily = MonoFont, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         time.Inlines.Add(_timeNow);
         time.Inlines.Add(_timeTotal);
         bar.Children.Add(time);
 
         var center = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        center.Children.Add(FlatIconButton(LucideIconKind.SkipBack, "First frame (Home)", (_, _) => Execute(RecordingEditorCommand.FirstFrame), 40, 18));
-        center.Children.Add(FlatIconButton(LucideIconKind.ChevronLeft, "Back one frame (Left or ,)", (_, _) => StepFrames(-1), 40, 20));
-        _playButton = IconButton(LucideIconKind.Play, "Play or pause (Space)", (_, _) => TogglePlay(), 52, 52, 22);
+        center.Children.Add(FlatIconButton(LucideIconKind.SkipBack, "First frame (Home)", (_, _) => Execute(RecordingEditorCommand.FirstFrame), 32, 15));
+        center.Children.Add(FlatIconButton(LucideIconKind.ChevronLeft, "Back one frame (Left or ,)", (_, _) => StepFrames(-1), 32, 17));
+        _playButton = IconButton(LucideIconKind.Play, "Play or pause (Space)", (_, _) => TogglePlay(), 38, 38, 17);
         _playButton.Background = Brushes.White;
         _playButton.Foreground = Brushes.Black;
-        _playButton.Margin = new Thickness(12, 0, 12, 0);
+        _playButton.Margin = new Thickness(8, 0, 8, 0);
         _playButton.Template = CircleTemplate();
         center.Children.Add(_playButton);
-        center.Children.Add(FlatIconButton(LucideIconKind.ChevronRight, "Forward one frame (Right or .)", (_, _) => StepFrames(1), 40, 20));
-        center.Children.Add(FlatIconButton(LucideIconKind.SkipForward, "Last frame (End)", (_, _) => Execute(RecordingEditorCommand.LastFrame), 40, 18));
+        center.Children.Add(FlatIconButton(LucideIconKind.ChevronRight, "Forward one frame (Right or .)", (_, _) => StepFrames(1), 32, 17));
+        center.Children.Add(FlatIconButton(LucideIconKind.SkipForward, "Last frame (End)", (_, _) => Execute(RecordingEditorCommand.LastFrame), 32, 15));
         Grid.SetColumn(center, 1);
         bar.Children.Add(center);
 
@@ -122,6 +125,13 @@ internal sealed partial class RecordingEditorWindow
         right.Children.Add(_volumeSlider);
         Grid.SetColumn(right, 2);
         bar.Children.Add(right);
+        // Reserve room for loop and speed beside the frame controls when the inspector is docked.
+        bar.SizeChanged += (_, e) =>
+        {
+            bool compact = e.NewSize.Width < 760;
+            bar.ColumnDefinitions[2].Width = compact ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
+            _volumeSlider.Width = compact ? 72 : 120;
+        };
         return bar;
     }
 
@@ -154,14 +164,20 @@ internal sealed partial class RecordingEditorWindow
         _surface.Height = safeHeight;
         _media.Width = safeWidth;
         _media.Height = safeHeight;
+        _composedBase.Width = safeWidth;
+        _composedBase.Height = safeHeight;
+        _cameraLayer.Width = safeWidth;
+        _cameraLayer.Height = safeHeight;
         _editCanvas.Width = safeWidth;
         _editCanvas.Height = safeHeight;
         if (_redactionPreview is not null) { _redactionPreview.Width = safeWidth; _redactionPreview.Height = safeHeight; }
         _markLayer.Configure(safeWidth, safeHeight);
+        SyncCameraPreview(forceSeek: true);
     }
 
     private void OpenPlayer()
     {
+        LoadCameraSource();
         try
         {
             _media.Source = new Uri(Entry.MoviePath, UriKind.Absolute);
@@ -192,6 +208,7 @@ internal sealed partial class RecordingEditorWindow
         }
         catch (InvalidOperationException) { } // Already closed.
         _mediaReady = false;
+        ShutDownCameraPlayer();
     }
 
     private void TogglePlay()
@@ -211,8 +228,9 @@ internal sealed partial class RecordingEditorWindow
         ApplyPlayerAudio();
         _media.SpeedRatio = _speed;
         _media.Play();
-        StartTrackPreview(start);
         _playing = true;
+        SyncCameraPreview(forceSeek: true);
+        StartTrackPreview(start);
         System.Windows.Media.CompositionTarget.Rendering += Playback_Rendering;
         UpdateToolbarState();
     }
@@ -223,6 +241,7 @@ internal sealed partial class RecordingEditorWindow
         System.Windows.Media.CompositionTarget.Rendering -= Playback_Rendering;
         _playing = false;
         _media.Pause();
+        if (_cameraPlaying) { _cameraMedia.Pause(); _cameraPlaying = false; }
         StopTrackPreview();
         Seek(_media.Position.TotalSeconds);
         UpdateToolbarState();
@@ -261,6 +280,7 @@ internal sealed partial class RecordingEditorWindow
         {
             _playhead = position;
             KeepTrackPreviewInStep(position);
+            SyncCameraPreview();
         }
         UpdatePlayheadUi(follow: true);
     }
@@ -272,6 +292,7 @@ internal sealed partial class RecordingEditorWindow
         _playhead = target;
         _jumpTarget = target;
         _jumpRequestedUtc = DateTime.UtcNow;
+        SyncCameraPreview(forceSeek: true);
     }
 
     private void Seek(double time)
@@ -279,6 +300,7 @@ internal sealed partial class RecordingEditorWindow
         double duration = State.Timeline.Duration;
         _playhead = Math.Clamp(double.IsFinite(time) ? time : 0, 0, Math.Max(0, duration - FrameDuration / 2));
         if (_mediaReady) _media.Position = TimeSpan.FromSeconds(_playhead);
+        SyncCameraPreview(forceSeek: true);
         UpdatePlayheadUi(follow: false);
     }
 
@@ -319,6 +341,7 @@ internal sealed partial class RecordingEditorWindow
     {
         _speed = speed;
         if (_playing) _media.SpeedRatio = speed;
+        if (_cameraPlaying) _cameraMedia.SpeedRatio = speed;
         _trackPreview?.SetRate(speed);
         UpdateToolbarState();
     }
@@ -366,10 +389,11 @@ internal sealed partial class RecordingEditorWindow
         }
         _redactionPreview?.Show(pixelRedactions);
         bool blurWhole = State.BlursWholePictureAt(time);
-        if (blurWhole && _media.Effect is null) _media.Effect = new BlurEffect { Radius = 40, KernelType = KernelType.Gaussian };
-        else if (!blurWhole && _media.Effect is not null) _media.Effect = null;
+        if (blurWhole && _composedBase.Effect is null) _composedBase.Effect = new BlurEffect { Radius = 40, KernelType = KernelType.Gaussian };
+        else if (!blurWhole && _composedBase.Effect is not null) _composedBase.Effect = null;
         (Rect? selection, IReadOnlyList<Point> handles) = SelectionGeometry(visible, time);
         _markLayer.Show(shapes, selection, handles, _drawPreview, DisplayScale);
+        SyncCameraPreview();
     }
 
     private void UpdateToolbarState()
@@ -392,6 +416,7 @@ internal sealed partial class RecordingEditorWindow
             _volumeButton.ToolTip = silent ? "Unmute the player" : "Mute the player";
         }
         UpdateTimelineToolbar();
+        UpdateCameraControls();
         UpdateHeaderState();
         UpdateInspector();
         UpdateMarkupToolbar();
