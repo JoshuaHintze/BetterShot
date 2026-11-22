@@ -68,7 +68,8 @@ public static class ScreenGeometry
         Int32Rect[] monitors = [new(-1920, 0, 1920, 1080), new(0, 0, 2560, 1440)];
         Require(MonitorAt(monitors, -5, 500) == monitors[0], "cursor on negative-origin monitor");
         Require(MonitorAt(monitors, 0, 0) == monitors[1], "cursor on primary origin");
-        Require(MonitorAt(monitors, -100, 1300) == monitors[0], "cursor below shorter monitor uses nearest");
+        Require(MonitorAt(monitors, -100, 1300) == monitors[1], "cursor below shorter monitor is nearer the taller monitor");
+        Require(MonitorAt(monitors, -300, 1300) == monitors[0], "cursor farther to the left is nearer the shorter monitor");
         Require(MonitorAt([], 0, 0) is null, "no monitors");
         SelectionSession.RunGestureSelfTest();
     }
